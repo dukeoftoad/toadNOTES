@@ -146,3 +146,10 @@ Update this file when a PR merges, an implementation stage completes, or a mater
 - Plan: audit and stabilize existing controls; then Appearance, Layout, Note behavior, and persistence/testing in small validated increments.
 - Keep settings grouped and scannable; every control must affect the UI and persist. Preserve NoteStore and only consider DataStore after auditing existing preference storage and migration safety.
 - `dc9d246`: fixed preview/timestamp settings propagation in list layout. `b1dfcb6`: updated this worklog. CI run `38135347194` is in progress for the latest branch head at time of check.
+
+
+### Follow-up implementation — 2026-10-11
+
+| Commit | Work | Validation |
+|---|---|---|
+| `3db8c07` | Made the dashboard sort control label reflect the active sort mode (Recently edited vs Title A–Z), so the visible selection stays in sync with the persistent sort preference and menu selection. | Code change committed; CI intentionally not polled per user instruction. |
