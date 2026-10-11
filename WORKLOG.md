@@ -159,3 +159,10 @@ Update this file when a PR merges, an implementation stage completes, or a mater
 | `838277e` | Fixed the Quick dialog editor to honor the saved default note category for new notes, matching the sheet and full-screen editor behavior; editing an existing note still preserves its category. | Code change committed; checks not polled per user instruction. |
 
 | `39b87ca` | Fixed dashboard sort menu persistence: selecting Recently edited or Title A–Z now saves the preference immediately, matching Settings and surviving app recreation. | Source-level review; Android CI for this exact commit not yet observed. |
+
+### Phase 3 final review — 2026-10-11
+
+
+| `39b87ca` | Dashboard sort menu now writes its selection to preferences immediately. | Source reviewed; CI for this change pending. |
+| `806ab2e` | Clarified Settings grouping with Layout, Layout density, Note editor, and Data & privacy; privacy copy explicitly states cloud sync and built-in export/import are not currently provided. | Source reviewed; CI for this change pending. |
+| `8c3cba0` | Extended the dashboard sorting UI test to assert the selected sort mode is persisted. | Test added; UI workflow remains manual-only by project decision. |
