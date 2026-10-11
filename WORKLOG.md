@@ -103,5 +103,7 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 | `124873a` | Fixed remaining note-card open handler to update `editorNoteId`. | CI failed due to conflicting/mistyped derived editor-note declaration; fixed in the following commit. |
 | `def342a` | Corrected derived selected-note lookup to `notes.firstOrNull { it.id == editorNoteId }`. | CI re-run pending; current head is not yet validated. |
 
+| `86469e6` | Added a parent-level unsaved-draft guard for system/back and sheet/dialog dismissal requests, while keeping editor Save/confirmed Cancel paths able to close directly. | CI pending; behavior needs automated validation. |
+
 ## Maintenance
 Update this file when a PR merges, an implementation stage completes, or a material CI decision/status changes. Record factual outcomes only; distinguish planned, in-progress, and verified work.
