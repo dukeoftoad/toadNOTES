@@ -1,9 +1,10 @@
 package com.nestnote.app
 
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -49,7 +50,7 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Search your notes…").assertIsDisplayed()
         composeRule.onNodeWithText("Search your notes…").performTextInput("Trip to the Mountains")
         composeRule.onNodeWithText("Trip to the Mountains").assertIsDisplayed()
-        composeRule.onNodeWithText("Project Plan").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Project Plan").assertCountEquals(0)
     }
 
     @Test
@@ -57,6 +58,6 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("New note").performClick()
         composeRule.onNodeWithText("Create a note").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
-        composeRule.onNodeWithText("Create a note").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Create a note").assertCountEquals(0)
     }
 }
