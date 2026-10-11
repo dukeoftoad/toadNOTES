@@ -138,3 +138,11 @@ Update this file when a PR merges, an implementation stage completes, or a mater
 4. Expand settings into Appearance, Layout, Note behavior, and Data & privacy groups without rewriting note storage.
 
 | `dc9d246` | Fixed the list-layout NoteCard call so preview and timestamp preferences apply consistently in both grid and list modes. | CI pending; caught during code review before CI. |
+
+
+## Phase 3 plan refinement — 2026-10-11
+
+- Reviewed Android Developers Settings design guidance and Google Keep's note settings patterns before expanding the feature set.
+- Plan: audit and stabilize existing controls; then Appearance, Layout, Note behavior, and persistence/testing in small validated increments.
+- Keep settings grouped and scannable; every control must affect the UI and persist. Preserve NoteStore and only consider DataStore after auditing existing preference storage and migration safety.
+- `dc9d246`: fixed preview/timestamp settings propagation in list layout. `b1dfcb6`: updated this worklog. CI run `38135347194` is in progress for the latest branch head at time of check.
