@@ -115,7 +115,7 @@ private fun NestNoteApp(store: NoteStore) {
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     // Resolve the selected note from persisted notes after recreation.
-    val editorNote = notes.firstOrNull { it.id == editorNoteId }
+    val editorNoteId = note.ids.firstOrNull { it.id == editorNoteId }
     var toastMessage by remember { mutableStateOf("") }
     var snackbarHost by remember { mutableStateOf<SnackbarHostState?>(null) }
 
@@ -335,7 +335,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
