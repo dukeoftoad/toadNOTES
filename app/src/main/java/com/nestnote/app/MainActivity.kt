@@ -336,7 +336,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -595,7 +595,7 @@ private fun OverviewTile(
 }
 
 @Composable
-private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     // Wallpaper palettes can produce very bright onSurface/primary colors that
@@ -628,12 +628,16 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
                 }
             }
             Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+            if (showPreview && note.body.isNotBlank()) {
             Text(note.body, style = MaterialTheme.typography.bodyMedium, color = cardSecondary, maxLines = if (compact) 2 else 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
+            }
+            if (showTimestamp) {
             Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
             Text(
                 if (note.reminder.isNotBlank()) "◷ ${note.reminder}" else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
                 style = MaterialTheme.typography.labelSmall, color = cardSecondary
             )
+            }
         }
     }
 }
