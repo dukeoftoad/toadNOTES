@@ -67,6 +67,10 @@ private const val PREF_LAYOUT = "dashboard_layout"
 private const val PREF_EDITOR = "editor_mode"
 private const val PREF_DENSITY = "dashboard_density"
 private const val PREF_NOTE_STYLE = "note_color_style"
+private const val PREF_DEFAULT_SORT = "default_sort"
+private const val PREF_NOTE_PREVIEWS = "show_note_previews"
+private const val PREF_NOTE_TIMESTAMPS = "show_note_timestamps"
+private const val PREF_DEFAULT_CATEGORY = "default_note_category"
 
 private enum class ThemeMode(val label: String) {
     SYSTEM("Follow device"), LIGHT("Light"), DARK("Dark")
@@ -107,7 +111,10 @@ private fun NestNoteApp(store: NoteStore) {
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
     var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }
     var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
-    var sortByTitle by remember { mutableStateOf(false) }
+    var sortByTitle by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_SORT, "RECENT") == "TITLE") }
+    var showNotePreviews by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_PREVIEWS, true)) }
+    var showNoteTimestamps by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_TIMESTAMPS, true)) }
+    var defaultNoteCategory by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_CATEGORY, "Ideas")?.takeIf { it in categories } ?: "Ideas") }
     var noteColorStyle by remember { mutableStateOf(NoteColorStyle.values().firstOrNull { it.name == preferences.getString(PREF_NOTE_STYLE, "PASTEL") } ?: NoteColorStyle.PASTEL) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
@@ -231,7 +238,15 @@ private fun NestNoteApp(store: NoteStore) {
                         dashboardDensity = dashboardDensity,
                         onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) },
                         noteColorStyle = noteColorStyle,
-                        onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) }
+                        onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) },
+                        sortByTitle = sortByTitle,
+                        onSortChange = { sortByTitle = it; savePreference(PREF_DEFAULT_SORT, if (it) "TITLE" else "RECENT") },
+                        showNotePreviews = showNotePreviews,
+                        onShowNotePreviewsChange = { showNotePreviews = it; preferences.edit().putBoolean(PREF_NOTE_PREVIEWS, it).apply() },
+                        showNoteTimestamps = showNoteTimestamps,
+                        onShowNoteTimestampsChange = { showNoteTimestamps = it; preferences.edit().putBoolean(PREF_NOTE_TIMESTAMPS, it).apply() },
+                        defaultNoteCategory = defaultNoteCategory,
+                        onDefaultNoteCategoryChange = { defaultNoteCategory = it; savePreference(PREF_DEFAULT_CATEGORY, it) }
                     )
                 } else if (selectedView == "Categories") {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -291,11 +306,11 @@ private fun NestNoteApp(store: NoteStore) {
                             var sortMenuExpanded by remember { mutableStateOf(false) }
                             Box {
                                 TextButton(onClick = { sortMenuExpanded = true }) {
-                                    Text("Recently edited", style = MaterialTheme.typography.labelLarge)
+                                    Text(if (sortByTitle) "Title A–Z" else "Recently edited", style = MaterialTheme.typography.labelLarge)
                                 }
                                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortByTitle = true; sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; savePreference(PREF_DEFAULT_SORT, "RECENT"); sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortByTitle = true; savePreference(PREF_DEFAULT_SORT, "TITLE"); sortMenuExpanded = false })
                                 }
                             }
                             IconButton(
@@ -325,7 +340,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -337,7 +352,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -363,11 +378,11 @@ private fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorMode.QUICK_DIALOG -> AlertDialog(
@@ -376,6 +391,7 @@ private fun NestNoteApp(store: NoteStore) {
                     text = {
                         QuickNoteFields(
                             original = editorNote,
+                            defaultCategory = defaultNoteCategory,
                             onSave = saveNote,
                             onDismiss = dismissEditor,
                             onDelete = deleteNote
@@ -419,7 +435,15 @@ private fun SettingsScreen(
     dashboardDensity: DashboardDensity,
     onDensityChange: (DashboardDensity) -> Unit,
     noteColorStyle: NoteColorStyle,
-    onNoteColorStyleChange: (NoteColorStyle) -> Unit
+    onNoteColorStyleChange: (NoteColorStyle) -> Unit,
+    sortByTitle: Boolean,
+    onSortChange: (Boolean) -> Unit,
+    showNotePreviews: Boolean,
+    onShowNotePreviewsChange: (Boolean) -> Unit,
+    showNoteTimestamps: Boolean,
+    onShowNoteTimestampsChange: (Boolean) -> Unit,
+    defaultNoteCategory: String,
+    onDefaultNoteCategoryChange: (String) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(
@@ -457,7 +481,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "Dashboard", subtitle = "Choose how your notes appear") {
+            SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
                 DashboardLayout.values().forEach { layout ->
                     Row(Modifier.fillMaxWidth().clickable { onLayoutChange(layout) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = dashboardLayout == layout, onClick = { onLayoutChange(layout) })
@@ -483,7 +507,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "Dashboard density", subtitle = "Choose how much space each note uses") {
+            SettingsSection(title = "Layout density", subtitle = "Choose how much space each note uses") {
                 DashboardDensity.values().forEach { density ->
                     Row(Modifier.fillMaxWidth().clickable { onDensityChange(density) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = dashboardDensity == density, onClick = { onDensityChange(density) })
@@ -496,7 +520,31 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "Note creation", subtitle = "Choose how the editor opens") {
+            SettingsSection(title = "Note behavior", subtitle = "Set defaults for note cards") {
+                Text("Default category", style = MaterialTheme.typography.titleSmall)
+                categories.forEach { category ->
+                    Row(Modifier.fillMaxWidth().clickable { onDefaultNoteCategoryChange(category) }.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = defaultNoteCategory == category, onClick = { onDefaultNoteCategoryChange(category) })
+                        Text(category, Modifier.padding(start = 8.dp))
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                Row(Modifier.fillMaxWidth().clickable { onSortChange(!sortByTitle) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sort by title A–Z", Modifier.weight(1f))
+                    Switch(checked = sortByTitle, onCheckedChange = onSortChange)
+                }
+                Row(Modifier.fillMaxWidth().clickable { onShowNotePreviewsChange(!showNotePreviews) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show note previews", Modifier.weight(1f))
+                    Switch(checked = showNotePreviews, onCheckedChange = onShowNotePreviewsChange)
+                }
+                Row(Modifier.fillMaxWidth().clickable { onShowNoteTimestampsChange(!showNoteTimestamps) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show dates and reminders", Modifier.weight(1f))
+                    Switch(checked = showNoteTimestamps, onCheckedChange = onShowNoteTimestampsChange)
+                }
+            }
+        }
+        item {
+            SettingsSection(title = "Note editor", subtitle = "Choose how the editor opens") {
                 EditorMode.values().forEach { mode ->
                     Row(Modifier.fillMaxWidth().clickable { onEditorModeChange(mode) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = editorMode == mode, onClick = { onEditorModeChange(mode) })
@@ -510,8 +558,9 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "About", subtitle = "Your notes stay on this device") {
-                Text("NESTNOTE stores notes locally. Wallpaper-based colors are provided by Android on supported devices.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            SettingsSection(title = "Data & privacy", subtitle = "Your notes stay on this device") {
+                Text("Notes are stored locally on this device. NESTNOTE does not currently sync notes to a cloud account or provide built-in export and import.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                Text("Wallpaper-based colors are provided by Android on supported devices.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
     }
@@ -562,7 +611,7 @@ private fun OverviewTile(
 }
 
 @Composable
-private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     // Wallpaper palettes can produce very bright onSurface/primary colors that
@@ -595,12 +644,16 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
                 }
             }
             Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+            if (showPreview && note.body.isNotBlank()) {
             Text(note.body, style = MaterialTheme.typography.bodyMedium, color = cardSecondary, maxLines = if (compact) 2 else 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
+            }
+            if (showTimestamp) {
             Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
             Text(
                 if (note.reminder.isNotBlank()) "◷ ${note.reminder}" else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
                 style = MaterialTheme.typography.labelSmall, color = cardSecondary
             )
+            }
         }
     }
 }
@@ -609,6 +662,7 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
 @Composable
 private fun NoteEditorContent(
     original: NestNote?,
+    defaultNoteCategory: String,
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -620,7 +674,7 @@ private fun NoteEditorContent(
     // Keying by note ID resets the draft only when switching to another note.
     var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
     var body by rememberSaveable(original?.id) { mutableStateOf(original?.body.orEmpty()) }
-    var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: "Ideas") }
+    var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: defaultNoteCategory) }
     var colorIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.color ?: 0) }
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var discardConfirmation by remember { mutableStateOf(false) }
@@ -725,6 +779,7 @@ private fun NoteEditorContent(
 @Composable
 private fun QuickNoteFields(
     original: NestNote?,
+    defaultCategory: String,
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?
@@ -743,7 +798,7 @@ private fun QuickNoteFields(
                     if (title.isNotBlank() && body.isNotBlank()) onSave(
                         NestNote(
                             id = original?.id ?: System.currentTimeMillis(), title = title.trim(), body = body.trim(),
-                            category = original?.category ?: "Ideas", color = original?.color ?: 0,
+                            category = original?.category ?: defaultCategory, color = original?.color ?: 0,
                             pinned = original?.pinned ?: false, reminder = original?.reminder.orEmpty(),
                             updated = System.currentTimeMillis()
                         )

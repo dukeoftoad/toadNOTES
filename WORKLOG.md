@@ -113,3 +113,56 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 
 ## Maintenance
 Update this file when a PR merges, an implementation stage completes, or a material CI decision/status changes. Record factual outcomes only; distinguish planned, in-progress, and verified work.
+
+
+## Phase 3 — Settings expansion
+
+| Commit | Work | Validation |
+|---|---|---|
+| `63fb556` | Added persistent preferences for default sort order, note preview visibility, and date/reminder visibility. | CI pending. |
+| `360535f` | Added the Note behavior group to Settings with controls for sorting, previews, and timestamps/reminders. | CI pending. |
+| `a2e9b0a` | Connected note-card rendering to the preview and timestamp preferences. | CI pending. |
+
+## Validation policy
+
+- Normal Android CI is required for each meaningful increment.
+- Emulator UI workflow remains manual-only; visual verification must be recorded as manual when performed.
+- Do not mark Phase 3 complete until preference persistence and existing note/editor flows are verified.
+- Preserve the existing NoteStore format and user notes.
+
+## Next steps
+
+1. Run Android CI and fix any compile/test failures.
+2. Add tests for preference persistence and preview/timestamp toggles.
+3. Add default note category and starting category behavior.
+4. Expand settings into Appearance, Layout, Note behavior, and Data & privacy groups without rewriting note storage.
+
+| `dc9d246` | Fixed the list-layout NoteCard call so preview and timestamp preferences apply consistently in both grid and list modes. | CI pending; caught during code review before CI. |
+
+
+## Phase 3 plan refinement — 2026-10-11
+
+- Reviewed Android Developers Settings design guidance and Google Keep's note settings patterns before expanding the feature set.
+- Plan: audit and stabilize existing controls; then Appearance, Layout, Note behavior, and persistence/testing in small validated increments.
+- Keep settings grouped and scannable; every control must affect the UI and persist. Preserve NoteStore and only consider DataStore after auditing existing preference storage and migration safety.
+- `dc9d246`: fixed preview/timestamp settings propagation in list layout. `b1dfcb6`: updated this worklog. CI run `38135347194` is in progress for the latest branch head at time of check.
+
+
+### Follow-up implementation — 2026-10-11
+
+| Commit | Work | Validation |
+|---|---|---|
+| `3db8c07` | Made the dashboard sort control label reflect the active sort mode (Recently edited vs Title A–Z), so the visible selection stays in sync with the persistent sort preference and menu selection. | Code change committed; CI intentionally not polled per user instruction. |
+
+| `a0431be` | Added a persistent default note category setting and applied it to newly created notes in the primary editor; existing notes retain their saved category. | Code change committed; CI intentionally not polled per user instruction. |
+
+| `838277e` | Fixed the Quick dialog editor to honor the saved default note category for new notes, matching the sheet and full-screen editor behavior; editing an existing note still preserves its category. | Code change committed; checks not polled per user instruction. |
+
+| `39b87ca` | Fixed dashboard sort menu persistence: selecting Recently edited or Title A–Z now saves the preference immediately, matching Settings and surviving app recreation. | Source-level review; Android CI for this exact commit not yet observed. |
+
+### Phase 3 final review — 2026-10-11
+
+
+| `39b87ca` | Dashboard sort menu now writes its selection to preferences immediately. | Source reviewed; CI for this change pending. |
+| `806ab2e` | Clarified Settings grouping with Layout, Layout density, Note editor, and Data & privacy; privacy copy explicitly states cloud sync and built-in export/import are not currently provided. | Source reviewed; CI for this change pending. |
+| `8c3cba0` | Extended the dashboard sorting UI test to assert the selected sort mode is persisted. | Test added; UI workflow remains manual-only by project decision. |
