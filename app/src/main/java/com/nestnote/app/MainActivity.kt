@@ -70,6 +70,7 @@ private const val PREF_NOTE_STYLE = "note_color_style"
 private const val PREF_DEFAULT_SORT = "default_sort"
 private const val PREF_NOTE_PREVIEWS = "show_note_previews"
 private const val PREF_NOTE_TIMESTAMPS = "show_note_timestamps"
+private const val PREF_DEFAULT_CATEGORY = "default_note_category"
 
 private enum class ThemeMode(val label: String) {
     SYSTEM("Follow device"), LIGHT("Light"), DARK("Dark")
@@ -113,6 +114,7 @@ private fun NestNoteApp(store: NoteStore) {
     var sortByTitle by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_SORT, "RECENT") == "TITLE") }
     var showNotePreviews by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_PREVIEWS, true)) }
     var showNoteTimestamps by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_TIMESTAMPS, true)) }
+    var defaultNoteCategory by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_CATEGORY, "Ideas")?.takeIf { it in categories } ?: "Ideas") }
     var noteColorStyle by remember { mutableStateOf(NoteColorStyle.values().firstOrNull { it.name == preferences.getString(PREF_NOTE_STYLE, "PASTEL") } ?: NoteColorStyle.PASTEL) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
@@ -242,7 +244,9 @@ private fun NestNoteApp(store: NoteStore) {
                         showNotePreviews = showNotePreviews,
                         onShowNotePreviewsChange = { showNotePreviews = it; preferences.edit().putBoolean(PREF_NOTE_PREVIEWS, it).apply() },
                         showNoteTimestamps = showNoteTimestamps,
-                        onShowNoteTimestampsChange = { showNoteTimestamps = it; preferences.edit().putBoolean(PREF_NOTE_TIMESTAMPS, it).apply() }
+                        onShowNoteTimestampsChange = { showNoteTimestamps = it; preferences.edit().putBoolean(PREF_NOTE_TIMESTAMPS, it).apply() },
+                        defaultNoteCategory = defaultNoteCategory,
+                        onDefaultNoteCategoryChange = { defaultNoteCategory = it; savePreference(PREF_DEFAULT_CATEGORY, it) }
                     )
                 } else if (selectedView == "Categories") {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -374,11 +378,11 @@ private fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorMode.QUICK_DIALOG -> AlertDialog(
@@ -436,7 +440,9 @@ private fun SettingsScreen(
     showNotePreviews: Boolean,
     onShowNotePreviewsChange: (Boolean) -> Unit,
     showNoteTimestamps: Boolean,
-    onShowNoteTimestampsChange: (Boolean) -> Unit
+    onShowNoteTimestampsChange: (Boolean) -> Unit,
+    defaultNoteCategory: String,
+    onDefaultNoteCategoryChange: (String) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(
@@ -514,6 +520,14 @@ private fun SettingsScreen(
         }
         item {
             SettingsSection(title = "Note behavior", subtitle = "Set defaults for note cards") {
+                Text("Default category", style = MaterialTheme.typography.titleSmall)
+                categories.forEach { category ->
+                    Row(Modifier.fillMaxWidth().clickable { onDefaultNoteCategoryChange(category) }.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = defaultNoteCategory == category, onClick = { onDefaultNoteCategoryChange(category) })
+                        Text(category, Modifier.padding(start = 8.dp))
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 Row(Modifier.fillMaxWidth().clickable { onSortChange(!sortByTitle) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Sort by title A–Z", Modifier.weight(1f))
                     Switch(checked = sortByTitle, onCheckedChange = onSortChange)
@@ -646,6 +660,7 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
 @Composable
 private fun NoteEditorContent(
     original: NestNote?,
+    defaultNoteCategory: String,
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -657,7 +672,7 @@ private fun NoteEditorContent(
     // Keying by note ID resets the draft only when switching to another note.
     var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
     var body by rememberSaveable(original?.id) { mutableStateOf(original?.body.orEmpty()) }
-    var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: "Ideas") }
+    var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: defaultNoteCategory) }
     var colorIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.color ?: 0) }
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var discardConfirmation by remember { mutableStateOf(false) }
