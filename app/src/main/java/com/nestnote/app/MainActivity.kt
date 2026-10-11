@@ -481,7 +481,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "Dashboard", subtitle = "Choose how your notes appear") {
+            SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
                 DashboardLayout.values().forEach { layout ->
                     Row(Modifier.fillMaxWidth().clickable { onLayoutChange(layout) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = dashboardLayout == layout, onClick = { onLayoutChange(layout) })
@@ -507,7 +507,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "Dashboard density", subtitle = "Choose how much space each note uses") {
+            SettingsSection(title = "Layout density", subtitle = "Choose how much space each note uses") {
                 DashboardDensity.values().forEach { density ->
                     Row(Modifier.fillMaxWidth().clickable { onDensityChange(density) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = dashboardDensity == density, onClick = { onDensityChange(density) })
@@ -544,7 +544,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "Note creation", subtitle = "Choose how the editor opens") {
+            SettingsSection(title = "Note editor", subtitle = "Choose how the editor opens") {
                 EditorMode.values().forEach { mode ->
                     Row(Modifier.fillMaxWidth().clickable { onEditorModeChange(mode) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = editorMode == mode, onClick = { onEditorModeChange(mode) })
@@ -558,8 +558,9 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection(title = "About", subtitle = "Your notes stay on this device") {
-                Text("NESTNOTE stores notes locally. Wallpaper-based colors are provided by Android on supported devices.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            SettingsSection(title = "Data & privacy", subtitle = "Your notes stay on this device") {
+                Text("Notes are stored locally on this device. NESTNOTE does not currently sync notes to a cloud account or provide built-in export and import.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                Text("Wallpaper-based colors are provided by Android on supported devices.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
     }
