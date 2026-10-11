@@ -35,8 +35,9 @@ class NestNoteE2ETest {
 
     @Test
     fun dashboardShowsStarterNotesAndNewNoteAction() {
-        composeRule.onNodeWithText("NESTNOTE").assertIsDisplayed()
-        composeRule.onNodeWithText("Capture what matters.").assertIsDisplayed()
+        composeRule.onNodeWithText("NestNote").assertIsDisplayed()
+        composeRule.onNodeWithText("Your thoughts, organized.").assertIsDisplayed()
+        composeRule.onNodeWithText("Search your notes").assertIsDisplayed()
         composeRule.onNodeWithText("Your notes").assertIsDisplayed()
         composeRule.onNodeWithText("All notes").assertIsDisplayed()
         composeRule.onNodeWithText("Reminders").assertIsDisplayed()
@@ -68,9 +69,18 @@ class NestNoteE2ETest {
     }
 
     @Test
+    fun homeScreenOffersSortingOptions() {
+        composeRule.onNodeWithText("Recently edited").performClick()
+        composeRule.onNodeWithText("Title A–Z").assertIsDisplayed()
+        composeRule.onNodeWithText("Title A–Z").performClick()
+        composeRule.onNodeWithText("Your notes").assertIsDisplayed()
+    }
+
+    @Test
     fun userCanSearchForANote() {
-        composeRule.onNodeWithContentDescription("Search notes").performClick()
-        composeRule.onNodeWithText("Search notes").assertIsDisplayed()
+        composeRule.onNodeWithText("Search your notes").performTextInput("Project")
+        composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Trip to the Mountains").assertCountEquals(0)
     }
 
     @Test
