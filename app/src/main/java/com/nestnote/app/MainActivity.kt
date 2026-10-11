@@ -348,7 +348,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
