@@ -309,8 +309,8 @@ private fun NestNoteApp(store: NoteStore) {
                                     Text(if (sortByTitle) "Title A–Z" else "Recently edited", style = MaterialTheme.typography.labelLarge)
                                 }
                                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortByTitle = true; sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; savePreference(PREF_DEFAULT_SORT, "RECENT"); sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortByTitle = true; savePreference(PREF_DEFAULT_SORT, "TITLE"); sortMenuExpanded = false })
                                 }
                             }
                             IconButton(
