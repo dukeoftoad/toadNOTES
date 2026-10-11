@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -596,11 +597,22 @@ private fun NoteEditorContent(
     fullScreen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var title by remember(original?.id) { mutableStateOf(original?.title.orEmpty()) }
-    var body by remember(original?.id) { mutableStateOf(original?.body.orEmpty()) }
-    var category by remember(original?.id) { mutableStateOf(original?.category ?: "Ideas") }
-    var colorIndex by remember(original?.id) { mutableIntStateOf(original?.color ?: 0) }
-    var reminder by remember(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
+    // Saveable editor fields survive activity recreation (for example, rotation).
+    // Keying by note ID resets the draft only when switching to another note.
+    var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
+    var body by rememberSaveable(original?.id) { mutableStateOf(original?.body.orEmpty()) }
+    var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: "Ideas") }
+    var colorIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.color ?: 0) }
+    var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
+    var discardConfirmation by remember { mutableStateOf(false) }
+    val hasUnsavedChanges = title != original?.title.orEmpty() ||
+        body != original?.body.orEmpty() ||
+        category != (original?.category ?: "Ideas") ||
+        colorIndex != (original?.color ?: 0) ||
+        reminder != original?.reminder.orEmpty()
+    fun requestDismiss() {
+        if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
+    }
     var categoryExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Column(
@@ -612,7 +624,7 @@ private fun NoteEditorContent(
                 Text(if (original == null) "New note" else "Edit note", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("Capture it before it slips away.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onDismiss) { Text("✕") }
+            IconButton(onClick = { requestDismiss() }) { Text("✕") }
         }
         OutlinedTextField(
             value = title, onValueChange = { title = it },
@@ -657,7 +669,7 @@ private fun NoteEditorContent(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete") }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = { requestDismiss() }) { Text("Cancel") }
             Button(
                 onClick = {
                     if (title.isNotBlank() && body.isNotBlank()) {
@@ -670,6 +682,22 @@ private fun NoteEditorContent(
                 },
                 enabled = title.isNotBlank() && body.isNotBlank()
             ) { Text("Save note") }
+        }
+        if (discardConfirmation) {
+            AlertDialog(
+                onDismissRequest = { discardConfirmation = false },
+                title = { Text("Discard changes?") },
+                text = { Text("Your unsaved changes will be lost.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        discardConfirmation = false
+                        onDismiss()
+                    }) { Text("Discard") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { discardConfirmation = false }) { Text("Keep editing") }
+                }
+            )
         }
     }
 }
