@@ -3,11 +3,13 @@ package com.nestnote.app
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription\nimport androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -31,8 +33,24 @@ class NestNoteE2ETest {
     @Test
     fun dashboardShowsStarterNotesAndNewNoteAction() {
         composeRule.onNodeWithText("NESTNOTE").assertIsDisplayed()
+        composeRule.onNodeWithText("Capture what matters.").assertIsDisplayed()
+        composeRule.onNodeWithText("Your notes").assertIsDisplayed()
+        composeRule.onNodeWithText("All notes").assertIsDisplayed()
+        composeRule.onNodeWithText("Reminders").assertIsDisplayed()
         composeRule.onNodeWithText("New note").assertIsDisplayed()
         composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
+    }
+
+    @Test
+    fun layoutTogglePersistsListSelection() {
+        composeRule.onNodeWithContentDescription("Switch dashboard layout").performClick()
+        composeRule.runOnIdle {
+            assertEquals(
+                "LIST",
+                composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+                    .getString("dashboard_layout", null)
+            )
+        }
     }
 
     @Test
@@ -48,7 +66,7 @@ class NestNoteE2ETest {
 
     @Test
     fun userCanSearchForANote() {
-        composeRule.onNodeWithText("Search notes").performClick()
+        composeRule.onNodeWithContentDescription("Search notes").performClick()
         composeRule.onNodeWithText("Search notes").assertIsDisplayed()
     }
 
@@ -69,5 +87,8 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Quick dialog").assertIsDisplayed()
         composeRule.onNodeWithText("Grid").assertIsDisplayed()
         composeRule.onNodeWithText("List").assertIsDisplayed()
+        composeRule.onNodeWithText("Dashboard density").assertIsDisplayed()
+        composeRule.onNodeWithText("Compact").assertIsDisplayed()
+        composeRule.onNodeWithText("Comfortable").assertIsDisplayed()
     }
 }
