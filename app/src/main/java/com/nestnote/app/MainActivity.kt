@@ -513,6 +513,22 @@ private fun SettingsScreen(
             }
         }
         item {
+            SettingsSection(title = "Note behavior", subtitle = "Set defaults for note cards") {
+                Row(Modifier.fillMaxWidth().clickable { onSortChange(!sortByTitle) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sort by title A–Z", Modifier.weight(1f))
+                    Switch(checked = sortByTitle, onCheckedChange = onSortChange)
+                }
+                Row(Modifier.fillMaxWidth().clickable { onShowNotePreviewsChange(!showNotePreviews) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show note previews", Modifier.weight(1f))
+                    Switch(checked = showNotePreviews, onCheckedChange = onShowNotePreviewsChange)
+                }
+                Row(Modifier.fillMaxWidth().clickable { onShowNoteTimestampsChange(!showNoteTimestamps) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show dates and reminders", Modifier.weight(1f))
+                    Switch(checked = showNoteTimestamps, onCheckedChange = onShowNoteTimestampsChange)
+                }
+            }
+        }
+        item {
             SettingsSection(title = "Note creation", subtitle = "Choose how the editor opens") {
                 EditorMode.values().forEach { mode ->
                     Row(Modifier.fillMaxWidth().clickable { onEditorModeChange(mode) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
