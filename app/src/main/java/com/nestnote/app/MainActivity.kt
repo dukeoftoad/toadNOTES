@@ -141,13 +141,13 @@ private fun NestNoteApp(store: NoteStore) {
                 TopAppBar(
                     title = {
                         Column {
-                            Text("NESTNOTE", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                            Text("A little space for big ideas", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                            Text("NestNote", fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp)
+                            Text("Your thoughts, organized.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                     },
                     actions = {
-                        IconButton(onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search notes")
+                        IconButton(onClick = { selectedView = "Settings" }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Open settings")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
@@ -184,11 +184,20 @@ private fun NestNoteApp(store: NoteStore) {
             }
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
-                if (searchVisible && selectedView != "Settings") {
+                if (selectedView == "Home" || selectedView == "All notes" || searchVisible) {
                     OutlinedTextField(
                         value = search, onValueChange = { search = it },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        placeholder = { Text("Search notes") }, singleLine = true
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                        placeholder = { Text("Search your notes") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(18.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedContainerColor = colors.surfaceContainerLow,
+                            focusedContainerColor = colors.surfaceContainerLow,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = colors.primary
+                        )
                     )
                 }
                 if (selectedView == "Settings") {
@@ -230,52 +239,7 @@ private fun NestNoteApp(store: NoteStore) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (selectedView == "Home") {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = colors.primaryContainer
-                            ) {
-                                Column(
-                                    Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(7.dp)
-                                ) {
-                                    Text(
-                                        "YOUR SPACE",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.2.sp,
-                                        color = colors.onPrimaryContainer
-                                    )
-                                    Text(
-                                        "Capture what matters.",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.onPrimaryContainer
-                                    )
-                                    Text(
-                                        "A calm home for your thoughts, plans, and ideas.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colors.onPrimaryContainer
-                                    )
-                                }
-                            }
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OverviewTile(
-                                    label = "All notes",
-                                    count = notes.size,
-                                    onClick = { selectedView = "All notes" },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                OverviewTile(
-                                    label = "Reminders",
-                                    count = notes.count { it.reminder.isNotBlank() },
-                                    onClick = { selectedView = "Reminders" },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
+                            Spacer(Modifier.height(2.dp))
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
@@ -304,6 +268,16 @@ private fun NestNoteApp(store: NoteStore) {
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f)
                             )
+                            var sortMenuExpanded by remember { mutableStateOf(false) }
+                            Box {
+                                TextButton(onClick = { sortMenuExpanded = true }) {
+                                    Text("Recently edited", style = MaterialTheme.typography.labelLarge)
+                                }
+                                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortMenuExpanded = false })
+                                }
+                            }
                             IconButton(
                                 onClick = {
                                     dashboardLayout = if (dashboardLayout == DashboardLayout.GRID) DashboardLayout.LIST else DashboardLayout.GRID
