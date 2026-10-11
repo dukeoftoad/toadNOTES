@@ -65,6 +65,7 @@ private const val PREF_DYNAMIC = "dynamic_colors"
 private const val PREF_LAYOUT = "dashboard_layout"
 private const val PREF_EDITOR = "editor_mode"
 private const val PREF_DENSITY = "dashboard_density"
+private const val PREF_NOTE_STYLE = "note_color_style"
 
 private enum class ThemeMode(val label: String) {
     SYSTEM("Follow device"), LIGHT("Light"), DARK("Dark")
@@ -75,6 +76,10 @@ private enum class DashboardLayout(val label: String) {
 private enum class DashboardDensity(val label: String, val description: String) {
     COMPACT("Compact", "Tighter cards to see more notes"),
     COMFORTABLE("Comfortable", "More spacing and breathing room")
+}
+private enum class NoteColorStyle(val label: String, val description: String) {
+    PASTEL("Soft pastel cards", "Gentle note colors like the design reference"),
+    ADAPTIVE("Match wallpaper", "Use your current Material You theme colors")
 }
 private enum class EditorMode(val label: String, val description: String) {
     SHEET("Expandable bottom sheet", "A compact editor that expands as you write"),
@@ -102,6 +107,7 @@ private fun NestNoteApp(store: NoteStore) {
     var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }
     var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
     var sortByTitle by remember { mutableStateOf(false) }
+    var noteColorStyle by remember { mutableStateOf(NoteColorStyle.values().firstOrNull { it.name == preferences.getString(PREF_NOTE_STYLE, "PASTEL") } ?: NoteColorStyle.PASTEL) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
@@ -215,7 +221,9 @@ private fun NestNoteApp(store: NoteStore) {
                         editorMode = editorMode,
                         onEditorModeChange = { editorMode = it; savePreference(PREF_EDITOR, it.name) },
                         dashboardDensity = dashboardDensity,
-                        onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) }
+                        onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) },
+                        noteColorStyle = noteColorStyle,
+                        onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) }
                     )
                 } else if (selectedView == "Categories") {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -309,7 +317,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNote = note; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -391,7 +399,9 @@ private fun SettingsScreen(
     editorMode: EditorMode,
     onEditorModeChange: (EditorMode) -> Unit,
     dashboardDensity: DashboardDensity,
-    onDensityChange: (DashboardDensity) -> Unit
+    onDensityChange: (DashboardDensity) -> Unit,
+    noteColorStyle: NoteColorStyle,
+    onNoteColorStyleChange: (NoteColorStyle) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(
@@ -436,6 +446,19 @@ private fun SettingsScreen(
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(layout.label)
                             Text(if (layout == DashboardLayout.GRID) "Compact cards, side by side" else "Full-width notes with more preview space", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            SettingsSection(title = "Note card colors", subtitle = "Choose your preferred note-card look") {
+                NoteColorStyle.values().forEach { style ->
+                    Row(Modifier.fillMaxWidth().clickable { onNoteColorStyleChange(style) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = noteColorStyle == style, onClick = { onNoteColorStyleChange(style) })
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text(style.label)
+                            Text(style.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                     }
                 }
@@ -521,12 +544,12 @@ private fun OverviewTile(
 }
 
 @Composable
-private fun NoteCard(note: NestNote, compact: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     // Keep note surfaces and labels legible in wallpaper-derived and fallback schemes.
     val accent = noteAccents[note.color.coerceIn(0, noteAccents.lastIndex)]
-    val tint = noteTints[note.color.coerceIn(0, noteTints.lastIndex)]
+    val tint = if (colorStyle == NoteColorStyle.PASTEL) noteTints[note.color.coerceIn(0, noteTints.lastIndex)] else colors.surfaceContainerLow
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
