@@ -100,7 +100,8 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 | Commit | Change | Validation |
 |---|---|---|
 | `e6db24a` | Save editor visibility and selected note ID across activity recreation; updated release workflow to use a rolling `latest` prerelease titled `NESTNOTE Latest Build` in the same branch commit `c47242e`. | Android CI failed at Kotlin compile on `MainActivity.kt:338` due to one remaining assignment to the now-derived `editorNote`; corrected in follow-up commit (see next row). |
-| `124873a` | Fixed remaining note-card open handler to update `editorNoteId`. | CI re-run pending; do not consider validated until current head succeeds. |
+| `124873a` | Fixed remaining note-card open handler to update `editorNoteId`. | CI failed due to conflicting/mistyped derived editor-note declaration; fixed in the following commit. |
+| `def342a` | Corrected derived selected-note lookup to `notes.firstOrNull { it.id == editorNoteId }`. | CI re-run pending; current head is not yet validated. |
 
 ## Maintenance
 Update this file when a PR merges, an implementation stage completes, or a material CI decision/status changes. Record factual outcomes only; distinguish planned, in-progress, and verified work.
