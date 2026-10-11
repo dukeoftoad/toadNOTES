@@ -115,7 +115,7 @@ private fun NestNoteApp(store: NoteStore) {
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     // Resolve the selected note from persisted notes after recreation.
-    val editorNoteId = note.ids.firstOrNull { it.id == editorNoteId }
+    val editorNote = notes.firstOrNull { it.id == editorNoteId }
     var toastMessage by remember { mutableStateOf("") }
     var snackbarHost by remember { mutableStateOf<SnackbarHostState?>(null) }
 
