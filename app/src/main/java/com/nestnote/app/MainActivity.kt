@@ -444,8 +444,9 @@ private fun SettingsSection(title: String, subtitle: String, content: @Composabl
 private fun NoteCard(note: NestNote, compact: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
-    val accent = noteAccents[note.color.coerceIn(0, noteAccents.lastIndex)]
-    val tint = noteTints[note.color.coerceIn(0, noteTints.lastIndex)]
+    // Keep note surfaces and labels legible in wallpaper-derived and fallback schemes.
+    val accent = colors.primary
+    val tint = colors.primaryContainer
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
@@ -455,12 +456,12 @@ private fun NoteCard(note: NestNote, compact: Boolean, onOpen: () -> Unit, onPin
         Column(Modifier.fillMaxWidth().padding(if (compact) 10.dp else 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(color = tint, shape = RoundedCornerShape(8.dp)) {
-                    Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                    Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = colors.onPrimaryContainer, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.weight(1f))
-                if (note.pinned) Icon(Icons.Default.PushPin, contentDescription = "Pinned", tint = colors.primary, modifier = Modifier.size(16.dp))
+                if (note.pinned) Icon(Icons.Default.PushPin, contentDescription = "Pinned note", tint = colors.primary, modifier = Modifier.size(18.dp))
                 Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Note actions") }
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Actions for " + note.title) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; onPin() }, leadingIcon = { Icon(Icons.Default.PushPin, null) })
                         DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onOpen() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
