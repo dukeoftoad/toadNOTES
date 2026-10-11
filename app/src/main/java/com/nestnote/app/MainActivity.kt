@@ -71,6 +71,10 @@ private enum class ThemeMode(val label: String) {
 private enum class DashboardLayout(val label: String) {
     GRID("Grid"), LIST("List")
 }
+private enum class DashboardDensity(val label: String, val description: String) {
+    COMPACT("Compact", "Tighter cards to see more notes"),
+    COMFORTABLE("Comfortable", "More spacing and breathing room")
+}
 private enum class EditorMode(val label: String, val description: String) {
     SHEET("Expandable bottom sheet", "A compact editor that expands as you write"),
     FULL_SCREEN("Full-screen editor", "A distraction-free writing space"),
@@ -94,7 +98,8 @@ private fun NestNoteApp(store: NoteStore) {
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
     var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
-    var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }\n    var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
+    var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }
+    var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }\n    var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
@@ -193,7 +198,9 @@ private fun NestNoteApp(store: NoteStore) {
                         dashboardLayout = dashboardLayout,
                         onLayoutChange = { dashboardLayout = it; savePreference(PREF_LAYOUT, it.name) },
                         editorMode = editorMode,
-                        onEditorModeChange = { editorMode = it; savePreference(PREF_EDITOR, it.name) }
+                        onEditorModeChange = { editorMode = it; savePreference(PREF_EDITOR, it.name) },
+                        dashboardDensity = dashboardDensity,
+                        onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) }
                     )
                 } else if (selectedView == "Categories") {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -263,7 +270,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, onOpen = { editorNote = note; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -331,7 +338,9 @@ private fun SettingsScreen(
     dashboardLayout: DashboardLayout,
     onLayoutChange: (DashboardLayout) -> Unit,
     editorMode: EditorMode,
-    onEditorModeChange: (EditorMode) -> Unit
+    onEditorModeChange: (EditorMode) -> Unit,
+    dashboardDensity: DashboardDensity,
+    onDensityChange: (DashboardDensity) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(
@@ -376,6 +385,19 @@ private fun SettingsScreen(
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(layout.label)
                             Text(if (layout == DashboardLayout.GRID) "Compact cards, side by side" else "Full-width notes with more preview space", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            SettingsSection(title = "Dashboard density", subtitle = "Choose how much space each note uses") {
+                DashboardDensity.values().forEach { density ->
+                    Row(Modifier.fillMaxWidth().clickable { onDensityChange(density) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = dashboardDensity == density, onClick = { onDensityChange(density) })
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(density.label)
+                            Text(density.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                     }
                 }
