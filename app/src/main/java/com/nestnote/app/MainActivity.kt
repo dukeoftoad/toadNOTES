@@ -171,8 +171,9 @@ private fun NestNoteApp(store: NoteStore) {
                                 Icon(when (item) {
                                     "Home" -> Icons.Default.Home
                                     "Settings" -> Icons.Default.Settings
-                                    "Categories" -> Icons.Default.List
-                                    else -> Icons.Default.Edit
+                                    "Categories" -> Icons.Default.GridView
+                                    "All notes" -> Icons.Default.List
+                                    else -> Icons.Default.Check
                                 }, contentDescription = item)
                             },
                             label = { Text(item, maxLines = 1, fontSize = 10.sp) }
@@ -223,24 +224,95 @@ private fun NestNoteApp(store: NoteStore) {
                         }
                     }
                 } else {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
-                        Text(
-                            when (selectedView) {
-                                "Home" -> "Your thinking space"
-                                "All notes" -> "All your notes"
-                                "Reminders" -> "Things to remember"
-                                else -> selectedView
-                            },
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text("${filteredNotes.size} notes · Make space for what matters", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AssistChip(onClick = { selectedView = "All notes" }, label = { Text("${notes.size} notes") })
-                            AssistChip(onClick = { selectedView = "Reminders" }, label = { Text("${notes.count { it.reminder.isNotBlank() }} reminders") })
-                            Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { dashboardLayout = if (dashboardLayout == DashboardLayout.GRID) DashboardLayout.LIST else DashboardLayout.GRID; savePreference(PREF_LAYOUT, dashboardLayout.name) }) {
-                                Icon(if (dashboardLayout == DashboardLayout.GRID) Icons.Default.List else Icons.Default.GridView, contentDescription = "Switch dashboard layout")
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (selectedView == "Home") {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = colors.primaryContainer
+                            ) {
+                                Column(
+                                    Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                                ) {
+                                    Text(
+                                        "YOUR SPACE",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.2.sp,
+                                        color = colors.onPrimaryContainer
+                                    )
+                                    Text(
+                                        "Capture what matters.",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.onPrimaryContainer
+                                    )
+                                    Text(
+                                        "A calm home for your thoughts, plans, and ideas.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colors.onPrimaryContainer
+                                    )
+                                }
+                            }
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OverviewTile(
+                                    label = "All notes",
+                                    count = notes.size,
+                                    onClick = { selectedView = "All notes" },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OverviewTile(
+                                    label = "Reminders",
+                                    count = notes.count { it.reminder.isNotBlank() },
+                                    onClick = { selectedView = "Reminders" },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    when (selectedView) {
+                                        "All notes" -> "All your notes"
+                                        "Reminders" -> "Things to remember"
+                                        else -> selectedView
+                                    },
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "${filteredNotes.size} notes",
+                                    color = colors.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                if (selectedView == "Home") "Your notes" else "Notes",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = {
+                                    dashboardLayout = if (dashboardLayout == DashboardLayout.GRID) DashboardLayout.LIST else DashboardLayout.GRID
+                                    savePreference(PREF_LAYOUT, dashboardLayout.name)
+                                }
+                            ) {
+                                Icon(
+                                    if (dashboardLayout == DashboardLayout.GRID) Icons.Default.List else Icons.Default.GridView,
+                                    contentDescription = "Switch dashboard layout"
+                                )
                             }
                         }
                     }
@@ -436,6 +508,35 @@ private fun SettingsSection(title: String, subtitle: String, content: @Composabl
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             content()
+        }
+    }
+}
+
+@Composable
+private fun OverviewTile(
+    label: String,
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = colors.surfaceContainerLow,
+        border = BorderStroke(1.dp, colors.outlineVariant)
+    ) {
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                count.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = colors.primary
+            )
+            Text(label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
         }
     }
 }
