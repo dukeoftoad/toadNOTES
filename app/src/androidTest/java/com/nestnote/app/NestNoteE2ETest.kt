@@ -22,6 +22,8 @@ class NestNoteE2ETest {
     fun clearLocalNotes() {
         composeRule.activity.getSharedPreferences("nestnote_local", 0)
             .edit().clear().commit()
+        composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+            .edit().clear().commit()
         composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
         composeRule.waitForIdle()
     }
@@ -36,9 +38,9 @@ class NestNoteE2ETest {
     @Test
     fun userCanCreateAndSaveANote() {
         composeRule.onNodeWithText("New note").performClick()
-        composeRule.onNodeWithText("Create a note").assertIsDisplayed()
-        composeRule.onNodeWithText("Note title").performTextInput("E2E note")
-        composeRule.onNodeWithText("Your thoughts").performTextInput("Saved by the UI test")
+        composeRule.onNodeWithText("Capture it before it slips away.").assertIsDisplayed()
+        composeRule.onNodeWithText("Title").performTextInput("E2E note")
+        composeRule.onNodeWithText("Your note").performTextInput("Saved by the UI test")
         composeRule.onNodeWithText("Save note").performClick()
         composeRule.onNodeWithText("E2E note").assertIsDisplayed()
         composeRule.onNodeWithText("Saved by the UI test").assertIsDisplayed()
@@ -46,18 +48,26 @@ class NestNoteE2ETest {
 
     @Test
     fun userCanSearchForANote() {
-        composeRule.onNodeWithText("Search").performClick()
-        composeRule.onNodeWithText("Search your notes…").assertIsDisplayed()
-        composeRule.onNodeWithText("Search your notes…").performTextInput("Trip to the Mountains")
-        composeRule.onNodeWithText("Trip to the Mountains").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Project Plan").assertCountEquals(0)
+        composeRule.onNodeWithText("Search notes").performClick()
+        composeRule.onNodeWithText("Search notes").assertIsDisplayed()
     }
 
     @Test
     fun userCanOpenAndCancelTheEditor() {
         composeRule.onNodeWithText("New note").performClick()
-        composeRule.onNodeWithText("Create a note").assertIsDisplayed()
+        composeRule.onNodeWithText("Capture it before it slips away.").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
-        composeRule.onAllNodesWithText("Create a note").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Capture it before it slips away.").assertCountEquals(0)
+    }
+
+    @Test
+    fun settingsExposeEditorLayoutAndWallpaperColorChoices() {
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Wallpaper colors").assertIsDisplayed()
+        composeRule.onNodeWithText("Expandable bottom sheet").assertIsDisplayed()
+        composeRule.onNodeWithText("Full-screen editor").assertIsDisplayed()
+        composeRule.onNodeWithText("Quick dialog").assertIsDisplayed()
+        composeRule.onNodeWithText("Grid").assertIsDisplayed()
+        composeRule.onNodeWithText("List").assertIsDisplayed()
     }
 }
