@@ -63,6 +63,7 @@ private const val PREF_THEME = "theme_mode"
 private const val PREF_DYNAMIC = "dynamic_colors"
 private const val PREF_LAYOUT = "dashboard_layout"
 private const val PREF_EDITOR = "editor_mode"
+private const val PREF_DENSITY = "dashboard_density"
 
 private enum class ThemeMode(val label: String) {
     SYSTEM("Follow device"), LIGHT("Light"), DARK("Dark")
@@ -93,7 +94,7 @@ private fun NestNoteApp(store: NoteStore) {
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
     var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
-    var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }
+    var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }\n    var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
@@ -250,7 +251,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, onOpen = { editorNote = note; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -418,7 +419,7 @@ private fun SettingsSection(title: String, subtitle: String, content: @Composabl
 }
 
 @Composable
-private fun NoteCard(note: NestNote, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+private fun NoteCard(note: NestNote, compact: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val accent = noteAccents[note.color.coerceIn(0, noteAccents.lastIndex)]
@@ -429,7 +430,7 @@ private fun NoteCard(note: NestNote, onOpen: () -> Unit, onPin: () -> Unit, onDe
         colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
         border = BorderStroke(1.dp, colors.outlineVariant)
     ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(if (compact) 10.dp else 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(color = tint, shape = RoundedCornerShape(8.dp)) {
                     Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
@@ -446,8 +447,8 @@ private fun NoteCard(note: NestNote, onOpen: () -> Unit, onPin: () -> Unit, onDe
                 }
             }
             Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
-            Text(note.body, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = if (noteAccents.size > 0) 4 else 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
-            Spacer(Modifier.height(12.dp))
+            Text(note.body, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = if (compact) 2 else 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
+            Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
             Text(
                 if (note.reminder.isNotBlank()) "◷ ${note.reminder}" else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
                 style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant
