@@ -97,6 +97,7 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 | `129b668` | 2026-10-11 | Initial NESTNOTE application commit |
 
 ## Recent Phase 2 commits
+| `ca8a723` | Fixed note-card foreground contrast: pastel cards now use stable dark primary text, secondary text, and icons rather than wallpaper-derived yellow/bright theme colors; adaptive cards still use Material 3 foreground colors. | CI pending; verify build before merge. |
 | Commit | Change | Validation |
 |---|---|---|
 | `e6db24a` | Save editor visibility and selected note ID across activity recreation; updated release workflow to use a rolling `latest` prerelease titled `NESTNOTE Latest Build` in the same branch commit `c47242e`. | Android CI failed at Kotlin compile on `MainActivity.kt:338` due to one remaining assignment to the now-derived `editorNote`; corrected in follow-up commit (see next row). |
