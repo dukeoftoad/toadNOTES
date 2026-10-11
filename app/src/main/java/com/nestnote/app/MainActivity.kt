@@ -391,6 +391,7 @@ private fun NestNoteApp(store: NoteStore) {
                     text = {
                         QuickNoteFields(
                             original = editorNote,
+                            defaultCategory = defaultNoteCategory,
                             onSave = saveNote,
                             onDismiss = dismissEditor,
                             onDelete = deleteNote
@@ -777,6 +778,7 @@ private fun NoteEditorContent(
 @Composable
 private fun QuickNoteFields(
     original: NestNote?,
+    defaultCategory: String,
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?
@@ -795,7 +797,7 @@ private fun QuickNoteFields(
                     if (title.isNotBlank() && body.isNotBlank()) onSave(
                         NestNote(
                             id = original?.id ?: System.currentTimeMillis(), title = title.trim(), body = body.trim(),
-                            category = original?.category ?: "Ideas", color = original?.color ?: 0,
+                            category = original?.category ?: defaultCategory, color = original?.color ?: 0,
                             pinned = original?.pinned ?: false, reminder = original?.reminder.orEmpty(),
                             updated = System.currentTimeMillis()
                         )
