@@ -74,6 +74,13 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Title A–Z").assertIsDisplayed()
         composeRule.onNodeWithText("Title A–Z").performClick()
         composeRule.onNodeWithText("Your notes").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(
+                "TITLE",
+                composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+                    .getString("default_sort", null)
+            )
+        }
     }
 
     @Test
