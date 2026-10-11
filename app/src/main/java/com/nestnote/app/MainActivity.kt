@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -111,8 +112,12 @@ private fun NestNoteApp(store: NoteStore) {
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
-    var editorNote by remember { mutableStateOf<NestNote?>(null) }
-    var editorVisible by remember { mutableStateOf(false) }
+    var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editorVisible by rememberSaveable { mutableStateOf(false) }
+    var editorHasUnsavedChanges by remember { mutableStateOf(false) }
+    var confirmSystemDiscard by remember { mutableStateOf(false) }
+    // Resolve the selected note from persisted notes after recreation.
+    val editorNote = notes.firstOrNull { it.id == editorNoteId }
     var toastMessage by remember { mutableStateOf("") }
     var snackbarHost by remember { mutableStateOf<SnackbarHostState?>(null) }
 
@@ -166,7 +171,7 @@ private fun NestNoteApp(store: NoteStore) {
             floatingActionButton = {
                 if (selectedView != "Settings" && selectedView != "Categories") {
                     FloatingActionButton(
-                        onClick = { editorNote = null; editorVisible = true },
+                        onClick = { editorNoteId = null; editorVisible = true },
                         shape = CircleShape,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -320,7 +325,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -332,7 +337,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
@@ -343,12 +348,13 @@ private fun NestNoteApp(store: NoteStore) {
         }
 
         if (editorVisible) {
-            val dismissEditor = { editorVisible = false }
+            val closeEditor = { editorHasUnsavedChanges = false; confirmSystemDiscard = false; editorVisible = false }
+            val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else closeEditor() }
             val saveNote: (NestNote) -> Unit = { updated ->
                 val existing = editorNote
                 val next = if (existing == null) notes + updated else notes.map { if (it.id == existing.id) updated.copy(id = existing.id) else it }
                 persist(next)
-                editorVisible = false
+                closeEditor()
                 toastMessage = "Note saved"
             }
             val deleteNote: (() -> Unit)? = if (editorNote != null) ({
@@ -357,11 +363,11 @@ private fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, onSave = saveNote, onDismiss = dismissEditor, onDelete = deleteNote, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, onSave = saveNote, onDismiss = dismissEditor, onDelete = deleteNote, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorMode.QUICK_DIALOG -> AlertDialog(
@@ -377,6 +383,15 @@ private fun NestNoteApp(store: NoteStore) {
                     },
                     confirmButton = {},
                     dismissButton = {}
+                )
+            }
+            if (confirmSystemDiscard) {
+                AlertDialog(
+                    onDismissRequest = { confirmSystemDiscard = false },
+                    title = { Text("Discard changes?") },
+                    text = { Text("Your unsaved changes will be lost.") },
+                    confirmButton = { TextButton(onClick = closeEditor) { Text("Discard") } },
+                    dismissButton = { TextButton(onClick = { confirmSystemDiscard = false }) { Text("Keep editing") } }
                 )
             }
         }
@@ -550,24 +565,28 @@ private fun OverviewTile(
 private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
-    // Keep note surfaces and labels legible in wallpaper-derived and fallback schemes.
-    val accent = noteAccents[note.color.coerceIn(0, noteAccents.lastIndex)]
+    // Wallpaper palettes can produce very bright onSurface/primary colors that
+    // disappear on the fixed pastel note backgrounds. Use a stable high-contrast
+    // foreground for pastel cards; adaptive cards continue to follow Material 3.
     val tint = if (colorStyle == NoteColorStyle.PASTEL) noteTints[note.color.coerceIn(0, noteTints.lastIndex)] else colors.surfaceContainerLow
+    val cardText = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF292633) else colors.onSurface
+    val cardSecondary = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF625D6B) else colors.onSurfaceVariant
+    val cardAccent = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF51466B) else colors.primary
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = tint),
+        colors = CardDefaults.cardColors(containerColor = tint, contentColor = cardText),
         border = BorderStroke(1.dp, colors.outlineVariant)
     ) {
         Column(Modifier.fillMaxWidth().padding(if (compact) 10.dp else 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(color = tint, shape = RoundedCornerShape(8.dp)) {
-                    Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = colors.onSurface, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                    Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = cardText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.weight(1f))
-                if (note.pinned) Icon(Icons.Default.PushPin, contentDescription = "Pinned note", tint = colors.primary, modifier = Modifier.size(18.dp))
+                if (note.pinned) Icon(Icons.Default.PushPin, contentDescription = "Pinned note", tint = cardAccent, modifier = Modifier.size(18.dp))
                 Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Actions for " + note.title) }
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Actions for " + note.title, tint = cardText) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; onPin() }, leadingIcon = { Icon(Icons.Default.PushPin, null) })
                         DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onOpen() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
@@ -576,11 +595,11 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
                 }
             }
             Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
-            Text(note.body, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = if (compact) 2 else 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
+            Text(note.body, style = MaterialTheme.typography.bodyMedium, color = cardSecondary, maxLines = if (compact) 2 else 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
             Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
             Text(
                 if (note.reminder.isNotBlank()) "◷ ${note.reminder}" else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
-                style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant
+                style = MaterialTheme.typography.labelSmall, color = cardSecondary
             )
         }
     }
@@ -593,14 +612,27 @@ private fun NoteEditorContent(
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
+    onUnsavedChangesChange: (Boolean) -> Unit = {},
     fullScreen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var title by remember(original?.id) { mutableStateOf(original?.title.orEmpty()) }
-    var body by remember(original?.id) { mutableStateOf(original?.body.orEmpty()) }
-    var category by remember(original?.id) { mutableStateOf(original?.category ?: "Ideas") }
-    var colorIndex by remember(original?.id) { mutableIntStateOf(original?.color ?: 0) }
-    var reminder by remember(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
+    // Saveable editor fields survive activity recreation (for example, rotation).
+    // Keying by note ID resets the draft only when switching to another note.
+    var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
+    var body by rememberSaveable(original?.id) { mutableStateOf(original?.body.orEmpty()) }
+    var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: "Ideas") }
+    var colorIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.color ?: 0) }
+    var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
+    var discardConfirmation by remember { mutableStateOf(false) }
+    val hasUnsavedChanges = title != original?.title.orEmpty() ||
+        body != original?.body.orEmpty() ||
+        category != (original?.category ?: "Ideas") ||
+        colorIndex != (original?.color ?: 0) ||
+        reminder != original?.reminder.orEmpty()
+    fun requestDismiss() {
+        if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
+    }
+    LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
     var categoryExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Column(
@@ -612,7 +644,7 @@ private fun NoteEditorContent(
                 Text(if (original == null) "New note" else "Edit note", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("Capture it before it slips away.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onDismiss) { Text("✕") }
+            IconButton(onClick = { requestDismiss() }) { Text("✕") }
         }
         OutlinedTextField(
             value = title, onValueChange = { title = it },
@@ -657,7 +689,7 @@ private fun NoteEditorContent(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete") }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = { requestDismiss() }) { Text("Cancel") }
             Button(
                 onClick = {
                     if (title.isNotBlank() && body.isNotBlank()) {
@@ -670,6 +702,22 @@ private fun NoteEditorContent(
                 },
                 enabled = title.isNotBlank() && body.isNotBlank()
             ) { Text("Save note") }
+        }
+        if (discardConfirmation) {
+            AlertDialog(
+                onDismissRequest = { discardConfirmation = false },
+                title = { Text("Discard changes?") },
+                text = { Text("Your unsaved changes will be lost.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        discardConfirmation = false
+                        onDismiss()
+                    }) { Text("Discard") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { discardConfirmation = false }) { Text("Keep editing") }
+                }
+            )
         }
     }
 }

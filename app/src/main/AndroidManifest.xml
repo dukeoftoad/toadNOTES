@@ -2,6 +2,7 @@
     <application
         android:allowBackup="true"
         android:label="NESTNOTE"
+        android:icon="@drawable/nestnote_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity
