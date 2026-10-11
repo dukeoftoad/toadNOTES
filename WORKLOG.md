@@ -113,3 +113,26 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 
 ## Maintenance
 Update this file when a PR merges, an implementation stage completes, or a material CI decision/status changes. Record factual outcomes only; distinguish planned, in-progress, and verified work.
+
+
+## Phase 3 — Settings expansion
+
+| Commit | Work | Validation |
+|---|---|---|
+| `63fb556` | Added persistent preferences for default sort order, note preview visibility, and date/reminder visibility. | CI pending. |
+| `360535f` | Added the Note behavior group to Settings with controls for sorting, previews, and timestamps/reminders. | CI pending. |
+| `a2e9b0a` | Connected note-card rendering to the preview and timestamp preferences. | CI pending. |
+
+## Validation policy
+
+- Normal Android CI is required for each meaningful increment.
+- Emulator UI workflow remains manual-only; visual verification must be recorded as manual when performed.
+- Do not mark Phase 3 complete until preference persistence and existing note/editor flows are verified.
+- Preserve the existing NoteStore format and user notes.
+
+## Next steps
+
+1. Run Android CI and fix any compile/test failures.
+2. Add tests for preference persistence and preview/timestamp toggles.
+3. Add default note category and starting category behavior.
+4. Expand settings into Appearance, Layout, Note behavior, and Data & privacy groups without rewriting note storage.
