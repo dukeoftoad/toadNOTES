@@ -97,6 +97,8 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 | `129b668` | 2026-10-11 | Initial NESTNOTE application commit |
 
 ## Recent Phase 2 commits
+| `be7da73` | Refined the launcher vector to include its own rounded-square deep-teal background, avoiding a full-bleed square when used as a legacy launcher drawable. The generated reference image was used as visual direction; vector remains a hand-built approximation, not a pixel-exact embedded PNG. | CI pending. |
+
 | `9c1b6b2` | Added a custom NESTNOTE launcher vector drawable inspired by the generated icon concept (deep teal tile, layered pastel notes, folded golden corner, writing lines, N mark, pencil). | Pending CI. |
 | `dada8ae` | Applied `@drawable/nestnote_launcher` as the Android application icon in the manifest. | Pending CI. |
 
