@@ -32,6 +32,8 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Compile Android instrumentation tests
+        run: gradle --no-daemon assembleDebugAndroidTest
       - name: Generate temporary CI keystore and sign test APK
         shell: bash
         run: |
