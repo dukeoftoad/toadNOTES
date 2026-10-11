@@ -112,8 +112,10 @@ private fun NestNoteApp(store: NoteStore) {
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
-    var editorNote by remember { mutableStateOf<NestNote?>(null) }
-    var editorVisible by remember { mutableStateOf(false) }
+    var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editorVisible by rememberSaveable { mutableStateOf(false) }
+    // Resolve the selected note from persisted notes after recreation.
+    val editorNote = notes.firstOrNull { it.id == editorNoteId }
     var toastMessage by remember { mutableStateOf("") }
     var snackbarHost by remember { mutableStateOf<SnackbarHostState?>(null) }
 
@@ -167,7 +169,7 @@ private fun NestNoteApp(store: NoteStore) {
             floatingActionButton = {
                 if (selectedView != "Settings" && selectedView != "Categories") {
                     FloatingActionButton(
-                        onClick = { editorNote = null; editorVisible = true },
+                        onClick = { editorNoteId = null; editorVisible = true },
                         shape = CircleShape,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -321,7 +323,7 @@ private fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNote = note; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, onOpen = { editorNoteId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { persist(notes.filterNot { it.id == note.id }) })
                             }
