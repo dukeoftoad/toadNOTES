@@ -165,11 +165,14 @@ private fun NestNoteApp(store: NoteStore) {
             },
             floatingActionButton = {
                 if (selectedView != "Settings" && selectedView != "Categories") {
-                    ExtendedFloatingActionButton(
+                    FloatingActionButton(
                         onClick = { editorNote = null; editorVisible = true },
-                        icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                        text = { Text("New note") }
-                    )
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Create note", modifier = Modifier.size(28.dp))
+                    }
                 }
             },
             bottomBar = {
