@@ -3,6 +3,9 @@ package com.nestnote.app
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -82,13 +85,17 @@ class NestNoteE2ETest {
     fun settingsExposeEditorLayoutAndWallpaperColorChoices() {
         composeRule.onNodeWithText("Settings").performClick()
         composeRule.onNodeWithText("Wallpaper colors").assertIsDisplayed()
-        composeRule.onNodeWithText("Expandable bottom sheet").assertIsDisplayed()
-        composeRule.onNodeWithText("Full-screen editor").assertIsDisplayed()
-        composeRule.onNodeWithText("Quick dialog").assertIsDisplayed()
+        val settings = composeRule.onNodeWithTag("settings_scroll")
+        settings.performScrollToNode(hasText("Grid"))
         composeRule.onNodeWithText("Grid").assertIsDisplayed()
         composeRule.onNodeWithText("List").assertIsDisplayed()
+        settings.performScrollToNode(hasText("Comfortable"))
         composeRule.onNodeWithText("Dashboard density").assertIsDisplayed()
         composeRule.onNodeWithText("Compact").assertIsDisplayed()
         composeRule.onNodeWithText("Comfortable").assertIsDisplayed()
+        settings.performScrollToNode(hasText("Expandable bottom sheet"))
+        composeRule.onNodeWithText("Expandable bottom sheet").assertIsDisplayed()
+        composeRule.onNodeWithText("Full-screen editor").assertIsDisplayed()
+        composeRule.onNodeWithText("Quick dialog").assertIsDisplayed()
     }
 }
