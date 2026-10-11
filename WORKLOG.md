@@ -136,3 +136,5 @@ Update this file when a PR merges, an implementation stage completes, or a mater
 2. Add tests for preference persistence and preview/timestamp toggles.
 3. Add default note category and starting category behavior.
 4. Expand settings into Appearance, Layout, Note behavior, and Data & privacy groups without rewriting note storage.
+
+| `dc9d246` | Fixed the list-layout NoteCard call so preview and timestamp preferences apply consistently in both grid and list modes. | CI pending; caught during code review before CI. |
