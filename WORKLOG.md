@@ -157,3 +157,5 @@ Update this file when a PR merges, an implementation stage completes, or a mater
 | `a0431be` | Added a persistent default note category setting and applied it to newly created notes in the primary editor; existing notes retain their saved category. | Code change committed; CI intentionally not polled per user instruction. |
 
 | `838277e` | Fixed the Quick dialog editor to honor the saved default note category for new notes, matching the sheet and full-screen editor behavior; editing an existing note still preserves its category. | Code change committed; checks not polled per user instruction. |
+
+| `39b87ca` | Fixed dashboard sort menu persistence: selecting Recently edited or Title A–Z now saves the preference immediately, matching Settings and surviving app recreation. | Source-level review; Android CI for this exact commit not yet observed. |
