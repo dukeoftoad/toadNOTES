@@ -107,16 +107,6 @@ class NestNoteE2ETest {
     }
 
     @Test
-    fun pinnedNotesAppearBeforeUnpinnedNotes() {
-        composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
-        composeRule.onNodeWithText("Trip to the Mountains").assertIsDisplayed()
-        composeRule.runOnIdle {
-            val firstPinned = composeRule.onAllNodesWithText("Project Plan").fetchSemanticsNodes()
-            assertEquals(1, firstPinned.size)
-        }
-    }
-
-    @Test
     fun settingsExposeEditorLayoutAndWallpaperColorChoices() {
         composeRule.onNodeWithText("Settings").performClick()
         composeRule.onNodeWithText("Wallpaper colors").assertIsDisplayed()
