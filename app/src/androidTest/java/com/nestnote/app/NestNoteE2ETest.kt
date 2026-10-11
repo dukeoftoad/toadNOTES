@@ -84,6 +84,19 @@ class NestNoteE2ETest {
     }
 
     @Test
+    fun cancelWithUnsavedChangesRequiresConfirmation() {
+        composeRule.onNodeWithText("New note").performClick()
+        composeRule.onNodeWithText("Title").performTextInput("Draft not saved")
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("Discard changes?").assertIsDisplayed()
+        composeRule.onNodeWithText("Keep editing").performClick()
+        composeRule.onNodeWithText("Draft not saved").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("Discard").performClick()
+        composeRule.onAllNodesWithText("Capture it before it slips away.").assertCountEquals(0)
+    }
+
+    @Test
     fun userCanOpenAndCancelTheEditor() {
         composeRule.onNodeWithText("New note").performClick()
         composeRule.onNodeWithText("Capture it before it slips away.").assertIsDisplayed()
