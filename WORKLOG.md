@@ -1,6 +1,8 @@
 # NESTNOTE Work Log
 
-Last updated: 2026-10-11  
+Last updated: 2026-10-11
+
+> Maintenance rule: update this log in the same commit as every implementation commit, including the commit SHA, summary, and validation status. If a separate commit is unavoidable, update the log immediately afterward.  
 Repository: [dukeoftoad/toadNOTES](https://github.com/dukeoftoad/toadNOTES)
 
 This activity record is assembled from visible repository commits, pull requests, and GitHub Actions runs. Statuses reflect the latest checks observed when written; use the linked run for live status.
@@ -93,6 +95,12 @@ Visible commit history, newest first (short SHA, UTC date, subject; merge commit
 | `34e4fa3` | 2026-10-11 | Add Android CI/CD and unit/E2E tests |
 | `d4a5f26` | 2026-10-11 | Add native Android 16 app with Kotlin and Jetpack Compose |
 | `129b668` | 2026-10-11 | Initial NESTNOTE application commit |
+
+## Recent Phase 2 commits
+| Commit | Change | Validation |
+|---|---|---|
+| `e6db24a` | Save editor visibility and selected note ID across activity recreation; updated release workflow to use a rolling `latest` prerelease titled `NESTNOTE Latest Build` in the same branch commit `c47242e`. | Android CI failed at Kotlin compile on `MainActivity.kt:338` due to one remaining assignment to the now-derived `editorNote`; corrected in follow-up commit (see next row). |
+| `124873a` | Fixed remaining note-card open handler to update `editorNoteId`. | CI re-run pending; do not consider validated until current head succeeds. |
 
 ## Maintenance
 Update this file when a PR merges, an implementation stage completes, or a material CI decision/status changes. Record factual outcomes only; distinguish planned, in-progress, and verified work.
