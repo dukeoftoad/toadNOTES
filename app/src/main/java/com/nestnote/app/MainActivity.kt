@@ -114,6 +114,8 @@ private fun NestNoteApp(store: NoteStore) {
     var searchVisible by remember { mutableStateOf(false) }
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
+    var editorHasUnsavedChanges by remember { mutableStateOf(false) }
+    var confirmSystemDiscard by remember { mutableStateOf(false) }
     // Resolve the selected note from persisted notes after recreation.
     val editorNote = notes.firstOrNull { it.id == editorNoteId }
     var toastMessage by remember { mutableStateOf("") }
@@ -346,12 +348,13 @@ private fun NestNoteApp(store: NoteStore) {
         }
 
         if (editorVisible) {
-            val dismissEditor = { editorVisible = false }
+            val closeEditor = { editorHasUnsavedChanges = false; confirmSystemDiscard = false; editorVisible = false }
+            val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else closeEditor() }
             val saveNote: (NestNote) -> Unit = { updated ->
                 val existing = editorNote
                 val next = if (existing == null) notes + updated else notes.map { if (it.id == existing.id) updated.copy(id = existing.id) else it }
                 persist(next)
-                editorVisible = false
+                closeEditor()
                 toastMessage = "Note saved"
             }
             val deleteNote: (() -> Unit)? = if (editorNote != null) ({
@@ -360,11 +363,11 @@ private fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, onSave = saveNote, onDismiss = dismissEditor, onDelete = deleteNote, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, onSave = saveNote, onDismiss = dismissEditor, onDelete = deleteNote, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, onSave = saveNote, onDismiss = closeEditor, onDelete = deleteNote, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorMode.QUICK_DIALOG -> AlertDialog(
@@ -380,6 +383,15 @@ private fun NestNoteApp(store: NoteStore) {
                     },
                     confirmButton = {},
                     dismissButton = {}
+                )
+            }
+            if (confirmSystemDiscard) {
+                AlertDialog(
+                    onDismissRequest = { confirmSystemDiscard = false },
+                    title = { Text("Discard changes?") },
+                    text = { Text("Your unsaved changes will be lost.") },
+                    confirmButton = { TextButton(onClick = closeEditor) { Text("Discard") } },
+                    dismissButton = { TextButton(onClick = { confirmSystemDiscard = false }) { Text("Keep editing") } }
                 )
             }
         }
@@ -596,6 +608,7 @@ private fun NoteEditorContent(
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
+    onUnsavedChangesChange: (Boolean) -> Unit = {},
     fullScreen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -615,6 +628,7 @@ private fun NoteEditorContent(
     fun requestDismiss() {
         if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
     }
+    LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
     var categoryExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Column(
