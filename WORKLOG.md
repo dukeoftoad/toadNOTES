@@ -155,3 +155,5 @@ Update this file when a PR merges, an implementation stage completes, or a mater
 | `3db8c07` | Made the dashboard sort control label reflect the active sort mode (Recently edited vs Title A–Z), so the visible selection stays in sync with the persistent sort preference and menu selection. | Code change committed; CI intentionally not polled per user instruction. |
 
 | `a0431be` | Added a persistent default note category setting and applied it to newly created notes in the primary editor; existing notes retain their saved category. | Code change committed; CI intentionally not polled per user instruction. |
+
+| `838277e` | Fixed the Quick dialog editor to honor the saved default note category for new notes, matching the sheet and full-screen editor behavior; editing an existing note still preserves its category. | Code change committed; checks not polled per user instruction. |
