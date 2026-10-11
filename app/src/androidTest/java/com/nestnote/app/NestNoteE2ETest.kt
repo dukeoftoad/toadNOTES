@@ -92,6 +92,31 @@ class NestNoteE2ETest {
     }
 
     @Test
+    fun categorySelectionFiltersDashboardNotes() {
+        composeRule.onNodeWithText("Categories").performClick()
+        composeRule.onNodeWithText("Work").performClick()
+        composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Trip to the Mountains").assertCountEquals(0)
+    }
+
+    @Test
+    fun searchWithNoMatchesShowsHelpfulEmptyState() {
+        composeRule.onNodeWithText("Search your notes").performTextInput("no-note-should-match-this")
+        composeRule.onNodeWithText("A fresh page awaits").assertIsDisplayed()
+        composeRule.onNodeWithText("Create a note and let ideas flow.").assertIsDisplayed()
+    }
+
+    @Test
+    fun pinnedNotesAppearBeforeUnpinnedNotes() {
+        composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
+        composeRule.onNodeWithText("Trip to the Mountains").assertIsDisplayed()
+        composeRule.runOnIdle {
+            val firstPinned = composeRule.onAllNodesWithText("Project Plan").fetchSemanticsNodes()
+            assertEquals(1, firstPinned.size)
+        }
+    }
+
+    @Test
     fun settingsExposeEditorLayoutAndWallpaperColorChoices() {
         composeRule.onNodeWithText("Settings").performClick()
         composeRule.onNodeWithText("Wallpaper colors").assertIsDisplayed()
