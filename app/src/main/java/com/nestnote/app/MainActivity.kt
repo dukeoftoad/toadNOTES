@@ -243,6 +243,7 @@ private fun NoteCard(note: NestNote, surface: Color, line: Color, text: Color, o
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoteEditor(original: NestNote?, categories: List<String>, onDismiss: () -> Unit, onSave: (NestNote) -> Unit, onDelete: (() -> Unit)?) {
     var title by remember(original?.id) { mutableStateOf(original?.title.orEmpty()) }
