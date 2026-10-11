@@ -67,6 +67,9 @@ private const val PREF_LAYOUT = "dashboard_layout"
 private const val PREF_EDITOR = "editor_mode"
 private const val PREF_DENSITY = "dashboard_density"
 private const val PREF_NOTE_STYLE = "note_color_style"
+private const val PREF_DEFAULT_SORT = "default_sort"
+private const val PREF_NOTE_PREVIEWS = "show_note_previews"
+private const val PREF_NOTE_TIMESTAMPS = "show_note_timestamps"
 
 private enum class ThemeMode(val label: String) {
     SYSTEM("Follow device"), LIGHT("Light"), DARK("Dark")
@@ -107,7 +110,9 @@ private fun NestNoteApp(store: NoteStore) {
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
     var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }
     var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
-    var sortByTitle by remember { mutableStateOf(false) }
+    var sortByTitle by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_SORT, "RECENT") == "TITLE") }
+    var showNotePreviews by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_PREVIEWS, true)) }
+    var showNoteTimestamps by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_TIMESTAMPS, true)) }
     var noteColorStyle by remember { mutableStateOf(NoteColorStyle.values().firstOrNull { it.name == preferences.getString(PREF_NOTE_STYLE, "PASTEL") } ?: NoteColorStyle.PASTEL) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
@@ -231,7 +236,13 @@ private fun NestNoteApp(store: NoteStore) {
                         dashboardDensity = dashboardDensity,
                         onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) },
                         noteColorStyle = noteColorStyle,
-                        onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) }
+                        onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) },
+                        sortByTitle = sortByTitle,
+                        onSortChange = { sortByTitle = it; savePreference(PREF_DEFAULT_SORT, if (it) "TITLE" else "RECENT") },
+                        showNotePreviews = showNotePreviews,
+                        onShowNotePreviewsChange = { showNotePreviews = it; preferences.edit().putBoolean(PREF_NOTE_PREVIEWS, it).apply() },
+                        showNoteTimestamps = showNoteTimestamps,
+                        onShowNoteTimestampsChange = { showNoteTimestamps = it; preferences.edit().putBoolean(PREF_NOTE_TIMESTAMPS, it).apply() }
                     )
                 } else if (selectedView == "Categories") {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -419,7 +430,13 @@ private fun SettingsScreen(
     dashboardDensity: DashboardDensity,
     onDensityChange: (DashboardDensity) -> Unit,
     noteColorStyle: NoteColorStyle,
-    onNoteColorStyleChange: (NoteColorStyle) -> Unit
+    onNoteColorStyleChange: (NoteColorStyle) -> Unit,
+    sortByTitle: Boolean,
+    onSortChange: (Boolean) -> Unit,
+    showNotePreviews: Boolean,
+    onShowNotePreviewsChange: (Boolean) -> Unit,
+    showNoteTimestamps: Boolean,
+    onShowNoteTimestampsChange: (Boolean) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(
