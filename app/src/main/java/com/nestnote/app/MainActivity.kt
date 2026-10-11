@@ -302,7 +302,7 @@ private fun NestNoteApp(store: NoteStore) {
                             var sortMenuExpanded by remember { mutableStateOf(false) }
                             Box {
                                 TextButton(onClick = { sortMenuExpanded = true }) {
-                                    Text("Recently edited", style = MaterialTheme.typography.labelLarge)
+                                    Text(if (sortByTitle) "Title A–Z" else "Recently edited", style = MaterialTheme.typography.labelLarge)
                                 }
                                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
                                     DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; sortMenuExpanded = false })
