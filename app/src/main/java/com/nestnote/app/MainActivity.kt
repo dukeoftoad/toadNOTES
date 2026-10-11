@@ -101,6 +101,7 @@ private fun NestNoteApp(store: NoteStore) {
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
     var editorMode by remember { mutableStateOf(EditorMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "SHEET") } ?: EditorMode.SHEET) }
     var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
+    var sortByTitle by remember { mutableStateOf(false) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
@@ -131,7 +132,10 @@ private fun NestNoteApp(store: NoteStore) {
         (selectedView == "Home" || selectedView == "All notes" || note.category == selectedView ||
             (selectedView == "Reminders" && note.reminder.isNotBlank())) &&
             (search.isBlank() || (note.title + " " + note.body + " " + note.category).contains(search, true))
-    }.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.updated })
+    }.let { visible ->
+        if (sortByTitle) visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenBy { it.title.lowercase(Locale.getDefault()) })
+        else visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.updated })
+    }
 
     MaterialTheme(colorScheme = scheme) {
         val colors = MaterialTheme.colorScheme
@@ -274,8 +278,8 @@ private fun NestNoteApp(store: NoteStore) {
                                     Text("Recently edited", style = MaterialTheme.typography.labelLarge)
                                 }
                                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortByTitle = true; sortMenuExpanded = false })
                                 }
                             }
                             IconButton(
@@ -521,18 +525,18 @@ private fun NoteCard(note: NestNote, compact: Boolean, onOpen: () -> Unit, onPin
     var menu by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     // Keep note surfaces and labels legible in wallpaper-derived and fallback schemes.
-    val accent = colors.primary
-    val tint = colors.primaryContainer
+    val accent = noteAccents[note.color.coerceIn(0, noteAccents.lastIndex)]
+    val tint = noteTints[note.color.coerceIn(0, noteTints.lastIndex)]
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
+        colors = CardDefaults.cardColors(containerColor = tint),
         border = BorderStroke(1.dp, colors.outlineVariant)
     ) {
         Column(Modifier.fillMaxWidth().padding(if (compact) 10.dp else 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(color = tint, shape = RoundedCornerShape(8.dp)) {
-                    Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = colors.onPrimaryContainer, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                    Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = colors.onSurface, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.weight(1f))
                 if (note.pinned) Icon(Icons.Default.PushPin, contentDescription = "Pinned note", tint = colors.primary, modifier = Modifier.size(18.dp))
