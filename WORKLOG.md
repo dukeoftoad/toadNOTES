@@ -1,0 +1,98 @@
+# NESTNOTE Work Log
+
+Last updated: 2026-10-11  
+Repository: [dukeoftoad/toadNOTES](https://github.com/dukeoftoad/toadNOTES)
+
+This activity record is assembled from visible repository commits, pull requests, and GitHub Actions runs. Statuses reflect the latest checks observed when written; use the linked run for live status.
+
+## Current snapshot
+- Native Android app using Kotlin, Jetpack Compose, and Material 3.
+- Target SDK Android 16 / API 36; minimum SDK 26.
+- main includes merged PR #1.
+- Phase 2 is in progress on `feature/phase-2-note-editor`, tracked by draft PR #2. **PR #2 is not merged.**
+- Existing note persistence uses SharedPreferences / NoteStore; Phase 2 preserves its format.
+- Emulator UI workflow is manual-only by project decision and is not a required CI gate.
+- No physical-device testing is claimed.
+
+## Pull requests
+| PR | Title | Status | Scope |
+|---|---|---|---|
+| [#1](https://github.com/dukeoftoad/toadNOTES/pull/1) | feat: Material 3 personalization and flexible note creation | **Merged** 2026-10-11 | Phase 1 dashboard modernization and personalization. |
+| [#2](https://github.com/dukeoftoad/toadNOTES/pull/2) | feat: resilient inline note editor | **Open draft** | Early Phase 2 increment; further work and validation remain. |
+
+## Work completed
+### Foundation and delivery automation
+- Created the native Kotlin / Jetpack Compose Android app.
+- Added Android CI/CD and unit/instrumentation-test scaffolding.
+- Fixed SDK setup and Compose UI-test dependency issues in CI.
+- Added automated APK prereleases from main and corrected the release artifact path.
+- Kept required CI focused on API 36; emulator UI workflow was made manually triggered after emulator reliability issues.
+
+### Phase 1 — home screen (merged)
+- Modernized the dashboard toward a calm, compact note-taking layout.
+- Added compact/comfortable density preference and adaptive overview.
+- Added note sort options and soft pastel / wallpaper-adaptive note colors.
+- Improved category-chip styling, note-card color rendering in list layout, and create-note action.
+- Added tests for dashboard/search/sorting, categories/empty state, note-color choices, settings/layout preferences, and related interactions.
+- PR: [#1](https://github.com/dukeoftoad/toadNOTES/pull/1).
+
+### Phase 2 — editor resilience (in progress)
+Branch: `feature/phase-2-note-editor`; PR: [#2](https://github.com/dukeoftoad/toadNOTES/pull/2).
+- Changed title, body, category, color, and reminder fields to Compose saveable state keyed to note ID.
+- Added discard confirmation for explicit editor close and Cancel when meaningful unsaved changes exist.
+- Added an instrumentation test for discard confirmation.
+- Preserved NoteStore schema and local persistence format.
+- Remaining: restore editor visibility/selection after activity recreation; route system/back and sheet dismissal through the same unsaved-change guard; review create/edit consistency and finish CI validation.
+
+## Validation and CI records
+- [Android CI — Phase 1 merged head](https://github.com/dukeoftoad/toadNOTES/actions/runs/38129704278): success.
+- [Android Release — Phase 1 merged head](https://github.com/dukeoftoad/toadNOTES/actions/runs/38129704259): success.
+- [Android CI — earlier Phase 1 commit](https://github.com/dukeoftoad/toadNOTES/actions/runs/38129329854): success.
+- [Android CI — earlier Phase 2 commit](https://github.com/dukeoftoad/toadNOTES/actions/runs/38129805061): cancelled after a newer commit was pushed.
+- [Android CI — current Phase 2 head f27e190](https://github.com/dukeoftoad/toadNOTES/actions/runs/38129835034): **in progress** when written. Do not record it as passed until complete.
+- [Android UI Tests (API 36)](https://github.com/dukeoftoad/toadNOTES/actions/runs/38129320213): separate/manual workflow; not a required CI gate under the current project decision.
+
+## Commit history
+Visible commit history, newest first (short SHA, UTC date, subject; merge commits included).
+| Commit | Date (UTC) | Subject |
+|---|---|---|
+| `a7532b3` | 2026-10-11 | Merge PR #1 — Material 3 personalization and flexible note creation |
+| `1d3c600` | 2026-10-11 | test: remove weak dashboard assertion |
+| `1f2a5dd` | 2026-10-11 | ci: keep emulator UI tests manually triggered |
+| `af7f825` | 2026-10-11 | test: cover dashboard categories and empty state |
+| `d85a7b5` | 2026-10-11 | ci: run API 36 UI tests on pull requests |
+| `994230e` | 2026-10-11 | fix: pass selected note color style in list layout |
+| `8faefe7` | 2026-10-11 | test: cover selectable adaptive and pastel note colors |
+| `54b4615` | 2026-10-11 | ui: use prominent round create-note action |
+| `823b27d` | 2026-10-11 | feat: add selectable pastel and wallpaper-adaptive note colors |
+| `8861a7e` | 2026-10-11 | test: cover reference home search and sorting |
+| `763cd46` | 2026-10-11 | feat: add working note sort options and soft note colors |
+| `1767d6d` | 2026-10-11 | ui: match calm compact NestNote home design |
+| `bcc3a83` | 2026-10-11 | test: scroll through settings in UI regression coverage |
+| `f22f464` | 2026-10-11 | test: expose settings scroll container for UI automation |
+| `6fc92d0` | 2026-10-11 | ci: compile Android UI tests in pull request validation |
+| `37a7ac1` | 2026-10-11 | test: cover modern home overview and saved layout preference |
+| `fc29813` | 2026-10-11 | ui: modernize home with adaptive overview and note section |
+| `2c02926` | 2026-10-11 | ui: align note category chips with Material You colors |
+| `61b32e8` | 2026-10-11 | fix: remove duplicate dashboard density state |
+| `a449cea` | 2026-10-11 | feat: add compact and comfortable dashboard density |
+| `c1aca0c` | 2026-10-11 | feat: add compact and comfortable dashboard density |
+| `b73b2ff` | 2026-10-11 | test: target the accessible search action |
+| `bfcdf05` | 2026-10-11 | test: cover editor preferences and Material 3 note creation |
+| `fa204d0` | 2026-10-11 | feat: add Material 3 personalization and note editor options |
+| `91f712a` | 2026-10-11 | Add manually triggered API 36 UI test workflow |
+| `c3d0104` | 2026-10-11 | Keep required CI API 36-only and independent of emulator boot |
+| `5055efa` | 2026-10-11 | Stabilize Android UI test emulator boot |
+| `8e90fe4` | 2026-10-11 | Fix Compose UI test assertion API |
+| `e0a02dd` | 2026-10-11 | Fix automatic release APK artifact path |
+| `afcc172` | 2026-10-11 | Enable automatic APK prereleases from main |
+| `d55e566` | 2026-10-11 | Fix Compose UI test dependency version resolution |
+| `f50c31f` | 2026-10-11 | Fix Android release SDK setup by dropping obsolete tools package |
+| `ac4a8ea` | 2026-10-11 | Fix Android CI SDK setup by dropping obsolete tools package |
+| `03fee55` | 2026-10-11 | Add temporary CI APK signing for validation |
+| `34e4fa3` | 2026-10-11 | Add Android CI/CD and unit/E2E tests |
+| `d4a5f26` | 2026-10-11 | Add native Android 16 app with Kotlin and Jetpack Compose |
+| `129b668` | 2026-10-11 | Initial NESTNOTE application commit |
+
+## Maintenance
+Update this file when a PR merges, an implementation stage completes, or a material CI decision/status changes. Record factual outcomes only; distinguish planned, in-progress, and verified work.
