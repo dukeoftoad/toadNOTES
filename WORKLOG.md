@@ -294,3 +294,13 @@ Scope was intentionally narrowed to the note editor and its appearance picker; d
 - The fix makes editor text graphite, placeholders mid-grey, toolbar/action icons graphite or deep purple, the cursor purple, and Save/Cancel actions more legible; pastel swatches were strengthened without making the writing surface harsh.
 - Remaining manual step: owner should confirm the newly installed build on-device visually. No post-fix screenshot/device verification is claimed by the implementation agent.
 - PR #4 remains open and draft, awaiting explicit owner approval; Phase 4 is not marked complete and nothing is merged.
+
+
+### Phase 4 finalisation — 2026-10-12
+
+- Owner confirmed validation/testing passed and approved PR #4 as good to go.
+- PR #4 was marked ready for review and squash-merged into `main`: [PR #4](https://github.com/dukeoftoad/toadNOTES/pull/4), merge commit `b3a140efcded6fc2fe090be0a6b997c9c83b6bcc`.
+- Android CI was confirmed passing by the owner; recorded run: [#38193073138](https://github.com/dukeoftoad/toadNOTES/actions/runs/38193073138).
+- Phase 4 is now marked complete in `ROADMAP.md`. The note editor redesign, appearance picker, persisted wallpaper/color choices, and screenshot-driven contrast/palette refinements are included.
+- Scope caveats remain accurate: reminder times are metadata only; rich-text formatting is not implemented. Owner performed the validation; no separate emulator screenshot run is claimed by the implementation agent.
+- PR #4 is merged. No further merge action is pending.
