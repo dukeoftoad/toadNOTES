@@ -1,71 +1,70 @@
-# NESTNOTE — Android
+# NESTNOTE — Native Android Notes
 
-Native Android notes app built with Kotlin, Jetpack Compose and Material 3. Target SDK: Android 16 (API 36).
+NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, and Material 3.
 
-## Open in Android Studio
-1. Open this repository as a project in Android Studio (recent stable version).
-2. Allow Gradle to sync and install the Android SDK Platform 36 if prompted.
-3. Run the `app` configuration on an Android 16 emulator or device.
+- **Target SDK:** Android 16 / API 36
+- **Minimum SDK:** API 26
+- **Storage:** encrypted local note payloads using AES-GCM and Android Keystore
+- **Sync:** no account or cloud sync
 
 ## Features
-- Create, edit, pin, archive, restore, and delete notes; undo accidental deletion
-- Search notes, filter by category, and sort by edited date, creation date, or title
-- Category labels, note colors, and selectable editor backgrounds/wallpapers
-- Quick capture plus full-screen and sheet editor modes
-- Checklist and bullet-list tools with list continuation
-- Optional word, character, and estimated reading-time counters
-- Configurable editor text size and grouped settings for theme, layout, density, sorting, and default category
-- Reminder date/time metadata with preset choices
-- Copy and share note text
-- JSON backup and restore through the Android system file picker
-- Light/dark theme, dynamic color, and responsive edge-to-edge Compose layout
-- Local note persistence encrypted with AES-GCM using an Android Keystore key
+- Create, edit, pin, archive, restore, search, sort, and delete notes (with undo).
+- Categories, pastel note colours, editor wallpapers, light/dark themes, and configurable dashboard layout.
+- Full-screen and quick editors, checklist and bullet tools, list continuation, and optional writing statistics.
+- Editor text-size options, reminder metadata, and copy/share actions.
+- JSON backup and restore through Android's system file picker.
+- Local-data recovery safeguards and validated, versioned backups.
 
-## Backup and restore
-Use **Settings → Back up notes** to save a NESTNOTE JSON backup to a location you choose. Use **Restore backup** to merge a backup into the current notes. Notes are matched by ID; missing notes are added, and the newer edited version wins when the same ID exists in both. Restore does not delete existing local notes. Only valid NESTNOTE backup JSON is accepted. Exported JSON is plaintext and should be stored somewhere you trust. Automatic Android app-data backup is disabled.
+## Install a release
+Visit [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases). Only download an APK attached to a versioned production release and verify its signature before installing. Historical “latest” or “CI-SIGNED” artifacts, if present, are not proof of production signing.
 
-## Local data protection
+Production APKs are created from tags matching v*.*.* (for example, v1.2.0). The release workflow builds the minified release variant, signs it with the permanent production keystore supplied through GitHub Actions secrets, verifies the signature, and attaches the APK to the matching GitHub Release. A successful CI build alone does not establish release readiness.
 
-NESTNOTE encrypts local note JSON with AES-GCM using a key held by Android Keystore. Existing plaintext SharedPreferences notes are migrated on load: the encrypted payload is committed before the legacy plaintext key is removed. If notes cannot be decrypted or parsed, the app preserves the stored data and presents a recovery path rather than silently replacing it with starter notes. Exported JSON backups are plaintext. Automatic Android app-data backup is disabled.
+### Production release steps
+1. Confirm the candidate commit has passing Android CI and release checklist sign-off, including required device/recovery checks.
+2. Confirm these repository Actions secrets exist without exposing their values: SIGNING_KEY (base64-encoded keystore), KEY_ALIAS, KEY_STORE_PASSWORD, and KEY_PASSWORD.
+3. Create and push an approved version tag, e.g. git tag v1.2.0 && git push origin v1.2.0.
+4. Wait for [Android Release](https://github.com/dukeoftoad/toadNOTES/actions/workflows/android-release.yml) to finish.
+5. Independently compare the APK certificate fingerprint with the recorded production certificate, install the exact published APK, and record the result before distribution.
 
-Release builds use R8 minification and resource shrinking. CI does not sign test/debug APKs with disposable keys. Non-tag release builds are uploaded unsigned for inspection only. Production tags (v*.*.*) require the permanent Actions secrets SIGNING_KEY (base64-encoded keystore), KEY_ALIAS, KEY_STORE_PASSWORD, and KEY_PASSWORD; the workflow fails closed if any are missing and verifies the APK signature before publishing. Never distribute an unsigned or test artifact as a production update.
+A manually dispatched/non-tag release workflow run is for unsigned inspection output only; it must not be distributed as a production APK. Never commit keystores, passwords, signing keys, or other secret values.
 
-## Download and install APK releases
+## Data, backups, and recovery
+Local notes are encrypted with AES-GCM using a key held by Android Keystore. Existing plaintext SharedPreferences records are migrated only after the encrypted payload is committed. If stored content cannot be read or decrypted, NESTNOTE preserves the original data and exposes a recovery path rather than silently replacing it with starter notes.
 
-Open the [NESTNOTE GitHub Releases page](https://github.com/dukeoftoad/toadNOTES/releases) to download a published APK. Production APKs are published only from version tags such as `v1.0.0`; the release workflow builds the minified release variant, signs it with the permanent production keystore, verifies the APK signature, and attaches `NESTNOTE-vX.Y.Z.apk` to the GitHub Release.
+Backups exported by the user are **plaintext JSON** and should be stored securely. Restore validates the entire file before changing notes, supports the current versioned backup envelope and legacy JSON-array backups, merges by note ID, keeps the newer edited copy when timestamps differ, and does not delete notes absent from the backup. Automatic Android app-data backup is disabled.
 
-To publish a production release after approval:
-
-1. Confirm the candidate commit has passing Android CI and required device/recovery checks are signed off.
-2. Confirm repository Actions secrets `SIGNING_KEY` (base64-encoded keystore), `KEY_ALIAS`, `KEY_STORE_PASSWORD`, and `KEY_PASSWORD` are configured. Never put secret values in the repository or logs.
-3. Create and push a version tag, for example `git tag v1.0.0 && git push origin v1.0.0`.
-4. Wait for **Android Release** to finish successfully, then verify the APK signature and certificate fingerprint against the independently recorded production certificate before distributing the file.
-
-Unsigned APKs from non-tag/manual inspection builds are not production install packages. Do not use them for public distribution or upgrades.
-
-## Project structure
-- `app/src/main/java/com/nestnote/app/MainActivity.kt`: UI and interactions
-- `app/src/main/java/com/nestnote/app/NoteStore.kt`: local persistence, note model, and backup encode/decode/merge
-- `app/src/main/java/com/nestnote/app/NoteText.kt`: editor list helpers and text counters
-- `app/src/test/`: unit tests
-- `app/src/androidTest/`: Compose instrumentation tests
-- `app/build.gradle.kts`: Android app configuration
-- `build.gradle.kts`, `settings.gradle.kts`: Gradle project
-
-## Current scope and limitations
-- Reminder times are stored as note metadata only; alarm scheduling and notification delivery are not implemented.
-- Checklist items are toggled through the editor toolbar; tapping the checkbox character in the note body does not toggle it.
-- Text formatting is limited to checklist and bullet prefixes; rich-text formatting is not implemented.
-- No account or cloud sync is included. Notes and preferences remain local to the device.
-- Android CI builds the app, runs unit tests, builds the minified release variant, and compiles instrumentation tests; it does not sign test APKs. Instrumentation tests have not been claimed as executed on an emulator or physical device; manual UI, accessibility, larger-font, keyboard, and edge-to-edge regression checks remain follow-up validation.
+Encryption protects data at rest; it is not a guarantee against a compromised device while the app is running. Losing/resetting the Android Keystore key may prevent decryption, so test and document recovery before release.
 
 ## Build and test
-Android Studio: sync Gradle, then Run.
+Open the repository in a recent stable Android Studio, allow Gradle sync, and install Android SDK Platform 36 if prompted.
 
-Command line with Android SDK and Gradle installed:
-```sh
-gradle assembleDebug
-gradle testDebugUnitTest
+With Java 17, Gradle 8.13, and Android SDK API 36 installed:
+
+```bash
+gradle --no-daemon testDebugUnitTest
+gradle --no-daemon assembleDebug
+gradle --no-daemon assembleRelease
+gradle --no-daemon assembleDebugAndroidTest
 ```
 
-See [ROADMAP.md](ROADMAP.md) for phase status and [WORKLOG.md](WORKLOG.md) for implementation and validation history.
+The [Android CI workflow](https://github.com/dukeoftoad/toadNOTES/blob/main/.github/workflows/android-ci.yml) runs unit tests, builds debug and minified release APKs, and compiles instrumentation tests. Compilation is not the same as executing instrumentation tests on a device. The emulator UI workflow is manual-only; do not claim device, TalkBack, large-font, keyboard/insets, upgrade, migration, or visual-regression checks unless they were actually run and recorded.
+
+## Repository guide
+- app/src/main/java/com/nestnote/app/MainActivity.kt — Compose UI and interactions.
+- app/src/main/java/com/nestnote/app/NoteStore.kt — note model, persistence, encryption, backup validation, and merge.
+- app/src/main/java/com/nestnote/app/NoteText.kt — list/checklist helpers and text counters.
+- app/src/test/ — JVM/unit tests.
+- app/src/androidTest/ — Android instrumentation tests.
+- .github/workflows/ — CI, release, and manual UI-test workflows.
+- [DEVELOPMENT.md](DEVELOPMENT.md) — setup and contribution guide.
+- [ROADMAP.md](ROADMAP.md) — product phases and status.
+- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) — validation and release gates.
+- [WORKLOG.md](WORKLOG.md) — implementation/CI history.
+- [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) — engineering decisions.
+
+## Current limitations
+- Reminder dates/times are metadata only; alarm scheduling and notification delivery are not implemented.
+- Checklist items can be toggled in the editor; rich-text formatting is not implemented.
+- No account, remote sync, or server-side note storage is included.
+- Instrumentation tests are compiled in CI but are not automatically run on a device/emulator by the required CI workflow.

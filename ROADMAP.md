@@ -406,3 +406,22 @@ Before a public release intended for sensitive personal notes:
 - Android CI run [#38228131828](https://github.com/dukeoftoad/toadNOTES/actions/runs/38228131828) passed on commit `48fd9d36b3ca4a559615bf74d68a149eaeede91c`: unit tests, API 36 debug APK build, instrumentation-test compilation, temporary test signing, and artifact uploads.
 - The latest editor stale-version guard is CI-validated. Rapid/repeated-save scenarios and full device/emulator lifecycle/accessibility checks remain outstanding.
 - PR #7 is still open pending final documentation validation and owner-requested merge workflow. This CI signing is for test artifacts only, not production release signing.
+
+
+## Documentation reconciliation — 2026-10-12
+
+**Current merged baseline:** PRs #1–#7 are merged into main, including Phase 6 reliability/recovery/accessibility work and PR #6 security/privacy hardening. Older dated notes and statuses above are retained as historical records; when they conflict with this current snapshot, this section is authoritative.
+
+### Current implementation baseline
+- Local note payload encryption uses AES-GCM and an Android Keystore key; legacy plaintext migration is designed to commit encrypted content before deleting the old value.
+- Backup/restore validates a versioned schema, accepts legacy JSON arrays, previews changes, merges by ID, and preserves notes absent from the backup.
+- Editor stale-draft protection and interactive checklist behavior have automated regression coverage.
+- Release build uses R8/resource shrinking. Production APK publishing is intended for version tags and permanent signing secrets only; historical CI-signed artifacts are not production proof.
+
+### Next priorities
+1. Validate legacy-data migration, Keystore failure/recovery, and backup policy on supported Android versions and a real device.
+2. Run editor/dashboard regression checks for keyboard/insets, focus, larger fonts, narrow screens, contrast, touch targets, and TalkBack.
+3. Complete a tagged production release only after signature and certificate fingerprint verification, installed-APK smoke tests, and owner sign-off.
+4. Continue architecture work incrementally (repository boundary and lifecycle-aware state) only with migration-safe tests; avoid a broad rewrite.
+
+**Validation boundary:** CI build/test success does not prove device behavior or production signing correctness. See RELEASE_CHECKLIST.md for release gates and WORKLOG.md for dated run evidence.

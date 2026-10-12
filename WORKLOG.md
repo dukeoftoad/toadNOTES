@@ -412,3 +412,18 @@ Branch: `feature/phase-5-settings-editor-ux` (from `main` after PR #4 merge). No
 - Added explicit release-delivery gates to RELEASE_CHECKLIST.md: minified release build, tag-only publication, permanent signing secrets, fail-closed signing, artifact naming, signature/fingerprint verification, and install validation.
 - The `security/privacy-hardening` branch already configures Android CI to build the minified release variant without disposable test signing, and Android Release to publish only version-tagged APKs signed with the permanent Actions secrets.
 - Validation status: documentation/workflow changes require the branch CI run; no production APK was published by this documentation update. A successful build alone does not replace device and certificate-fingerprint validation.
+
+
+## Documentation refresh and current repository state — 2026-10-12
+
+This section supersedes stale status snapshots at the top of this file; older entries remain as historical records and should not be read as the current PR state.
+
+- PR #7, Phase 6 reliability, recovery, and accessibility, was squash-merged to main at 7d49fa0621a56d9c55f37bb164ea17ed61820a88 on 2026-10-12.
+- PR #6, security hardening and production release pipeline, was squash-merged to main at a954879c4c409a69db9a00be98d4e279365ec3bd on 2026-10-12.
+- Current baseline includes encrypted local note storage using Android Keystore/AES-GCM, guarded legacy-data migration/recovery, validated versioned backups with legacy import support, editor stale-draft protection, checklist accessibility improvements, minified release compilation, and tag-triggered production signing/publishing.
+- Documentation refreshed in this branch: README.md, DEVELOPMENT.md, DEVELOPMENT_LOG.md, RELEASE_CHECKLIST.md, plus current-state summaries in ROADMAP.md and WORKLOG.md.
+- Production APK status is not confirmed as published by this documentation change. A GitHub Release or an older CI-signed artifact is not evidence that the latest APK uses the permanent production certificate.
+- Not claimed complete without recorded evidence: physical-device/emulator regression checks, TalkBack and large-font checks, legacy-note migration and Keystore recovery testing, independently verified production certificate fingerprint, and installation/upgrade testing of the exact published APK.
+- CI for this documentation branch must be checked before merge. This work updates docs only and does not trigger a version tag or publish an APK.
+
+Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7](https://github.com/dukeoftoad/toadNOTES/pull/7), [Android CI](https://github.com/dukeoftoad/toadNOTES/actions/workflows/android-ci.yml), [Android Release](https://github.com/dukeoftoad/toadNOTES/actions/workflows/android-release.yml), [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases).

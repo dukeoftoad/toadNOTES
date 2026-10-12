@@ -1,61 +1,58 @@
 # NESTNOTE Development Guide
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
-## Technology
+## Stack and prerequisites
 - Kotlin, native Android, Jetpack Compose, Material 3.
-- Target SDK Android 16 / API 36; minimum SDK 26.
-- Local note persistence through the existing NoteStore / SharedPreferences implementation.
+- Android target SDK 36; minimum SDK 26.
+- Java 17 and Gradle 8.13 (the CI workflow uses these versions).
+- Android SDK Platform 36 and Build Tools 36.0.0.
 
-## Open and run
+## Set up and build
 1. Clone the repository and open it in a recent stable Android Studio.
-2. Allow Gradle sync to complete.
-3. Install Android SDK Platform 36 if prompted.
-4. Run the `app` configuration on an Android 16 emulator or compatible device.
+2. Allow Gradle sync to complete and install SDK components if prompted.
+3. Run the app configuration on an Android 16 emulator or compatible device.
 
-Command-line build (Android SDK and Gradle required):
-```bash
-gradle assembleDebug
-```
-Run unit tests:
-```bash
-gradle test
-```
-Task names can vary by configured variants and Gradle setup; inspect the Gradle task list if a task is unavailable.
+Command-line checks:
 
-## Project map
-- `app/src/main/java/com/nestnote/app/MainActivity.kt` — Compose UI and interactions.
-- `app/src/main/java/com/nestnote/app/NoteStore.kt` — note model and local persistence.
-- `app/src/androidTest/java/com/nestnote/app/NestNoteE2ETest.kt` — Compose/instrumentation workflow tests.
-- `app/build.gradle.kts` — Android app configuration.
-- `build.gradle.kts`, `settings.gradle.kts` — root Gradle configuration.
-- `.github/workflows/` — CI and release automation.
+```bash
+gradle --no-daemon testDebugUnitTest
+gradle --no-daemon assembleDebug
+gradle --no-daemon assembleRelease
+gradle --no-daemon assembleDebugAndroidTest
+```
+
+CI is defined in .github/workflows/android-ci.yml. It runs unit tests, builds debug and minified release variants, and compiles instrumentation tests. The separate emulator UI workflow is manual-only; do not treat compilation as execution or proof of device behavior.
+
+## Code map
+- app/src/main/java/com/nestnote/app/MainActivity.kt — dashboard, editor, settings, and Compose interactions.
+- app/src/main/java/com/nestnote/app/NoteStore.kt — encrypted local persistence, migration, validation, recovery, and backup/restore.
+- app/src/main/java/com/nestnote/app/NoteText.kt — checklist/list operations, selection mapping, and writing counters.
+- app/src/test/ — unit and local logic tests.
+- app/src/androidTest/ — Compose instrumentation coverage.
+- .github/workflows/android-ci.yml — required build/test checks.
+- .github/workflows/android-ui-tests.yml — manually triggered UI workflow.
+- .github/workflows/android-release.yml — tagged production release pipeline.
+
+## Data safety requirements
+1. Preserve user data; do not replace unreadable stored content with starter notes.
+2. Keep encryption/migration ordering fail-safe: commit encrypted content before removing legacy plaintext.
+3. Validate the complete backup before applying restore; preserve existing notes absent from an import.
+4. Keep legacy backup import compatibility unless an explicit migration plan and tests replace it.
+5. Do not log or commit signing secrets, keystores, passwords, or note contents.
+6. User-exported backup JSON is plaintext. Keep privacy copy consistent with actual behavior.
+7. Changes to storage, backup, encryption, manifest backup settings, or release signing require regression tests and updated docs.
 
 ## Working agreements
-1. Work in a feature branch and submit a pull request.
-2. Keep PRs focused and describe behavior, tests, and known limitations.
-3. Preserve existing note data and storage format unless a migration is designed and tested.
-4. Keep editor drafts and preference state explicit; test recreation and dismissal paths.
-5. Use Material 3 and preserve accessibility labels, touch targets, and readable contrast.
-6. Do not claim tests passed based only on compilation or an in-progress CI run.
-7. Do not merge PRs without the repository owner's explicit approval.
+- Use a focused feature branch and pull request.
+- Explain user-visible behavior, tests run, CI links, limitations, and migrations in each PR.
+- Update README, ROADMAP, RELEASE_CHECKLIST, and WORKLOG when scope/status or validation changes.
+- Keep historical work-log entries as history; add a current status note rather than silently rewriting prior events.
+- Never report a test, device check, signature verification, or release as successful unless evidence exists for the exact commit/artifact.
+- Do not merge or publish without repository-owner approval.
+- Prefer accessible Material 3 patterns, clear contrast, semantic labels, scalable text, and usable touch targets.
 
-## CI and UI testing
-- Required Android CI is configured for API 36 and should be checked on the exact latest commit.
-- Separate emulator UI tests are manual-only by project decision; failures are not a required CI gate.
-- Manual-only does not prove UI behavior. Mention remaining manual-validation risk where relevant.
-- Physical-device testing is not claimed by this guide.
+## Current product and validation state
+Phases 1–6 and security/release hardening PRs #1–#7 are merged to main as of 2026-10-12. See ROADMAP.md for implementation priorities and WORKLOG.md for historical evidence.
 
-## Current Phase 2 focus
-See [ROADMAP.md](ROADMAP.md). Active branch: `feature/phase-2-note-editor`; [draft PR #2](https://github.com/dukeoftoad/toadNOTES/pull/2).
-
-Current early increment:
-- Editor title/body/category/color/reminder use saveable Compose state.
-- Explicit close and Cancel ask before discarding meaningful changes.
-- Existing NoteStore persistence schema is unchanged.
-
-Before Phase 2 is considered done:
-- Restore editor visibility and selected note after activity recreation.
-- Ensure system/back and bottom-sheet dismiss requests cannot bypass unsaved-change confirmation.
-- Verify create/edit behavior is consistent.
-- Run latest normal Android CI and resolve failures.
+Still required before claiming production release readiness: real-device/emulator smoke testing, legacy-data migration and Keystore recovery validation, TalkBack and large-font/narrow-screen checks, keyboard/focus/insets checks, release signing certificate fingerprint verification, and installation/upgrade testing of the exact published APK. These checks are not claimed as complete by this guide.
