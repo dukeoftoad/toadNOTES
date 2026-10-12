@@ -30,16 +30,16 @@ jobs:
       - name: Sign production release with permanent key
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY: ${{ secrets.KEYSTORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
-          : "${SIGNING_KEY:?SIGNING_KEY secret is required for tagged production releases}"
+          : "${SIGNING_KEY:?KEYSTORE_BASE64 secret is required for tagged production releases}"
           : "${KEY_ALIAS:?KEY_ALIAS secret is required for tagged production releases}"
-          : "${KEY_STORE_PASSWORD:?KEY_STORE_PASSWORD secret is required for tagged production releases}"
+          : "${KEY_STORE_PASSWORD:?KEYSTORE_PASSWORD secret is required for tagged production releases}"
           : "${KEY_PASSWORD:?KEY_PASSWORD secret is required for tagged production releases}"
           KEYSTORE_PATH="$RUNNER_TEMP/nestnote-production.jks"
           trap 'rm -f "$KEYSTORE_PATH"' EXIT
