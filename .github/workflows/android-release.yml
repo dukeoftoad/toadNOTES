@@ -43,8 +43,12 @@ jobs:
           : "${KEY_PASSWORD:?KEY_PASSWORD secret is required for tagged production releases}"
           KEYSTORE_PATH="$RUNNER_TEMP/nestnote-production.jks"
           trap 'rm -f "$KEYSTORE_PATH"' EXIT
-          printf '%s' "$SIGNING_KEY" | base64 --decode > "$KEYSTORE_PATH"
-          test -s "$KEYSTORE_PATH"
+          # Ignore whitespace in the stored Base64 value, then fail clearly if it is malformed.
+          if ! printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 --decode > "$KEYSTORE_PATH"; then
+            echo "::error::KEYSTORE_BASE64 is not valid Base64. Re-encode the permanent keystore file and update this Actions secret."
+            exit 1
+          fi
+          test -s "$KEYSTORE_PATH" || { echo "::error::Decoded keystore is empty."; exit 1; }
           APK_NAME="NESTNOTE-$GITHUB_REF_NAME.apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
             --ks "$KEYSTORE_PATH" \
@@ -69,4 +73,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" "$APK_NAME" --title "NESTNOTE $GITHUB_REF_NAME" --generate-notes
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; replacing/adding the signed APK asset."
+            gh release upload "$GITHUB_REF_NAME" "$APK_NAME" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$APK_NAME" --title "NESTNOTE $GITHUB_REF_NAME" --generate-notes
+          fi
+          # Verify that the published release now exposes the APK asset.
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | grep -Fx "$APK_NAME"
