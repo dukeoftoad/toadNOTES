@@ -216,27 +216,34 @@ Reconcile the work log with the current `main` branch, including PR #4 and PR #5
 
 I recommend a focused **Phase 6 — Reliability, Recovery & Accessibility**, rather than adding cloud sync or a large collection of new features immediately.
 
-#### Phase 6 candidate checklist
+#### Phase 6 — Reliability, Recovery & Accessibility
 
-- [ ] Audit local storage and save failure handling — **P0**
-- [ ] Harden backup validation and atomic restore — **P0**
-- [ ] Add editor lifecycle and draft-recovery tests — **P0**
-- [ ] Complete contrast, font-scaling, and keyboard checks — **P1**
-- [ ] Make checklist interactions more natural — **P1**
-- [ ] Synchronize roadmap, work log, and release checklist — **P1**
-- [ ] Extract repository and ViewModel boundaries incrementally — **P2**
+**Status: In progress on [PR #7](https://github.com/dukeoftoad/toadNOTES/pull/7), branch `feature/phase-6-release-checklist`.** PR #6 security hardening remains separate and on hold. Do not merge either PR without explicit owner approval.
 
-### What I would do first
+Phase 6 follows **P0 → P1 → P2**. Check items only after the latest relevant code and tests pass CI; device-only acceptance criteria remain unchecked until manually verified.
 
-- Audit `NoteStore` and all save/restore paths for data-loss risks.
-- Add focused regression tests before modifying the storage implementation.
-- Improve editor state handling and backup recovery.
-- Run the automated suite and validate the interface on an emulator or physical device.
-- Update the documentation and open a small, reviewable PR.
+### P0 — Protect writing, saving, and recovery
+- [ ] Validate local save failure handling and ensure failed saves never close the editor or falsely report success (implementation started; CI passed on an earlier storage/backup commit, latest editor safeguards still need CI).
+- [x] Reject malformed, oversized, duplicate-ID, invalid-ID, and invalid-timestamp backup records before modifying local notes (backup validation regression tests pass CI run #38226761119).
+- [x] Distinguish a fresh install from unreadable local storage; preserve corrupt bytes and offer a deliberate recovery route rather than silently loading starter notes (regression test passes CI run #38226761119).
+- [x] Export versioned backups and retain legacy array import compatibility; preview additions/updates and validate the complete restore before applying it (implementation and regression tests pass CI run #38226761119).
+- [x] Preserve editor drafts and discard-warning state across activity recreation; reject stale drafts that would overwrite a newer note version (version-guard unit test and CI run #38228131828 passed).
+- [ ] Add/verify rapid-edit, repeated-save, interrupted-edit, malformed restore, and save-failure regression tests.
+- [x] Run Android CI successfully on current PR head `48fd9d36b3ca4a559615bf74d68a149eaeede91c` (run #38228131828 passed). Focused emulator/device smoke test remains outstanding.
 
-I would defer cloud sync, accounts, collaboration, and rich-text editing until local data safety and the everyday writing experience are dependable. Those are worthwhile future directions, but they introduce substantially more complexity.
+### P1 — Improve the everyday writing and organizing experience
+- [x] Make checklist items interactive in the note body and preserve cursor/selection during list formatting (implementation and JVM tests pass CI; device interaction still needs manual validation).
+- [ ] Verify keyboard insets, scrolling, focus, and narrow-screen behavior.
+- [ ] Audit every note palette in light/dark themes for contrast; test appearance-picker selection states, font/display scaling, TalkBack labels, and touch targets.
+- [ ] Verify case-insensitive title/body search composes predictably with category/archive filters and sorting; add multi-select actions only after core flows remain stable.
+- [ ] Reconcile current-state summaries in ROADMAP.md, WORKLOG.md, and RELEASE_CHECKLIST.md while preserving older work-log entries as historical records.
 
-**Recommendation:** start Phase 6 with a storage-and-editor reliability audit, then implement the fixes in small, testable PRs. That offers the greatest improvement to NESTNOTE without unnecessarily destabilizing the existing app.
+### P2 — Incrementally improve architecture
+- [ ] Extract note persistence behind a repository interface and cover it with focused tests.
+- [ ] Move editor/dashboard state into lifecycle-aware ViewModels without a full application rewrite.
+- [ ] Evaluate Room only if data/query needs justify it; design and test migration, backup, upgrade, and rollback before changing storage.
+
+Defer cloud sync, accounts, collaboration, and rich-text editing until local data safety and the everyday writing experience are dependable.
 
 ---
 
@@ -392,3 +399,10 @@ Before a public release intended for sensitive personal notes:
 
 **Overall assessment:** NESTNOTE has a promising local-first MVP foundation, but the reviewed data-at-rest and release-process controls should be strengthened before recommending it for sensitive personal information. Treat severity as a prioritization aid, verify each observation against current source, and do not mark a finding resolved until its acceptance criteria have been tested.
 
+
+
+### Phase 6 validation update — 2026-10-12
+
+- Android CI run [#38228131828](https://github.com/dukeoftoad/toadNOTES/actions/runs/38228131828) passed on commit `48fd9d36b3ca4a559615bf74d68a149eaeede91c`: unit tests, API 36 debug APK build, instrumentation-test compilation, temporary test signing, and artifact uploads.
+- The latest editor stale-version guard is CI-validated. Rapid/repeated-save scenarios and full device/emulator lifecycle/accessibility checks remain outstanding.
+- PR #7 is still open pending final documentation validation and owner-requested merge workflow. This CI signing is for test artifacts only, not production release signing.

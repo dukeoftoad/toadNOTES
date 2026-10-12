@@ -69,6 +69,51 @@ class NoteTextTest {
     }
 
     @Test
+    fun lineFormattingPreservesSelectedTextRange() {
+        val old = "first\nsecond"
+        val (newText, cursor) = NoteText.cycleChecklist(old, 8)
+        assertEquals("first\n☐ second", newText)
+        assertEquals(10 to 14, NoteText.selectionAfterLineEdit(old, newText, 8, 12, cursor))
+    }
+
+    @Test
+    fun lineFormattingKeepsCollapsedSelectionAtReturnedCursor() {
+        assertEquals(6 to 6, NoteText.selectionAfterLineEdit("item", "☐ item", 4, 4, 6))
+    }
+
+    @Test
+    fun interactiveChecklistUpdatesOnlySelectedItemAndPreservesIndentation() {
+        val body = "plain\n  ☐ first\n☑ second"
+        assertEquals(
+            listOf(
+                NoteText.ChecklistItem(1, "first", false),
+                NoteText.ChecklistItem(2, "second", true)
+            ),
+            NoteText.checklistItems(body)
+        )
+        assertEquals("plain\n  ☑ first\n☑ second", NoteText.setChecklistItemChecked(body, 1, true))
+        assertEquals("plain\n  ☐ first\n☐ second", NoteText.setChecklistItemChecked(body, 2, false))
+        assertEquals(body, NoteText.setChecklistItemChecked(body, 0, true))
+        assertEquals(body, NoteText.setChecklistItemChecked(body, 99, true))
+    }
+
+    @Test
+    fun interactiveChecklistIsIdempotentAndPreservesTrailingNewline() {
+        val body = "☐ first\nplain\n"
+        val checked = NoteText.setChecklistItemChecked(body, 0, true)
+        assertEquals("☑ first\nplain\n", checked)
+        assertEquals(checked, NoteText.setChecklistItemChecked(checked, 0, true))
+        assertEquals(body, NoteText.setChecklistItemChecked(checked, 0, false))
+        assertEquals(emptyList<NoteText.ChecklistItem>(), NoteText.checklistItems("\nplain\n• bullet"))
+    }
+
+    @Test
+    fun checklistProgressCountsOnlyChecklistLines() {
+        assertEquals(0 to 0, NoteText.checklistProgress("plain\n• bullet"))
+        assertEquals(3 to 1, NoteText.checklistProgress("☑ done\n☐ next\n  ☐ indented\nplain"))
+    }
+
+    @Test
     fun shareTextJoinsNonBlankParts() {
         assertEquals("Title\n\nBody", NoteText.shareText(" Title ", " Body "))
         assertEquals("Body", NoteText.shareText("", "Body"))

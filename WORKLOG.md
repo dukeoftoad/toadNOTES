@@ -8,13 +8,13 @@ Repository: [dukeoftoad/toadNOTES](https://github.com/dukeoftoad/toadNOTES)
 This activity record is assembled from visible repository commits, pull requests, and GitHub Actions runs. Statuses reflect the latest checks observed when written; use the linked run for live status.
 
 ## Current snapshot
-- Native Android app using Kotlin, Jetpack Compose, and Material 3.
-- Target SDK Android 16 / API 36; minimum SDK 26.
-- `main` includes merged PRs #1, #2, and #3.
-- Phase 4 is in progress on `feature/phase-4-note-taking`, tracked by draft PR #4. **PR #4 is open and must not be merged without explicit approval.**
-- Existing note persistence uses SharedPreferences / NoteStore; Phase 2 preserves its format.
-- Emulator UI workflow is manual-only by project decision and is not a required CI gate.
-- No physical-device testing is claimed.
+- Native Android app using Kotlin, Jetpack Compose, and Material 3; target SDK API 36, minimum SDK 26.
+- `main` includes merged PRs #1–#5 as of 2026-10-12. Verify live PR status before relying on this snapshot.
+- PR #6, `security/privacy-hardening`, is intentionally on hold and remains unmerged pending owner approval and device/release validation.
+- PR #7, `feature/phase-6-release-checklist`, is open against `main` and now includes Phase 6 reliability work; it is not merged.
+- Phase 4 (PR #4) and Phase 5 (PR #5) were merged on 2026-10-12; older entries below describing them as open/in progress are historical snapshots, not current status.
+- Note persistence uses SharedPreferences / NoteStore. Phase 6 is incrementally hardening local-save behavior and backup/restore before larger architecture changes.
+- Emulator UI workflow is manual-only by project decision. Do not claim device testing unless it was actually run.
 
 ## Pull requests
 | PR | Title | Status | Scope |
@@ -332,3 +332,75 @@ Branch: `feature/phase-5-settings-editor-ux` (from `main` after PR #4 merge). No
 - Owner requested discovery, documentation reconciliation, and merge of PR [#5](https://github.com/dukeoftoad/toadNOTES/pull/5). The PR was squash-merged into `main`; merge commit: `ee046eaa67fe2b2be713ef96becabf0892f034fe`.
 - Final docs now include the README feature/limitations/build guide, roadmap status, and this worklog history. Phase 5 remains in progress until the manual UI, accessibility/larger-font, keyboard/edge-to-edge, and final regression checks are completed.
 - CI runs recorded before the final documentation-only commits passed. No fresh workflow run was returned for the final docs head. Instrumentation tests were compiled, not executed on a device.
+
+
+## Phase 6 — Reliability, Recovery & Accessibility (current work on PR #7)
+**Status: P0 implementation in progress. Initial storage/backup increment passed CI; latest editor safeguards are awaiting a fresh CI result.** Branch: `feature/phase-6-release-checklist`; PR: [#7](https://github.com/dukeoftoad/toadNOTES/pull/7). No changes have been merged to `main`.
+
+- [x] Validate note collections for duplicate/non-positive IDs, invalid timestamps, field length limits, and maximum record count.
+- [x] Make local persistence report commit success/failure; keep the editor open when a note save fails.
+- [x] Distinguish unreadable local storage from a fresh install. Corrupt stored bytes are left untouched; normal note writes are blocked until recovery.
+- [x] Add versioned JSON backup envelopes (schema version 1) while retaining import compatibility for legacy JSON-array backups.
+- [x] Validate a complete backup and show an add/update preview before applying restore; restore merges without deleting notes absent from the backup.
+- [x] Add unit coverage for duplicate IDs, invalid/oversized data, corrupt local storage recovery, backup versioning, and legacy backup compatibility.
+- [x] Android CI passed for the initial storage/backup increment (run #129, commit `c3155b2a92d16996f025bc8be09d762613e2ef2f`). Newer editor lifecycle/stale-draft commits still require CI validation.
+- [x] Preserve the unsaved-change warning state across activity recreation and add a note-version guard that rejects stale editor drafts instead of overwriting newer saved content.
+- [x] Interactive checklist controls are available in the editor; tapping a checkbox or its item text toggles the selected row while preserving other lines and indentation.
+- [x] Completed checklist items are visually distinguished with muted color and strikethrough styling.
+- [ ] Continue with large-font/small-screen accessibility checks and repository/ViewModel boundaries.
+- [ ] Reconcile remaining historical work-log entries and update roadmap/checklist status after each verified milestone.
+
+**Validation honesty:** CI run [#38220086471](https://github.com/dukeoftoad/toadNOTES/actions/runs/38220086471) passed for commit `35d5f86e8ff956ccec00ed30a0cf627620f11231`, including unit tests, API 36 debug build, instrumentation-test compilation, and test APK signing. The subsequent completed-item styling commit still requires CI validation. No emulator or physical-device validation is claimed.
+
+
+**Latest Phase 6 update (2026-10-12):** Added stale-draft version checking for full-screen and quick-note editors. A draft carries the version timestamp it was opened from; the parent compares that value with the latest saved note before writing. A mismatch produces a recovery-oriented message and leaves the newer note untouched. The unsaved-change warning flag now survives activity recreation alongside the saveable editor draft. Unit coverage includes the version comparison helper. This change is not yet CI-validated.
+
+
+### Phase 6 accessibility increment — 2026-10-12
+
+- Android CI run [#142](https://github.com/dukeoftoad/toadNOTES/actions/runs/38212595857) passed on commit `59e33cc6dfff9694ac97c6c9575e6e5bfe871600`, validating the newline-fixture regression fix before the next change.
+- Checklist progress on note cards now remains visible when note-body previews are turned off, so disabling previews no longer hides a useful task-status summary.
+- The progress label uses body-small typography for better readability and exposes a screen-reader description with the completed and total item counts.
+- Validation for this accessibility increment is pending a fresh CI run. UI behavior at system-large font sizes and TalkBack still requires manual device/emulator verification; none is claimed here.
+
+
+### Interactive checklist follow-up — 2026-10-12
+
+- Completed checklist rows now use strikethrough styling as well as muted text color, making completion state easier to scan.
+- CI passed for the interactive checkbox implementation before this visual follow-up; this latest styling change awaits CI.
+- Large system-font, narrow-screen, and TalkBack behavior remain manual validation items and are not claimed as tested.
+
+
+### Checklist accessibility and edge-case hardening — 2026-10-12
+
+- Latest confirmed CI run [#38225533514](https://github.com/dukeoftoad/toadNOTES/actions/runs/38225533514) passed for commit `29ff4626cb8069cbe6d4b32c52e555a01accc05f` (unit tests, API 36 debug build, instrumentation-test compilation, and temporary test signing).
+- Checklist checkboxes now expose the item text and its completion state through Compose accessibility semantics, instead of announcing only a bare checkbox.
+- Added JVM regression coverage for idempotent checkbox state updates, trailing-newline preservation, and ignoring non-checklist lines.
+- The accessibility and test additions after the confirmed run are awaiting CI. TalkBack, large-font, and narrow-device checks still require a real emulator/device run.
+
+
+### Backup recovery regression pass — 2026-10-12
+
+- CI run [#38226281995](https://github.com/dukeoftoad/toadNOTES/actions/runs/38226281995) passed on commit `4eb1babbcae60395772f0fd85144e10768dfbe44`, including unit tests, API 36 debug build, instrumentation-test compilation, and test APK signing.
+- Added unit tests to verify backup imports reject records missing required identity fields, invalid IDs, and malformed versioned envelopes.
+- Added a merge regression test proving newer copies update existing notes, older copies do not overwrite them, new IDs are added, and existing notes absent from the import are retained.
+- Marked the interactive checklist implementation milestone complete in ROADMAP.md based on passing CI; real-device interaction, TalkBack, and font-scaling checks remain unverified.
+- The new backup/merge tests and this log update await CI validation. PR #7 remains open and unmerged.
+
+
+
+### Phase 6 backup/merge validation — 2026-10-12
+
+- Android CI run [#38226761119](https://github.com/dukeoftoad/toadNOTES/actions/runs/38226761119) passed on commit `404cc744eccbb3d6854a93340136d2a793eb70a0`, including unit tests, API 36 debug build, instrumentation-test compilation, and test APK signing.
+- Updated release-checklist and roadmap statuses for backup validation, versioned/legacy import, local corruption recovery, and interactive checklist coverage. Device-only accessibility and interaction checks remain open.
+- Added a merge regression case for equal timestamps: an import with a timestamp tie must not overwrite the existing copy, and existing note ordering must remain stable while new IDs append.
+- This new equal-timestamp regression test and documentation updates require a fresh CI run. PR #7 remains open and unmerged.
+
+
+### Final Phase 6 CI verification — 2026-10-12
+
+- Android CI run [#38228131828](https://github.com/dukeoftoad/toadNOTES/actions/runs/38228131828) completed successfully on commit `48fd9d36b3ca4a559615bf74d68a149eaeede91c` (unit tests, API 36 debug build, instrumentation-test compilation, temporary test signing, and artifact uploads).
+- The run validates the stale-editor-version guard and current backup/merge regressions on that exact code head.
+- Documentation now records this CI result. The documentation updates themselves will trigger another CI run before merge.
+- Not run: emulator/physical-device smoke tests, TalkBack, larger font/display scaling, keyboard/focus/insets, production signing-certificate verification, release/minified build, and installed upgrade testing. No production-release readiness is claimed.
+- PR #7 remains open until the documentation commit also passes CI; merge will be performed only after that final check.

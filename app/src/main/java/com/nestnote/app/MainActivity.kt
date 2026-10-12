@@ -64,11 +64,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -140,7 +143,11 @@ class MainActivity : ComponentActivity() {
 private fun NestNoteApp(store: NoteStore) {
     val context = LocalContext.current
     val preferences = remember { context.getSharedPreferences(PREFS, 0) }
-    var notes by remember { mutableStateOf(store.load()) }
+    val initialNoteLoad = remember { store.loadSafely() }
+    var notes by remember { mutableStateOf(initialNoteLoad.notes) }
+    var storageRecoveryRequired by remember { mutableStateOf(initialNoteLoad.recoveryRequired) }
+    var showStorageRecoveryDialog by remember { mutableStateOf(initialNoteLoad.recoveryRequired) }
+    var pendingRestore by remember { mutableStateOf<List<NestNote>?>(null) }
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
     var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
@@ -159,7 +166,7 @@ private fun NestNoteApp(store: NoteStore) {
     var searchVisible by remember { mutableStateOf(false) }
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
-    var editorHasUnsavedChanges by remember { mutableStateOf(false) }
+    var editorHasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
     var confirmSystemDiscard by remember { mutableStateOf(false) }
     // Resolve the selected note from persisted notes after recreation.
     val editorNote = notes.firstOrNull { it.id == editorNoteId }
@@ -169,9 +176,19 @@ private fun NestNoteApp(store: NoteStore) {
     fun savePreference(key: String, value: String) {
         preferences.edit().putString(key, value).apply()
     }
-    fun persist(next: List<NestNote>) {
-        notes = next
-        store.save(next)
+    fun persist(next: List<NestNote>, allowRecovery: Boolean = false): Boolean {
+        if (storageRecoveryRequired && !allowRecovery) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("Restore a backup before changing notes. Existing local data was not overwritten.") }
+            return false
+        }
+        val saved = store.save(next)
+        if (saved) {
+            notes = next
+            if (allowRecovery) storageRecoveryRequired = false
+        } else {
+            coroutineScope.launch { snackbarHostState.showSnackbar("Save failed. Your previous notes are still available.") }
+        }
+        return saved
     }
     fun deleteNote(note: NestNote, closeEditor: Boolean = false) {
         persist(notes.filterNot { it.id == note.id })
@@ -213,7 +230,7 @@ private fun NestNoteApp(store: NoteStore) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
             val saved = runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(NoteStore.encode(notes).toByteArray(Charsets.UTF_8)) } != null
+                context.contentResolver.openOutputStream(uri)?.use { it.write(NoteStore.encodeBackup(notes).toByteArray(Charsets.UTF_8)) } != null
             }.getOrDefault(false)
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(if (saved) "Backup saved (${notes.size} notes)" else "Couldn't save the backup")
@@ -225,13 +242,12 @@ private fun NestNoteApp(store: NoteStore) {
             val raw = runCatching {
                 context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
             }.getOrNull()
-            val incoming = raw?.let { NoteStore.decode(it, requireFields = true) }
+            val incoming = raw?.let { NoteStore.decodeBackup(it) }
             val message = if (incoming == null) {
-                "That file isn't a NESTNOTE backup"
+                "That file isn't a valid NESTNOTE backup"
             } else {
-                val merged = NoteStore.merge(notes, incoming)
-                persist(merged.notes)
-                "Restored ${merged.added} new and ${merged.updated} updated notes"
+                pendingRestore = incoming
+                "Backup validated. Review the restore before applying it."
             }
             coroutineScope.launch { snackbarHostState.showSnackbar(message) }
         }
@@ -480,15 +496,72 @@ private fun NestNoteApp(store: NoteStore) {
             }
         }
 
+        pendingRestore?.let { incoming ->
+            val preview = NoteStore.merge(notes, incoming)
+            AlertDialog(
+                onDismissRequest = { pendingRestore = null },
+                title = { Text("Review backup restore") },
+                text = {
+                    Text("This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Notes not present in the backup will not be deleted.")
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (persist(preview.notes, allowRecovery = true)) {
+                            pendingRestore = null
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
+                            }
+                        }
+                    }) { Text("Restore notes") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        if (showStorageRecoveryDialog) {
+            AlertDialog(
+                onDismissRequest = { showStorageRecoveryDialog = false },
+                title = { Text("Local notes need recovery") },
+                text = { Text("NESTNOTE couldn't read the saved notes. The stored data has been left untouched. Open Settings and restore a backup before creating, editing, or deleting notes.") },
+                confirmButton = {
+                    TextButton(onClick = { showStorageRecoveryDialog = false; selectedView = "Settings" }) {
+                        Text("Open backup settings")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showStorageRecoveryDialog = false }) { Text("Later") }
+                }
+            )
+        }
+
         if (editorVisible) {
             val closeEditor = { editorHasUnsavedChanges = false; confirmSystemDiscard = false; editorVisible = false }
             val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else closeEditor() }
-            val saveNote: (NestNote) -> Unit = { updated ->
+            val saveNote: (NestNote) -> Unit = { draft ->
                 val existing = editorNote
-                val next = if (existing == null) notes + updated else notes.map { if (it.id == existing.id) updated.copy(id = existing.id) else it }
-                persist(next)
-                closeEditor()
-                coroutineScope.launch { snackbarHostState.showSnackbar("Note saved") }
+                // Compare the editor's baseline against the latest collection, not the
+                // editor's own snapshot, which naturally remains unchanged while typing.
+                val currentSaved = existing?.let { opened -> notes.firstOrNull { it.id == opened.id } }
+                val isStale = existing != null && (
+                    currentSaved == null ||
+                        !NoteStore.isSameNoteVersion(draft.updated, currentSaved.updated)
+                    )
+                if (isStale) {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("This note changed elsewhere. Reopen it before saving to avoid overwriting newer content.")
+                    }
+                } else {
+                    val updated = draft.copy(updated = System.currentTimeMillis())
+                    val next = if (existing == null) notes + updated else notes.map {
+                        if (it.id == existing.id) updated.copy(id = existing.id) else it
+                    }
+                    if (persist(next)) {
+                        closeEditor()
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Note saved") }
+                    }
+                }
             }
             val editorDeleteAction: (() -> Unit)? = if (editorNote != null) ({
                 editorNote?.let { deleteNote(it, closeEditor = true) }
@@ -842,7 +915,26 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
             }
             Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
             if (showPreview && note.body.isNotBlank()) {
-            Text(note.body, style = MaterialTheme.typography.bodyMedium, color = cardSecondary, maxLines = if (compact) 2 else 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false))
+                Text(
+                    note.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cardSecondary,
+                    maxLines = if (compact) 2 else 5,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 7.dp).weight(1f, fill = false)
+                )
+            }
+            // Progress remains visible even when note previews are disabled.
+            val (checklistTotal, checklistDone) = NoteText.checklistProgress(note.body)
+            if (checklistTotal > 0) {
+                Text(
+                    "Checklist · $checklistDone/$checklistTotal complete",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cardAccent,
+                    modifier = Modifier.padding(top = 6.dp).semantics {
+                        contentDescription = "Checklist progress: $checklistDone of $checklistTotal items complete"
+                    }
+                )
             }
             if (showTimestamp) {
             Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
@@ -910,7 +1002,8 @@ private fun NoteEditorContent(
             color = colorIndex,
             pinned = if (archived) false else pinned,
             reminder = reminder,
-            updated = now,
+            // Carry the version opened by this editor; the parent checks it before writing.
+            updated = original?.updated ?: 0L,
             created = original?.created ?: now,
             archived = archived,
             background = backgroundIndex
@@ -932,8 +1025,16 @@ private fun NoteEditorContent(
         bodyValue = if (continued != null) TextFieldValue(continued.first, TextRange(continued.second)) else next
     }
     fun applyLineEdit(transform: (String, Int) -> Pair<String, Int>) {
-        val (text, cursor) = transform(bodyValue.text, bodyValue.selection.start)
-        bodyValue = TextFieldValue(text, TextRange(cursor))
+        val oldValue = bodyValue
+        val (text, cursor) = transform(oldValue.text, oldValue.selection.start)
+        val (selectionStart, selectionEnd) = NoteText.selectionAfterLineEdit(
+            oldText = oldValue.text,
+            newText = text,
+            selectionStart = oldValue.selection.start,
+            selectionEnd = oldValue.selection.end,
+            newCursor = cursor
+        )
+        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
     }
     fun shareNote() {
         val send = Intent(Intent.ACTION_SEND).apply {
@@ -1062,6 +1163,45 @@ private fun NoteEditorContent(
                     colors = fieldColors,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                 )
+                val checklistItems = NoteText.checklistItems(bodyValue.text)
+                if (checklistItems.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = accent.copy(alpha = 0.07f),
+                        border = BorderStroke(1.dp, accent.copy(alpha = 0.18f))
+                    ) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Text("Checklist", style = MaterialTheme.typography.titleSmall, color = ink)
+                            checklistItems.forEach { item ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = item.checked,
+                                        modifier = Modifier.semantics {
+                                            contentDescription = "${item.text.ifBlank { "Empty checklist item" }}, ${if (item.checked) "completed" else "not completed"}"
+                                        },
+                                        onCheckedChange = { checked ->
+                                            bodyValue = bodyValue.copy(text = NoteText.setChecklistItemChecked(bodyValue.text, item.lineIndex, checked))
+                                        }
+                                    )
+                                    Text(
+                                        item.text.ifBlank { "(empty item)" },
+                                        modifier = Modifier.weight(1f).clickable {
+                                            bodyValue = bodyValue.copy(text = NoteText.setChecklistItemChecked(bodyValue.text, item.lineIndex, !item.checked))
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            textDecoration = if (item.checked) TextDecoration.LineThrough else TextDecoration.None
+                                        ),
+                                        color = if (item.checked) muted else ink
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = bodyValue,
                     onValueChange = { onBodyChange(it) },
@@ -1412,7 +1552,7 @@ private fun QuickNoteFields(
                             id = original?.id ?: System.currentTimeMillis(), title = title.trim(), body = body.trim(),
                             category = original?.category ?: defaultCategory, color = original?.color ?: 0,
                             pinned = original?.pinned ?: false, reminder = original?.reminder.orEmpty(),
-                            updated = System.currentTimeMillis(), created = original?.created ?: System.currentTimeMillis(),
+                            updated = original?.updated ?: 0L, created = original?.created ?: System.currentTimeMillis(),
                             archived = original?.archived ?: false, background = original?.background ?: 0
                         )
                     )
