@@ -1,6 +1,6 @@
 # NESTNOTE Product Roadmap
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 ## Product direction
 Build a calm, compact, personal note-taking experience using native Android, Jetpack Compose, and Material 3. Keep common actions fast, preserve local user data, and deliver in small, testable increments.
@@ -56,7 +56,7 @@ Implemented a unified Material 3 editor with saveable title/body/category/color/
 **Review outcome:** owner approved Phase 4 after testing; PR #4 was squash-merged on 2026-10-12. Visual references are inspiration, not proof of pixel-perfect parity. Reminder delivery and rich-text formatting remain unimplemented. Device testing was performed by the owner; no additional post-fix device verification is claimed by the implementation agent.
 
 ## Phase 5 — Reliability and finishing touches
-**Status: In progress** — PR [#5](https://github.com/dukeoftoad/toadNOTES/pull/5) includes the Phase 5 implementation and refreshed documentation. Android CI passed on the previously recorded branch head. Merge is owner-authorized; manual UI, accessibility/larger-font, keyboard/edge-to-edge, and final regression checks remain outstanding, so Phase 5 is not marked complete.
+**Status: In progress** — PR [#5](https://github.com/dukeoftoad/toadNOTES/pull/5) was squash-merged into `main` on 2026-10-12 (merge commit `ee046eaa67fe2b2be713ef96becabf0892f034fe`). Android CI passed on the previously recorded implementation head; manual UI, accessibility/larger-font, keyboard/edge-to-edge, and final regression checks remain outstanding, so Phase 5 is not marked complete.
 - [x] Backup and restore: JSON backup to a user-chosen file and merge-restore (new ids added, newest copy wins, nothing deleted). Same JSON format as local storage.
 - [x] Settings redesign: segmented controls (theme, view, density, sort, text size), selectable cards (note card colors, editor mode), default-category chips, per-setting summaries, reset-to-defaults.
 - [x] Editor UX: checklist and bullet tools with Enter-to-continue lists, live word count and reading time (optional), editor text size setting, category chips, reminder presets (later today, tomorrow morning, next Monday) and clear-reminder, share/copy note, new notes open focused, edited/created info.
