@@ -69,6 +69,16 @@ On a clean install and an upgrade install where practical:
 - [ ] Confirm exported JSON is handled as plaintext unless export encryption is explicitly implemented.
 - [ ] Review permissions, exported components, and newly added dependencies.
 
+## 5. APK build and GitHub Release delivery
+
+- [ ] Confirm Android CI runs unit tests, builds the debug APK, compiles instrumentation tests, and builds the minified/R8 release variant on the exact candidate commit.
+- [ ] Confirm production publishing is tag-only (`v*.*.*`) and a push to `main` does not create or overwrite a public release.
+- [ ] Confirm all four permanent signing Actions secrets are configured without exposing their values: `SIGNING_KEY`, `KEY_ALIAS`, `KEY_STORE_PASSWORD`, `KEY_PASSWORD`.
+- [ ] Confirm a tagged build fails closed when signing secrets are missing/invalid and does not publish an unsigned APK.
+- [ ] Confirm the published GitHub Release contains `NESTNOTE-vX.Y.Z.apk`, generated release notes, and a verified production signature.
+- [ ] Verify the APK certificate fingerprint independently and install/test the published APK before distribution.
+- Download page: https://github.com/dukeoftoad/toadNOTES/releases
+
 ## 5. Production signing and artifact integrity
 
 - [ ] Confirm the production signing key is available only through the approved secret/managed signing path.

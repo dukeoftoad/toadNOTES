@@ -1,5 +1,7 @@
 package com.nestnote.app
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -8,6 +10,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import javax.crypto.KeyGenerator
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -47,4 +50,40 @@ class NoteBackupTest {
         assertEquals(2, result.added)
         assertTrue(result.notes.map { it.id } == listOf(5L, 4L))
     }
+    @Test
+    fun encryptedStorageMigratesLegacyJsonAndDoesNotKeepPlaintext() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+        prefs.edit().clear().commit()
+        val expected = listOf(note(81, "Private title"))
+        prefs.edit().putString("notes", NoteStore.encode(expected)).commit()
+        val testKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val store = NoteStore(context) { testKey }
+
+        val result = store.loadSafely()
+
+        assertEquals(expected, result.notes)
+        assertEquals(false, result.recoveryRequired)
+        assertEquals(null, prefs.getString("notes", null))
+        val encrypted = prefs.getString("notes_encrypted_v1", null)
+        assertNotNull(encrypted)
+        assertTrue(!encrypted!!.contains("Private title"))
+        assertEquals(expected, store.loadSafely().notes)
+    }
+
+    @Test
+    fun corruptEncryptedStorageRequiresRecoveryAndPreservesCiphertext() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+        prefs.edit().clear().putString("notes_encrypted_v1", "corrupted-ciphertext").commit()
+        val testKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val store = NoteStore(context) { testKey }
+
+        val result = store.loadSafely()
+
+        assertTrue(result.recoveryRequired)
+        assertTrue(result.notes.isEmpty())
+        assertEquals("corrupted-ciphertext", prefs.getString("notes_encrypted_v1", null))
+    }
+
 }

@@ -1,6 +1,15 @@
 package com.nestnote.app
 
 import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.nio.ByteBuffer
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -20,8 +29,9 @@ data class NestNote(
 
 data class MergeResult(val notes: List<NestNote>, val added: Int, val updated: Int)
 data class NoteLoadResult(val notes: List<NestNote>, val recoveryRequired: Boolean)
+class NoteStorageException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
-class NoteStore(context: Context) {
+class NoteStore internal constructor(context: Context, private val testKeyProvider: (() -> SecretKey)? = null) {
     private val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
 
     fun load(): List<NestNote> = loadSafely().notes
@@ -31,19 +41,93 @@ class NoteStore(context: Context) {
      * On corruption, return no editable notes and leave the original bytes untouched.
      */
     fun loadSafely(): NoteLoadResult {
-        val raw = prefs.getString("notes", null) ?: return NoteLoadResult(sampleNotes(), false)
-        val decoded = decode(raw)
-        return if (decoded != null) NoteLoadResult(decoded, false)
+        val encrypted = prefs.getString(ENCRYPTED_NOTES_KEY, null)
+        if (encrypted != null) {
+            val decoded = runCatching { decode(decrypt(encrypted)) }.getOrNull()
+            return if (decoded != null) NoteLoadResult(decoded, false)
+            else NoteLoadResult(emptyList(), true)
+        }
+
+        val legacy = prefs.getString(LEGACY_NOTES_KEY, null)
+            ?: return NoteLoadResult(sampleNotes(), false)
+        val decoded = decode(legacy)
+        if (decoded == null) return NoteLoadResult(emptyList(), true)
+
+        // Commit the encrypted payload before removing the plaintext key. If encryption or
+        // the preferences commit fails, preserve the legacy bytes and block normal writes.
+        return if (save(decoded)) NoteLoadResult(decoded, false)
         else NoteLoadResult(emptyList(), true)
     }
 
-    /** Returns false when Android reports that the synchronous preference commit failed. */
+    /** Encrypts first and removes legacy plaintext only in the same successful preferences commit. */
     fun save(notes: List<NestNote>): Boolean {
         if (!isValidNoteCollection(notes)) return false
-        return runCatching { prefs.edit().putString("notes", encode(notes)).commit() }.getOrDefault(false)
+        return runCatching {
+            val encrypted = encrypt(encode(notes))
+            prefs.edit()
+                .putString(ENCRYPTED_NOTES_KEY, encrypted)
+                .remove(LEGACY_NOTES_KEY)
+                .commit()
+        }.getOrDefault(false)
+    }
+
+    private fun encrypt(plainText: String): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val ciphertext = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        val payload = ByteBuffer.allocate(cipher.iv.size + ciphertext.size)
+            .put(cipher.iv).put(ciphertext).array()
+        return Base64.encodeToString(payload, Base64.NO_WRAP)
+    }
+
+    private fun decrypt(encoded: String): String {
+        val payload = Base64.decode(encoded, Base64.NO_WRAP)
+        require(payload.size > GCM_IV_LENGTH_BYTES) { "Encrypted note payload is too short" }
+        val buffer = ByteBuffer.wrap(payload)
+        val iv = ByteArray(GCM_IV_LENGTH_BYTES)
+        buffer.get(iv)
+        val ciphertext = ByteArray(buffer.remaining())
+        buffer.get(ciphertext)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getExistingKey(), GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+        return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+    }
+
+    private fun getExistingKey(): SecretKey {
+        testKeyProvider?.let { return it() }
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        return keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+            ?: throw IllegalStateException("The encryption key for saved notes is missing")
+    }
+
+    private fun getOrCreateKey(): SecretKey {
+        testKeyProvider?.let { return it() }
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .setKeySize(256)
+                .build()
+        )
+        return generator.generateKey()
     }
 
     companion object {
+        private const val LEGACY_NOTES_KEY = "notes"
+        private const val ENCRYPTED_NOTES_KEY = "notes_encrypted_v1"
+        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val KEY_ALIAS = "nestnote_notes_aes_gcm_v1"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val GCM_IV_LENGTH_BYTES = 12
+        private const val GCM_TAG_LENGTH_BITS = 128
+
         const val MAX_BACKUP_BYTES = 10 * 1024 * 1024
         const val MAX_NOTES = 10_000
         const val MAX_TITLE_LENGTH = 10_000

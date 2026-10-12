@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   unit-tests:
-    name: Unit tests, API 36 debug build and test signing
+    name: Unit tests, API 36 debug build and release compilation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,38 +32,13 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Build minified release APK
+        run: gradle --no-daemon assembleRelease
       - name: Compile Android instrumentation tests
         run: gradle --no-daemon assembleDebugAndroidTest
-      - name: Generate temporary CI keystore and sign test APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          # This disposable key is for CI validation only. Never use it for production upgrades.
-          STORE_PASS="$(openssl rand -hex 24)"
-          echo "::add-mask::$STORE_PASS"
-          keytool -genkeypair -noprompt -v \
-            -keystore "$RUNNER_TEMP/nestnote-ci-test.jks" \
-            -storetype JKS -storepass "$STORE_PASS" -keypass "$STORE_PASS" \
-            -alias nestnote-ci-test -keyalg RSA -keysize 2048 -validity 2 \
-            -dname "CN=NESTNOTE CI Test,O=Temporary Testing,C=US"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
-            --ks "$RUNNER_TEMP/nestnote-ci-test.jks" \
-            --ks-key-alias nestnote-ci-test \
-            --ks-pass "pass:$STORE_PASS" --key-pass "pass:$STORE_PASS" \
-            --out app/build/outputs/apk/debug/app-debug-ci-signed.apk \
-            app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose \
-            app/build/outputs/apk/debug/app-debug-ci-signed.apk
-          rm -f "$RUNNER_TEMP/nestnote-ci-test.jks"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit-test-reports
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: nestnote-ci-signed-test-apk
-          path: app/build/outputs/apk/debug/app-debug-ci-signed.apk
-          if-no-files-found: error

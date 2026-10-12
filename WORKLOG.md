@@ -404,3 +404,11 @@ Branch: `feature/phase-5-settings-editor-ux` (from `main` after PR #4 merge). No
 - Documentation now records this CI result. The documentation updates themselves will trigger another CI run before merge.
 - Not run: emulator/physical-device smoke tests, TalkBack, larger font/display scaling, keyboard/focus/insets, production signing-certificate verification, release/minified build, and installed upgrade testing. No production-release readiness is claimed.
 - PR #7 remains open until the documentation commit also passes CI; merge will be performed only after that final check.
+
+
+### APK CI and release-page documentation — 2026-10-12
+
+- Documented the GitHub Releases download page and version-tag publishing steps in README.md.
+- Added explicit release-delivery gates to RELEASE_CHECKLIST.md: minified release build, tag-only publication, permanent signing secrets, fail-closed signing, artifact naming, signature/fingerprint verification, and install validation.
+- The `security/privacy-hardening` branch already configures Android CI to build the minified release variant without disposable test signing, and Android Release to publish only version-tagged APKs signed with the permanent Actions secrets.
+- Validation status: documentation/workflow changes require the branch CI run; no production APK was published by this documentation update. A successful build alone does not replace device and certificate-fingerprint validation.

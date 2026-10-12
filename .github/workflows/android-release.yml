@@ -1,8 +1,6 @@
 name: Android Release
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -29,49 +27,46 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest
       - name: Build release APK
         run: gradle --no-daemon assembleRelease
-      - name: Generate temporary CI keystore and sign release test APK
+      - name: Sign production release with permanent key
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
-          STORE_PASS="$(openssl rand -hex 24)"
-          echo "::add-mask::$STORE_PASS"
-          keytool -genkeypair -noprompt -v \
-            -keystore "$RUNNER_TEMP/nestnote-ci-release.jks" \
-            -storetype JKS -storepass "$STORE_PASS" -keypass "$STORE_PASS" \
-            -alias nestnote-ci-release -keyalg RSA -keysize 2048 -validity 2 \
-            -dname "CN=NESTNOTE CI Release Test,O=Temporary Testing,C=US"
-          APK_NAME="NESTNOTE-${GITHUB_SHA::7}-CI-SIGNED.apk"
+          : "${SIGNING_KEY:?SIGNING_KEY secret is required for tagged production releases}"
+          : "${KEY_ALIAS:?KEY_ALIAS secret is required for tagged production releases}"
+          : "${KEY_STORE_PASSWORD:?KEY_STORE_PASSWORD secret is required for tagged production releases}"
+          : "${KEY_PASSWORD:?KEY_PASSWORD secret is required for tagged production releases}"
+          KEYSTORE_PATH="$RUNNER_TEMP/nestnote-production.jks"
+          trap 'rm -f "$KEYSTORE_PATH"' EXIT
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          APK_NAME="NESTNOTE-$GITHUB_REF_NAME.apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
-            --ks "$RUNNER_TEMP/nestnote-ci-release.jks" \
-            --ks-key-alias nestnote-ci-release \
-            --ks-pass "pass:$STORE_PASS" --key-pass "pass:$STORE_PASS" \
+            --ks "$KEYSTORE_PATH" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEY_STORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
             --out "$APK_NAME" \
             app/build/outputs/apk/release/app-release-unsigned.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK_NAME"
-          rm -f "$RUNNER_TEMP/nestnote-ci-release.jks"
           echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@v4
+      - name: Upload unsigned release build for manual CI inspection
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
         with:
-          name: NESTNOTE-${{ github.sha }}-CI-SIGNED
-          path: NESTNOTE-*-CI-SIGNED.apk
+          name: NESTNOTE-${{ github.sha }}-UNSIGNED-RELEASE
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
-      - name: Publish automatic prerelease or tagged release
-        if: startsWith(github.ref, 'refs/tags/') || (github.ref == 'refs/heads/main' && github.event_name == 'push')
+      - name: Publish tagged production release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            RELEASE_TAG="$GITHUB_REF_NAME"
-            gh release create "$RELEASE_TAG" "$APK_NAME" --title "NESTNOTE $RELEASE_TAG" --generate-notes
-          else
-            RELEASE_TAG="latest"
-            NOTES="Latest automated prerelease from main. Commit: $GITHUB_SHA."
-            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-              gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber
-              gh release edit "$RELEASE_TAG" --title "NESTNOTE Latest Build" --notes "$NOTES" --prerelease
-            else
-              gh release create "$RELEASE_TAG" "$APK_NAME" --title "NESTNOTE Latest Build" --notes "$NOTES" --prerelease
-            fi
-          fi
+          gh release create "$GITHUB_REF_NAME" "$APK_NAME" --title "NESTNOTE $GITHUB_REF_NAME" --generate-notes

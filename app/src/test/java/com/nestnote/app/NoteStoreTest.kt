@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import javax.crypto.KeyGenerator
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -22,7 +23,8 @@ class NoteStoreTest {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
             .edit().clear().commit()
-        store = NoteStore(context)
+        val testKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        store = NoteStore(context) { testKey }
     }
 
     @Test
