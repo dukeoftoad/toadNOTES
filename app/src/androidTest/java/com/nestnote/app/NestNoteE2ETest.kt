@@ -41,7 +41,7 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Your notes").assertIsDisplayed()
         composeRule.onNodeWithText("All notes").assertIsDisplayed()
         composeRule.onNodeWithText("Reminders").assertIsDisplayed()
-        composeRule.onNodeWithText("New note").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Create note").assertIsDisplayed()
         composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
     }
 
@@ -59,10 +59,10 @@ class NestNoteE2ETest {
 
     @Test
     fun userCanCreateAndSaveANote() {
-        composeRule.onNodeWithText("New note").performClick()
-        composeRule.onNodeWithText("Capture it before it slips away.").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithText("Title").assertIsDisplayed()
         composeRule.onNodeWithText("Title").performTextInput("E2E note")
-        composeRule.onNodeWithText("Your note").performTextInput("Saved by the UI test")
+        composeRule.onNodeWithText("Note").performTextInput("Saved by the UI test")
         composeRule.onNodeWithText("Save note").performClick()
         composeRule.onNodeWithText("E2E note").assertIsDisplayed()
         composeRule.onNodeWithText("Saved by the UI test").assertIsDisplayed()
@@ -81,6 +81,30 @@ class NestNoteE2ETest {
                     .getString("default_sort", null)
             )
         }
+        composeRule.onNodeWithText("Title A–Z").performClick()
+        composeRule.onNodeWithText("Recently created").assertIsDisplayed()
+        composeRule.onNodeWithText("Recently created").performClick()
+        composeRule.runOnIdle {
+            assertEquals(
+                "CREATED",
+                composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+                    .getString("default_sort", null)
+            )
+        }
+    }
+
+
+    @Test
+    fun archivedNoteCanBeRestoredFromArchivedView() {
+        composeRule.onNodeWithContentDescription("Actions for Project Plan").performClick()
+        composeRule.onNodeWithText("Archive").performClick()
+        composeRule.onNodeWithText("Archived").performClick()
+        composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Actions for Project Plan").performClick()
+        composeRule.onNodeWithText("Restore from archive").performClick()
+        composeRule.onAllNodesWithText("Project Plan").assertCountEquals(0)
+        composeRule.onNodeWithText("Home").performClick()
+        composeRule.onNodeWithText("Project Plan").assertIsDisplayed()
     }
 
     @Test
@@ -92,7 +116,7 @@ class NestNoteE2ETest {
 
     @Test
     fun cancelWithUnsavedChangesRequiresConfirmation() {
-        composeRule.onNodeWithText("New note").performClick()
+        composeRule.onNodeWithContentDescription("Create note").performClick()
         composeRule.onNodeWithText("Title").performTextInput("Draft not saved")
         composeRule.onNodeWithText("Cancel").performClick()
         composeRule.onNodeWithText("Discard changes?").assertIsDisplayed()
@@ -100,15 +124,15 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Draft not saved").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
         composeRule.onNodeWithText("Discard").performClick()
-        composeRule.onAllNodesWithText("Capture it before it slips away.").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Title").assertCountEquals(0)
     }
 
     @Test
     fun userCanOpenAndCancelTheEditor() {
-        composeRule.onNodeWithText("New note").performClick()
-        composeRule.onNodeWithText("Capture it before it slips away.").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithText("Title").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
-        composeRule.onAllNodesWithText("Capture it before it slips away.").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Title").assertCountEquals(0)
     }
 
     @Test
@@ -124,6 +148,25 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Search your notes").performTextInput("no-note-should-match-this")
         composeRule.onNodeWithText("A fresh page awaits").assertIsDisplayed()
         composeRule.onNodeWithText("Create a note and let ideas flow.").assertIsDisplayed()
+    }
+
+    @Test
+    fun appearancePickerChangesAndPersistsColorAndWallpaper() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
+        composeRule.onNodeWithText("Colour").assertIsDisplayed()
+        composeRule.onNodeWithText("Background").assertIsDisplayed()
+        composeRule.onNodeWithTag("note_color_2").performClick()
+        composeRule.onNodeWithTag("note_background_1").performClick()
+        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithText("Title").performTextInput("Wallpaper note")
+        composeRule.onNodeWithText("Note").performTextInput("Illustrated background")
+        composeRule.onNodeWithText("Save note").performClick()
+        composeRule.runOnIdle {
+            val saved = com.nestnote.app.NoteStore(composeRule.activity).load().first { it.title == "Wallpaper note" }
+            assertEquals(2, saved.color)
+            assertEquals(1, saved.background)
+        }
     }
 
     @Test

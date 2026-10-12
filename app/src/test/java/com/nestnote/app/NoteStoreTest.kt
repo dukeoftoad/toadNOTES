@@ -44,6 +44,69 @@ class NoteStoreTest {
     }
 
     @Test
+    fun legacyRecordsWithoutCreatedTimestampUseTheirIdAsFallback() {
+        context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+            .edit()
+            .putString(
+                "notes",
+                """[{"id":77,"title":"Legacy","body":"Older note","category":"Ideas","updated":88}]"""
+            )
+            .commit()
+
+        val loaded = store.load().single()
+        assertEquals(77L, loaded.created)
+        assertEquals("Legacy", loaded.title)
+    }
+
+    @Test
+    fun createdTimestampSurvivesSaveAndLoad() {
+        val original = NestNote(
+            id = 9L, title = "Created date", body = "Keep original time",
+            updated = 500L, created = 100L
+        )
+        store.save(listOf(original.copy(updated = 900L)))
+        val loaded = store.load().single()
+        assertEquals(100L, loaded.created)
+        assertEquals(900L, loaded.updated)
+    }
+
+    @Test
+    fun archiveAndRestoreStateSurviveSaveAndLoad() {
+        val archived = NestNote(id = 19L, title = "Archived", body = "Keep it", archived = true)
+        store.save(listOf(archived))
+        assertEquals(archived, store.load().single())
+
+        val restored = store.load().single().copy(archived = false)
+        store.save(listOf(restored))
+        assertEquals(restored, store.load().single())
+        assertFalse(store.load().single().archived)
+    }
+
+    @Test
+    fun legacyRecordsDefaultToNotArchived() {
+        context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+            .edit().putString("notes", """[{"id":78,"title":"Legacy","body":"Visible"}]""").commit()
+        assertFalse(store.load().single().archived)
+    }
+
+    @Test
+    fun noteWallpaperSelectionSurvivesSaveAndLoad() {
+        val decorated = NestNote(
+            id = 91L, title = "Wallpaper", body = "Botanical",
+            color = 2, background = 1
+        )
+        store.save(listOf(decorated))
+        assertEquals(decorated, store.load().single())
+    }
+
+    @Test
+    fun legacyNotesDefaultToNoCustomWallpaper() {
+        context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+            .edit().putString("notes", """[{"id":92,"title":"Legacy","body":"No wallpaper"}]""").commit()
+        assertEquals(0, store.load().single().background)
+    }
+
+    @Test
     fun savingEmptyListPersistsAnEmptyList() {
         store.save(emptyList())
         assertTrue(store.load().isEmpty())
