@@ -18,15 +18,46 @@ data class NestNote(
     val background: Int = 0
 )
 
+data class MergeResult(val notes: List<NestNote>, val added: Int, val updated: Int)
+
 class NoteStore(context: Context) {
     private val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
 
     fun load(): List<NestNote> {
         val raw = prefs.getString("notes", null) ?: return sampleNotes()
-        return runCatching {
+        return decode(raw) ?: sampleNotes()
+    }
+
+    fun save(notes: List<NestNote>) {
+        prefs.edit().putString("notes", encode(notes)).apply()
+    }
+
+    companion object {
+        /** Serializes notes to the same JSON array used for local storage and backups. */
+        fun encode(notes: List<NestNote>): String {
+            val array = JSONArray()
+            notes.forEach { n ->
+                array.put(JSONObject().apply {
+                    put("id", n.id); put("title", n.title); put("body", n.body)
+                    put("category", n.category); put("color", n.color)
+                    put("pinned", n.pinned); put("reminder", n.reminder)
+                    put("updated", n.updated); put("created", n.created); put("archived", n.archived)
+                    put("background", n.background.coerceIn(0, 5))
+                })
+            }
+            return array.toString()
+        }
+
+        /**
+         * Parses a JSON array of notes. Returns null if the text is not valid.
+         * With [requireFields] every record must carry at least an id and a title
+         * (used to reject unrelated files during import).
+         */
+        fun decode(raw: String, requireFields: Boolean = false): List<NestNote>? = runCatching {
             val array = JSONArray(raw)
             (0 until array.length()).map { i ->
                 val o = array.getJSONObject(i)
+                if (requireFields && !(o.has("id") && o.has("title"))) error("not a NESTNOTE record")
                 NestNote(
                     id = o.optLong("id"),
                     title = o.optString("title"),
@@ -41,21 +72,23 @@ class NoteStore(context: Context) {
                     background = o.optInt("background", 0).coerceIn(0, 5)
                 )
             }
-        }.getOrElse { sampleNotes() }
-    }
+        }.getOrNull()
 
-    fun save(notes: List<NestNote>) {
-        val array = JSONArray()
-        notes.forEach { n ->
-            array.put(JSONObject().apply {
-                put("id", n.id); put("title", n.title); put("body", n.body)
-                put("category", n.category); put("color", n.color)
-                put("pinned", n.pinned); put("reminder", n.reminder)
-                put("updated", n.updated); put("created", n.created); put("archived", n.archived)
-                put("background", n.background.coerceIn(0, 5))
-            })
+        /** Merges imported notes by id: new ids are added, existing ids keep the most recently edited copy. */
+        fun merge(existing: List<NestNote>, incoming: List<NestNote>): MergeResult {
+            val byId = existing.associateBy { it.id }.toMutableMap()
+            var added = 0
+            var updated = 0
+            incoming.forEach { note ->
+                val current = byId[note.id]
+                when {
+                    current == null -> { byId[note.id] = note; added++ }
+                    note.updated > current.updated -> { byId[note.id] = note; updated++ }
+                }
+            }
+            val order = existing.map { it.id } + incoming.map { it.id }.filter { id -> existing.none { it.id == id } }
+            return MergeResult(order.distinct().mapNotNull { byId[it] }, added, updated)
         }
-        prefs.edit().putString("notes", array.toString()).apply()
     }
 
     private fun sampleNotes() = listOf(

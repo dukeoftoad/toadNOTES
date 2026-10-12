@@ -56,12 +56,18 @@ Implemented a unified Material 3 editor with saveable title/body/category/color/
 **Review outcome:** owner approved Phase 4 after testing; PR #4 was squash-merged on 2026-10-12. Visual references are inspiration, not proof of pixel-perfect parity. Reminder delivery and rich-text formatting remain unimplemented. Device testing was performed by the owner; no additional post-fix device verification is claimed by the implementation agent.
 
 ## Phase 5 — Reliability and finishing touches
-**Status: Planned; start after Phase 4 is complete.**
-- Export/import and backup/restore.
-- Accessibility and larger-font support.
-- Keyboard and edge-to-edge behavior.
-- Tests for editing, deletion, persistence, and preferences.
-- Final regression and release checks.
+**Status: In progress** — PR [#5](https://github.com/dukeoftoad/toadNOTES/pull/5) includes the Phase 5 implementation and refreshed documentation. Android CI passed on the previously recorded branch head. Merge is owner-authorized; manual UI, accessibility/larger-font, keyboard/edge-to-edge, and final regression checks remain outstanding, so Phase 5 is not marked complete.
+- [x] Backup and restore: JSON backup to a user-chosen file and merge-restore (new ids added, newest copy wins, nothing deleted). Same JSON format as local storage.
+- [x] Settings redesign: segmented controls (theme, view, density, sort, text size), selectable cards (note card colors, editor mode), default-category chips, per-setting summaries, reset-to-defaults.
+- [x] Editor UX: checklist and bullet tools with Enter-to-continue lists, live word count and reading time (optional), editor text size setting, category chips, reminder presets (later today, tomorrow morning, next Monday) and clear-reminder, share/copy note, new notes open focused, edited/created info.
+- [x] Verify automated checks with Android CI: [run #38196257185 — success](https://github.com/dukeoftoad/toadNOTES/actions/runs/38196257185). Unit tests, API 36 debug APK build, instrumentation-test compilation, and test-APK signing passed.
+- [ ] Manual emulator/device UI validation (not yet run; the emulator UI workflow is manual-only).
+- [ ] Accessibility and larger-font audit.
+- [ ] Keyboard and edge-to-edge behavior review.
+- [ ] Tests for editing, deletion, persistence, and preferences (unit tests added for list/reminder helpers and backup merge).
+- [ ] Final regression and release checks.
+
+Still not implemented: reminder delivery (alarms/notifications), rich-text formatting beyond checklist/bullet prefixes, tap-to-toggle checkboxes inside the text.
 
 ## Release and validation policy
 - Android CI targets API 36 and is the required automated validation.

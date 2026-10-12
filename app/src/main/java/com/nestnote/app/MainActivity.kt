@@ -1,11 +1,17 @@
 package com.nestnote.app
 
 import android.app.DatePickerDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -28,6 +34,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -45,6 +55,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
@@ -53,7 +65,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,9 +101,14 @@ private const val PREF_DEFAULT_SORT = "default_sort"
 private const val PREF_NOTE_PREVIEWS = "show_note_previews"
 private const val PREF_NOTE_TIMESTAMPS = "show_note_timestamps"
 private const val PREF_DEFAULT_CATEGORY = "default_note_category"
+private const val PREF_TEXT_SIZE = "editor_text_size"
+private const val PREF_EDITOR_COUNTS = "editor_show_counts"
 
 private enum class ThemeMode(val label: String) {
-    SYSTEM("Follow device"), LIGHT("Light"), DARK("Dark")
+    SYSTEM("Device"), LIGHT("Light"), DARK("Dark")
+}
+private enum class EditorTextSize(val label: String, val titleSp: Int, val bodySp: Int) {
+    SMALL("Small", 24, 14), MEDIUM("Medium", 27, 16), LARGE("Large", 31, 19)
 }
 private enum class DashboardLayout(val label: String) {
     GRID("Grid"), LIST("List")
@@ -133,6 +152,8 @@ private fun NestNoteApp(store: NoteStore) {
     var showNoteTimestamps by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_TIMESTAMPS, true)) }
     var defaultNoteCategory by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_CATEGORY, "Ideas")?.takeIf { it in categories } ?: "Ideas") }
     var noteColorStyle by remember { mutableStateOf(NoteColorStyle.values().firstOrNull { it.name == preferences.getString(PREF_NOTE_STYLE, "PASTEL") } ?: NoteColorStyle.PASTEL) }
+    var editorTextSize by remember { mutableStateOf(EditorTextSize.values().firstOrNull { it.name == preferences.getString(PREF_TEXT_SIZE, "MEDIUM") } ?: EditorTextSize.MEDIUM) }
+    var showEditorCounts by remember { mutableStateOf(preferences.getBoolean(PREF_EDITOR_COUNTS, true)) }
     var selectedView by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
@@ -165,6 +186,54 @@ private fun NestNoteApp(store: NoteStore) {
             if (result == SnackbarResult.ActionPerformed && notes.none { it.id == note.id }) {
                 persist(notes + note)
             }
+        }
+    }
+    fun setSort(key: String) {
+        sortByTitle = key == "TITLE"
+        sortByCreated = key == "CREATED"
+        savePreference(PREF_DEFAULT_SORT, key)
+    }
+    fun resetPreferences() {
+        preferences.edit().clear().apply()
+        themeMode = ThemeMode.SYSTEM
+        dynamicColors = true
+        dashboardLayout = DashboardLayout.GRID
+        editorMode = EditorMode.FULL_SCREEN
+        dashboardDensity = DashboardDensity.COMPACT
+        sortByTitle = false
+        sortByCreated = false
+        showNotePreviews = true
+        showNoteTimestamps = true
+        defaultNoteCategory = "Ideas"
+        noteColorStyle = NoteColorStyle.PASTEL
+        editorTextSize = EditorTextSize.MEDIUM
+        showEditorCounts = true
+        coroutineScope.launch { snackbarHostState.showSnackbar("Settings reset to defaults") }
+    }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            val saved = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(NoteStore.encode(notes).toByteArray(Charsets.UTF_8)) } != null
+            }.getOrDefault(false)
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(if (saved) "Backup saved (${notes.size} notes)" else "Couldn't save the backup")
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val raw = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            }.getOrNull()
+            val incoming = raw?.let { NoteStore.decode(it, requireFields = true) }
+            val message = if (incoming == null) {
+                "That file isn't a NESTNOTE backup"
+            } else {
+                val merged = NoteStore.merge(notes, incoming)
+                persist(merged.notes)
+                "Restored ${merged.added} new and ${merged.updated} updated notes"
+            }
+            coroutineScope.launch { snackbarHostState.showSnackbar(message) }
         }
     }
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -277,14 +346,23 @@ private fun NestNoteApp(store: NoteStore) {
                         onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) },
                         noteColorStyle = noteColorStyle,
                         onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) },
-                        sortByTitle = sortByTitle,
-                        onSortChange = { sortByTitle = it; sortByCreated = false; savePreference(PREF_DEFAULT_SORT, if (it) "TITLE" else "RECENT") },
+                        sortKey = when { sortByTitle -> "TITLE"; sortByCreated -> "CREATED"; else -> "RECENT" },
+                        onSortChange = { setSort(it) },
                         showNotePreviews = showNotePreviews,
                         onShowNotePreviewsChange = { showNotePreviews = it; preferences.edit().putBoolean(PREF_NOTE_PREVIEWS, it).apply() },
                         showNoteTimestamps = showNoteTimestamps,
                         onShowNoteTimestampsChange = { showNoteTimestamps = it; preferences.edit().putBoolean(PREF_NOTE_TIMESTAMPS, it).apply() },
                         defaultNoteCategory = defaultNoteCategory,
-                        onDefaultNoteCategoryChange = { defaultNoteCategory = it; savePreference(PREF_DEFAULT_CATEGORY, it) }
+                        onDefaultNoteCategoryChange = { defaultNoteCategory = it; savePreference(PREF_DEFAULT_CATEGORY, it) },
+                        editorTextSize = editorTextSize,
+                        onEditorTextSizeChange = { editorTextSize = it; savePreference(PREF_TEXT_SIZE, it.name) },
+                        showEditorCounts = showEditorCounts,
+                        onShowEditorCountsChange = { showEditorCounts = it; preferences.edit().putBoolean(PREF_EDITOR_COUNTS, it).apply() },
+                        totalNotes = notes.size,
+                        archivedNotes = notes.count { it.archived },
+                        onExportNotes = { exportLauncher.launch("nestnote-backup.json") },
+                        onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                        onResetDefaults = { resetPreferences() }
                     )
                 } else if (selectedView == "Categories") {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -348,9 +426,9 @@ private fun NestNoteApp(store: NoteStore) {
                                     Text(when { sortByTitle -> "Title A–Z"; sortByCreated -> "Recently created"; else -> "Recently edited" }, style = MaterialTheme.typography.labelLarge)
                                 }
                                 DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { sortByTitle = false; sortByCreated = false; savePreference(PREF_DEFAULT_SORT, "RECENT"); sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Recently created") }, onClick = { sortByTitle = false; sortByCreated = true; savePreference(PREF_DEFAULT_SORT, "CREATED"); sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { sortByTitle = true; sortByCreated = false; savePreference(PREF_DEFAULT_SORT, "TITLE"); sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { setSort("RECENT"); sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Recently created") }, onClick = { setSort("CREATED"); sortMenuExpanded = false })
+                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { setSort("TITLE"); sortMenuExpanded = false })
                                 }
                             }
                             IconButton(
@@ -417,11 +495,11 @@ private fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorMode.QUICK_DIALOG -> AlertDialog(
@@ -453,6 +531,7 @@ private fun NestNoteApp(store: NoteStore) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(
     themeMode: ThemeMode,
@@ -467,16 +546,27 @@ private fun SettingsScreen(
     onDensityChange: (DashboardDensity) -> Unit,
     noteColorStyle: NoteColorStyle,
     onNoteColorStyleChange: (NoteColorStyle) -> Unit,
-    sortByTitle: Boolean,
-    onSortChange: (Boolean) -> Unit,
+    sortKey: String,
+    onSortChange: (String) -> Unit,
     showNotePreviews: Boolean,
     onShowNotePreviewsChange: (Boolean) -> Unit,
     showNoteTimestamps: Boolean,
     onShowNoteTimestampsChange: (Boolean) -> Unit,
     defaultNoteCategory: String,
-    onDefaultNoteCategoryChange: (String) -> Unit
+    onDefaultNoteCategoryChange: (String) -> Unit,
+    editorTextSize: EditorTextSize,
+    onEditorTextSizeChange: (EditorTextSize) -> Unit,
+    showEditorCounts: Boolean,
+    onShowEditorCountsChange: (Boolean) -> Unit,
+    totalNotes: Int,
+    archivedNotes: Int,
+    onExportNotes: () -> Unit,
+    onImportNotes: () -> Unit,
+    onResetDefaults: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    var confirmReset by remember { mutableStateOf(false) }
+    val sortOptions = listOf("RECENT" to "Edited", "CREATED" to "Created", "TITLE" to "Title")
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("settings_scroll"),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp),
@@ -488,110 +578,177 @@ private fun SettingsScreen(
         }
         item {
             SettingsSection(title = "Appearance", subtitle = "Colors that fit your device") {
-                Text("Theme", style = MaterialTheme.typography.titleSmall)
-                ThemeMode.values().forEach { mode ->
-                    Row(Modifier.fillMaxWidth().clickable { onThemeChange(mode) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = themeMode == mode, onClick = { onThemeChange(mode) })
-                        Column(Modifier.padding(start = 8.dp)) {
-                            Text(mode.label)
-                            if (mode == ThemeMode.SYSTEM) Text("Follow your Android light/dark setting", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
-                    }
+                SettingLabel("Theme")
+                SegmentedChoice(ThemeMode.values().toList(), themeMode, { it.label }, onThemeChange)
+                if (themeMode == ThemeMode.SYSTEM) {
+                    Text("Follows your Android light/dark setting", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Wallpaper colors", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use Android dynamic colors from your wallpaper" else "Requires Android 12 or newer; older devices use the app palette",
-                            style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
-                        )
-                    }
-                    Switch(checked = dynamicColors, onCheckedChange = onDynamicColorsChange)
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SwitchRow(
+                    title = "Wallpaper colors",
+                    summary = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use Android dynamic colors from your wallpaper" else "Requires Android 12 or newer; older devices use the app palette",
+                    checked = dynamicColors,
+                    onChange = onDynamicColorsChange
+                )
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SettingLabel("Note card colors")
+                NoteColorStyle.values().forEach { style ->
+                    ChoiceCard(style.label, style.description, noteColorStyle == style) { onNoteColorStyleChange(style) }
                 }
             }
         }
         item {
             SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
-                DashboardLayout.values().forEach { layout ->
-                    Row(Modifier.fillMaxWidth().clickable { onLayoutChange(layout) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = dashboardLayout == layout, onClick = { onLayoutChange(layout) })
-                        Column(Modifier.padding(start = 8.dp)) {
-                            Text(layout.label)
-                            Text(if (layout == DashboardLayout.GRID) "Compact cards, side by side" else "Full-width notes with more preview space", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
-                    }
-                }
+                SettingLabel("Dashboard view")
+                SegmentedChoice(DashboardLayout.values().toList(), dashboardLayout, { it.label }, onLayoutChange)
+                Text(
+                    if (dashboardLayout == DashboardLayout.GRID) "Compact cards, side by side" else "Full-width notes with more preview space",
+                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
+                )
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SettingLabel("Dashboard density")
+                SegmentedChoice(DashboardDensity.values().toList(), dashboardDensity, { it.label }, onDensityChange)
+                Text(dashboardDensity.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
         item {
-            SettingsSection(title = "Note card colors", subtitle = "Choose your preferred note-card look") {
-                NoteColorStyle.values().forEach { style ->
-                    Row(Modifier.fillMaxWidth().clickable { onNoteColorStyleChange(style) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = noteColorStyle == style, onClick = { onNoteColorStyleChange(style) })
-                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text(style.label)
-                            Text(style.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
+            SettingsSection(title = "Note behavior", subtitle = "Defaults for new and existing notes") {
+                SettingLabel("Default category for new notes")
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { category ->
+                        FilterChip(
+                            selected = defaultNoteCategory == category,
+                            onClick = { onDefaultNoteCategoryChange(category) },
+                            label = { Text(category) }
+                        )
                     }
                 }
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SettingLabel("Sort notes by")
+                SegmentedChoice(sortOptions, sortOptions.first { it.first == sortKey }, { it.second }, { onSortChange(it.first) })
+                Text("Pinned notes always stay on top.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SwitchRow("Show note previews", "Display the first lines of each note on its card", showNotePreviews, onShowNotePreviewsChange)
+                SwitchRow("Show dates and reminders", "Display the edit date or reminder on each card", showNoteTimestamps, onShowNoteTimestampsChange)
             }
         }
         item {
-            SettingsSection(title = "Layout density", subtitle = "Choose how much space each note uses") {
-                DashboardDensity.values().forEach { density ->
-                    Row(Modifier.fillMaxWidth().clickable { onDensityChange(density) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = dashboardDensity == density, onClick = { onDensityChange(density) })
-                        Column(Modifier.padding(start = 8.dp)) {
-                            Text(density.label)
-                            Text(density.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            SettingsSection(title = "Note behavior", subtitle = "Set defaults for note cards") {
-                Text("Default category", style = MaterialTheme.typography.titleSmall)
-                categories.forEach { category ->
-                    Row(Modifier.fillMaxWidth().clickable { onDefaultNoteCategoryChange(category) }.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = defaultNoteCategory == category, onClick = { onDefaultNoteCategoryChange(category) })
-                        Text(category, Modifier.padding(start = 8.dp))
-                    }
-                }
-                HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                Row(Modifier.fillMaxWidth().clickable { onSortChange(!sortByTitle) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sort by title A–Z", Modifier.weight(1f))
-                    Switch(checked = sortByTitle, onCheckedChange = onSortChange)
-                }
-                Row(Modifier.fillMaxWidth().clickable { onShowNotePreviewsChange(!showNotePreviews) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Show note previews", Modifier.weight(1f))
-                    Switch(checked = showNotePreviews, onCheckedChange = onShowNotePreviewsChange)
-                }
-                Row(Modifier.fillMaxWidth().clickable { onShowNoteTimestampsChange(!showNoteTimestamps) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Show dates and reminders", Modifier.weight(1f))
-                    Switch(checked = showNoteTimestamps, onCheckedChange = onShowNoteTimestampsChange)
-                }
-            }
-        }
-        item {
-            SettingsSection(title = "Note editor", subtitle = "Choose how the editor opens") {
+            SettingsSection(title = "Note editor", subtitle = "Choose how writing feels") {
+                SettingLabel("Open editor as")
                 EditorMode.values().forEach { mode ->
-                    Row(Modifier.fillMaxWidth().clickable { onEditorModeChange(mode) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = editorMode == mode, onClick = { onEditorModeChange(mode) })
-                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text(mode.label)
-                            Text(mode.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
-                    }
+                    ChoiceCard(mode.label, mode.description, editorMode == mode) { onEditorModeChange(mode) }
                 }
-                Text("Default: expandable bottom sheet", color = colors.primary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp))
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SettingLabel("Text size")
+                SegmentedChoice(EditorTextSize.values().toList(), editorTextSize, { it.label }, onEditorTextSizeChange)
+                Surface(shape = RoundedCornerShape(14.dp), color = colors.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Your notes will look like this.",
+                        modifier = Modifier.padding(14.dp),
+                        fontSize = editorTextSize.bodySp.sp,
+                        color = colors.onSurface
+                    )
+                }
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SwitchRow("Word count and reading time", "Show a live count under the note while you write", showEditorCounts, onShowEditorCountsChange)
             }
         }
         item {
-            SettingsSection(title = "Data & privacy", subtitle = "Your notes stay on this device") {
-                Text("Notes are stored locally on this device. NESTNOTE does not currently sync notes to a cloud account or provide built-in export and import.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                Text("Wallpaper-based colors are provided by Android on supported devices.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            SettingsSection(title = "Backup & privacy", subtitle = "Your notes stay on this device") {
+                Text(
+                    "$totalNotes notes stored on this device ($archivedNotes archived).",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "NESTNOTE does not sync to a cloud account. Back up your notes to a file you choose, and restore it any time. Restoring adds missing notes and keeps the most recently edited copy of notes that already exist; nothing is deleted.",
+                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = onExportNotes, modifier = Modifier.weight(1f)) { Text("Back up notes") }
+                    OutlinedButton(onClick = onImportNotes, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                }
+            }
+        }
+        item {
+            OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Reset settings to defaults")
+            }
+        }
+    }
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Reset settings?") },
+            text = { Text("Theme, layout, editor and note defaults go back to their original values. Your notes are not changed.") },
+            confirmButton = { TextButton(onClick = { confirmReset = false; onResetDefaults() }) { Text("Reset") } },
+            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } }
+        )
+    }
+}
+
+@Composable
+private fun SettingLabel(text: String) {
+    Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> SegmentedChoice(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = option == selected,
+                onClick = { onSelect(option) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+            ) {
+                Text(label(option), maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title)
+            if (summary != null) {
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChoiceCard(title: String, description: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) colors.secondaryContainer else colors.surface,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.outlineVariant)
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+            if (selected) {
+                Icon(Icons.Default.Check, contentDescription = "Selected", tint = colors.primary)
             }
         }
     }
@@ -704,6 +861,8 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
 private fun NoteEditorContent(
     original: NestNote?,
     defaultNoteCategory: String,
+    textSize: EditorTextSize,
+    showCounts: Boolean,
     onSave: (NestNote) -> Unit,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
@@ -712,7 +871,10 @@ private fun NoteEditorContent(
     modifier: Modifier = Modifier
 ) {
     var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
-    var body by rememberSaveable(original?.id) { mutableStateOf(original?.body.orEmpty()) }
+    var bodyValue by rememberSaveable(original?.id, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(original?.body.orEmpty()))
+    }
+    val body = bodyValue.text
     var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: defaultNoteCategory) }
     var colorIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.color?.coerceIn(0, noteAccents.lastIndex) ?: 0) }
     var backgroundIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.background?.coerceIn(0, 5) ?: 0) }
@@ -720,8 +882,13 @@ private fun NoteEditorContent(
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
     var appearanceVisible by remember { mutableStateOf(false) }
     var discardConfirmation by remember { mutableStateOf(false) }
-    var categoryExpanded by remember { mutableStateOf(false) }
+    var reminderMenu by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }
+    val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
+    val ink = Color(0xFF292633)
+    val muted = Color(0xFF66616D)
+    val accent = Color(0xFF514783)
     val hasUnsavedChanges = title != original?.title.orEmpty() ||
         body != original?.body.orEmpty() ||
         category != (original?.category ?: defaultNoteCategory) ||
@@ -753,15 +920,50 @@ private fun NoteEditorContent(
         val now = Calendar.getInstance()
         DatePickerDialog(context, { _, year, month, day ->
             TimePickerDialog(context, { _, hour, minute ->
-                reminder = String.format(
-                    Locale.getDefault(), "%04d-%02d-%02d %02d:%02d",
-                    year, month + 1, day, hour, minute
-                )
+                val picked = Calendar.getInstance().apply { set(year, month, day, hour, minute, 0) }
+                reminder = NoteText.formatReminder(picked)
             }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show()
         }, now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH)).show()
     }
+    fun onBodyChange(next: TextFieldValue) {
+        val continued = if (next.selection.collapsed) {
+            NoteText.continueList(bodyValue.text, next.text, next.selection.start)
+        } else null
+        bodyValue = if (continued != null) TextFieldValue(continued.first, TextRange(continued.second)) else next
+    }
+    fun applyLineEdit(transform: (String, Int) -> Pair<String, Int>) {
+        val (text, cursor) = transform(bodyValue.text, bodyValue.selection.start)
+        bodyValue = TextFieldValue(text, TextRange(cursor))
+    }
+    fun shareNote() {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, title.trim())
+            putExtra(Intent.EXTRA_TEXT, NoteText.shareText(title, body))
+        }
+        context.startActivity(Intent.createChooser(send, "Share note"))
+    }
+    fun copyNote() {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("NESTNOTE note", NoteText.shareText(title, body)))
+        android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
+    // A brand-new note opens ready to type.
+    LaunchedEffect(Unit) { if (original == null) runCatching { titleFocus.requestFocus() } }
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        unfocusedContainerColor = Color.Transparent,
+        focusedContainerColor = Color.Transparent,
+        unfocusedBorderColor = Color.Transparent,
+        focusedBorderColor = Color.Transparent,
+        unfocusedTextColor = ink,
+        focusedTextColor = ink,
+        cursorColor = accent,
+        unfocusedPlaceholderColor = muted,
+        focusedPlaceholderColor = muted
+    )
 
     Box(
         modifier = modifier
@@ -785,15 +987,32 @@ private fun NoteEditorContent(
                     Icon(
                         Icons.Default.PushPin,
                         contentDescription = if (pinned) "Unpin note" else "Pin note",
-                        tint = if (pinned) Color(0xFF514783) else Color(0xFF55515C)
+                        tint = if (pinned) accent else Color(0xFF55515C)
                     )
                 }
-                IconButton(onClick = { pickReminder() }) {
-                    Icon(
-                        Icons.Default.NotificationsNone,
-                        contentDescription = "Choose reminder time",
-                        tint = if (reminder.isNotBlank()) Color(0xFF514783) else Color(0xFF55515C)
-                    )
+                Box {
+                    IconButton(onClick = { reminderMenu = true }) {
+                        Icon(
+                            Icons.Default.NotificationsNone,
+                            contentDescription = "Choose reminder time",
+                            tint = if (reminder.isNotBlank()) accent else Color(0xFF55515C)
+                        )
+                    }
+                    DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
+                        DropdownMenuItem(text = { Text("Later today") }, onClick = {
+                            reminderMenu = false; reminder = NoteText.formatReminder(NoteText.laterToday(Calendar.getInstance()))
+                        })
+                        DropdownMenuItem(text = { Text("Tomorrow morning") }, onClick = {
+                            reminderMenu = false; reminder = NoteText.formatReminder(NoteText.tomorrowMorning(Calendar.getInstance()))
+                        })
+                        DropdownMenuItem(text = { Text("Next Monday") }, onClick = {
+                            reminderMenu = false; reminder = NoteText.formatReminder(NoteText.nextMonday(Calendar.getInstance()))
+                        })
+                        DropdownMenuItem(text = { Text("Pick date and time…") }, onClick = { reminderMenu = false; pickReminder() })
+                        if (reminder.isNotBlank()) {
+                            DropdownMenuItem(text = { Text("Remove reminder") }, onClick = { reminderMenu = false; reminder = "" })
+                        }
+                    }
                 }
                 if (original != null) {
                     IconButton(onClick = { onSave(buildNote(archived = true)) }) {
@@ -801,7 +1020,26 @@ private fun NoteEditorContent(
                     }
                 }
                 IconButton(onClick = { appearanceVisible = true }) {
-                    Icon(Icons.Default.Palette, contentDescription = "Choose note appearance", tint = Color(0xFF514783))
+                    Icon(Icons.Default.Palette, contentDescription = "Choose note appearance", tint = accent)
+                }
+                Box {
+                    IconButton(onClick = { moreMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More editor actions", tint = Color(0xFF55515C))
+                    }
+                    DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Share note") },
+                            enabled = title.isNotBlank() || body.isNotBlank(),
+                            onClick = { moreMenu = false; shareNote() },
+                            leadingIcon = { Icon(Icons.Default.Share, null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy text") },
+                            enabled = title.isNotBlank() || body.isNotBlank(),
+                            onClick = { moreMenu = false; copyNote() },
+                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
+                        )
+                    }
                 }
             }
 
@@ -810,85 +1048,118 @@ private fun NoteEditorContent(
                     .padding(horizontal = 22.dp),
                 verticalArrangement = Arrangement.Top
             ) {
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(18.dp))
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(titleFocus),
                     placeholder = { Text("Title") },
                     textStyle = MaterialTheme.typography.headlineSmall.copy(
-                        fontSize = 27.sp, lineHeight = 34.sp, fontWeight = FontWeight.Normal
+                        fontSize = textSize.titleSp.sp, lineHeight = (textSize.titleSp * 1.26f).sp, fontWeight = FontWeight.Normal
                     ),
                     singleLine = false,
                     shape = RoundedCornerShape(0.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedTextColor = Color(0xFF292633),
-                        focusedTextColor = Color(0xFF292633),
-                        cursorColor = Color(0xFF514783),
-                        unfocusedPlaceholderColor = Color(0xFF66616D),
-                        focusedPlaceholderColor = Color(0xFF66616D)
-                    ),
+                    colors = fieldColors,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                 )
                 OutlinedTextField(
-                    value = body,
-                    onValueChange = { body = it },
+                    value = bodyValue,
+                    onValueChange = { onBodyChange(it) },
                     modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
                     placeholder = { Text("Note") },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 16.sp, lineHeight = 23.sp
+                        fontSize = textSize.bodySp.sp, lineHeight = (textSize.bodySp * 1.45f).sp
                     ),
-                    minLines = if (fullScreen) 12 else 6,
+                    minLines = if (fullScreen) 10 else 5,
                     shape = RoundedCornerShape(0.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedTextColor = Color(0xFF292633),
-                        focusedTextColor = Color(0xFF292633),
-                        cursorColor = Color(0xFF514783),
-                        unfocusedPlaceholderColor = Color(0xFF77727D),
-                        focusedPlaceholderColor = Color(0xFF77727D)
-                    ),
+                    colors = fieldColors,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                 )
 
-                Spacer(Modifier.height(14.dp))
-                Box {
-                    TextButton(onClick = { categoryExpanded = true }) {
-                        Text(category, color = Color(0xFF514783))
-                    }
-                    DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
-                        categories.forEach { item ->
-                            DropdownMenuItem(
-                                text = { Text(item) },
-                                onClick = { category = item; categoryExpanded = false }
-                            )
-                        }
+                Spacer(Modifier.height(12.dp))
+                Text("Category", style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(horizontal = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { item ->
+                        FilterChip(
+                            selected = category == item,
+                            onClick = { category = item },
+                            label = { Text(item) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.White.copy(alpha = 0.55f),
+                                labelColor = ink,
+                                selectedContainerColor = accent,
+                                selectedLabelColor = Color.White
+                            ),
+                            border = BorderStroke(1.dp, Color(0x33514783))
+                        )
                     }
                 }
                 if (reminder.isNotBlank()) {
+                    Surface(
+                        onClick = { pickReminder() },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White.copy(alpha = 0.6f)
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.NotificationsNone, contentDescription = null, tint = accent)
+                            Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                                Text("Reminder · $reminder", style = MaterialTheme.typography.bodyMedium, color = ink)
+                                Text(
+                                    "Saved as a reminder time only — notifications aren’t enabled yet.",
+                                    style = MaterialTheme.typography.bodySmall, color = muted
+                                )
+                            }
+                            IconButton(onClick = { reminder = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear reminder", tint = Color(0xFF55515C))
+                            }
+                        }
+                    }
+                }
+                if (original != null) {
+                    val format = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
                     Text(
-                        "Reminder · $reminder",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Saved as a reminder time only — notifications aren’t enabled yet.",
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "Edited ${format.format(Date(original.updated))} · Created ${SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(original.created))}",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = muted
                     )
                 }
                 Spacer(Modifier.height(24.dp))
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } }) {
+                    Icon(Icons.Default.CheckBox, contentDescription = "Toggle checklist item", tint = Color(0xFF45434A))
+                }
+                IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }) {
+                    Icon(Icons.Default.FormatListBulleted, contentDescription = "Toggle bullet point", tint = Color(0xFF45434A))
+                }
+                Spacer(Modifier.weight(1f))
+                if (showCounts) {
+                    val words = NoteText.wordCount(body)
+                    val minutes = NoteText.readingMinutes(words)
+                    Text(
+                        buildString {
+                            append(if (words == 1) "1 word" else "$words words")
+                            append(" · ${body.length} characters")
+                            if (minutes > 0) append(" · $minutes min read")
+                        },
+                        modifier = Modifier.padding(end = 12.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = muted
+                    )
+                }
+            }
             HorizontalDivider(color = Color(0x1F6F6878))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -897,17 +1168,17 @@ private fun NoteEditorContent(
             ) {
                 if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete") }
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { requestDismiss() }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF514783))) { Text("Cancel") }
+                TextButton(onClick = { requestDismiss() }, colors = ButtonDefaults.textButtonColors(contentColor = accent)) { Text("Cancel") }
                 Button(
                     onClick = { if (title.isNotBlank()) onSave(buildNote()) },
                     enabled = title.isNotBlank(),
                     shape = RoundedCornerShape(18.dp),
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF514783),
+                        containerColor = accent,
                         contentColor = Color.White,
                         disabledContainerColor = Color(0xFFE2DFE9),
-                        disabledContentColor = Color(0xFF514783)
+                        disabledContentColor = accent
                     )
                 ) { Text("Save note") }
             }

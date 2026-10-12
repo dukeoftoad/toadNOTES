@@ -189,4 +189,27 @@ class NestNoteE2ETest {
         composeRule.onNodeWithText("Full-screen editor").assertIsDisplayed()
         composeRule.onNodeWithText("Quick dialog").assertIsDisplayed()
     }
+
+    @Test
+    fun settingsExposeEditorTextSizeAndBackup() {
+        composeRule.onNodeWithText("Settings").performClick()
+        val settings = composeRule.onNodeWithTag("settings_scroll")
+        settings.performScrollToNode(hasText("Text size"))
+        composeRule.onNodeWithText("Large").performClick()
+        composeRule.runOnIdle {
+            val prefs = composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+            assertEquals("LARGE", prefs.getString("editor_text_size", null))
+        }
+        settings.performScrollToNode(hasText("Back up notes"))
+        composeRule.onNodeWithText("Back up notes").assertIsDisplayed()
+        composeRule.onNodeWithText("Restore backup").assertIsDisplayed()
+    }
+
+    @Test
+    fun editorChecklistButtonPrefixesTheCurrentLine() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithText("Note").performTextInput("buy milk")
+        composeRule.onNodeWithContentDescription("Toggle checklist item").performClick()
+        composeRule.onNodeWithText("☐ buy milk").assertIsDisplayed()
+    }
 }
