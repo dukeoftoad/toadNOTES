@@ -41,7 +41,7 @@ Implemented a unified Material 3 editor with saveable title/body/category/color/
 - Persist preferences; audit existing preferences before considering DataStore for new ones. Avoid rewriting note storage without a migration need. Test saved choices and accessibility labels.
 
 ## Phase 4 — Improve everyday note-taking
-**Status: In progress** — [Draft PR #4](https://github.com/dukeoftoad/toadNOTES/pull/4)
+**Status: Complete** — [PR #4 merged](https://github.com/dukeoftoad/toadNOTES/pull/4)
 - [x] Improve note colors and category handling with pastel/adaptive color choices.
 - [x] Sort by edited date, created date, and title; pinned notes stay first.
 - [x] Clarify pinning and archive behavior: archived notes are removed from active views, remain accessible in Archived, and can be restored without losing their content.
@@ -50,8 +50,10 @@ Implemented a unified Material 3 editor with saveable title/body/category/color/
 - [x] Add creation timestamp persistence and regression coverage for legacy records and edits.
 - [x] Align archive/restore behavior in grid and list layouts; add persistence and archive-screen restore regression coverage.
 - [x] Refine editor hierarchy, tonal surfaces, writing space, close/color controls, and save feedback using the supplied references as inspiration (not pixel-perfect targets).
+- [x] Redesign the full-screen editor and add the appearance picker with persisted pastel colors and wallpaper choices.
+- [x] Fix screenshot-reported foreground, placeholder, cursor, toolbar, and Save/Cancel contrast; strengthen palette distinction.
 
-**Review gate:** implementation and automated CI are ready for owner review; do not mark Phase 4 complete until explicit owner approval. Visual references are inspiration, not proof of screenshot parity. Reminder delivery, rich-text formatting, and emulator/physical-device visual verification are not claimed.
+**Review outcome:** owner approved Phase 4 after testing; PR #4 was squash-merged on 2026-10-12. Visual references are inspiration, not proof of pixel-perfect parity. Reminder delivery and rich-text formatting remain unimplemented. Device testing was performed by the owner; no additional post-fix device verification is claimed by the implementation agent.
 
 ## Phase 5 — Reliability and finishing touches
 **Status: Planned; start after Phase 4 is complete.**
