@@ -238,3 +238,157 @@ I would defer cloud sync, accounts, collaboration, and rich-text editing until l
 
 **Recommendation:** start Phase 6 with a storage-and-editor reliability audit, then implement the fixes in small, testable PRs. That offers the greatest improvement to NESTNOTE without unnecessarily destabilizing the existing app.
 
+---
+
+## Security & Privacy Hardening
+
+**Status: Planned — verify each finding against the current implementation before considering it confirmed or resolved.**
+
+### Security assessment summary
+
+Based on the repository audit of the main branch and changes proposed in PR #4, NESTNOTE is a native Android notes app built with Kotlin and Jetpack Compose. The assessed implementation stores note data locally using SharedPreferences. The reviewed codebase appeared relatively small, with no obvious critical issues such as hardcoded secrets, network calls, unsafe reflection, or dynamic code loading in the reviewed areas. Verify each observation against current source and release workflows before implementation.
+
+The recommendation is to strengthen data-at-rest protection and release safeguards before encouraging users to store sensitive personal notes.
+
+### Findings by severity
+
+#### 🔴 High — Insecure local storage of notes
+
+**Location:** app/src/main/java/com/nestnote/app/NoteStore.kt (assessment cited lines 8–20; verify line numbers against current main).
+
+**Issue:** Notes are serialized as JSON and stored in a plain SharedPreferences file (nestnote_local) without application-level encryption.
+
+**Potential impact:** A person with root access, a compromised device, or access to an exposed device backup/ADB workflow may be able to extract note contents, including titles, bodies, reminders, and categories. This is a local-device threat; it does not by itself imply remote access.
+
+**Recommendation:**
+- Evaluate AndroidX security-crypto support and maintenance status before choosing an encryption approach. Compare an encrypted preferences migration with a dedicated encrypted database such as SQLCipher.
+- Design a backward-compatible migration from existing plaintext records; do not overwrite or delete old data until encrypted data has been written, verified, and a recovery path is available.
+- Keep user-controlled JSON export/restore behavior explicit and explain that exported files are readable unless the export format is separately encrypted.
+- If encryption is deferred, clearly disclose the local-storage threat model and avoid claiming that notes are encrypted at rest.
+
+**Acceptance criteria:**
+- The selected storage protection and threat model are documented.
+- Existing notes migrate without loss, with tests for first launch, interrupted migration, malformed legacy data, and repeated launches.
+- No plaintext copy is silently left behind after successful migration; cleanup occurs only after verified migration and a documented recovery strategy.
+- Backup/export compatibility and recovery are tested, and the privacy disclosure accurately describes what is and is not encrypted.
+
+#### 🟠 Medium — Android automatic backup may include note data
+
+**Location:** app/src/main/AndroidManifest.xml (android:allowBackup="true" was reported by the assessment; verify the current manifest and backup rules).
+
+**Issue:** Android automatic backup behavior may include app SharedPreferences, depending on platform version and configured backup/data-extraction rules.
+
+**Potential impact:** Note data could be copied into a cloud or device backup outside the app's explicit export flow.
+
+**Recommendation:**
+- Decide whether automatic system backup is an intentional product feature.
+- If it is not intended, disable automatic backup and configure applicable Android backup/data-extraction rules to exclude sensitive note storage.
+- If backup is intended, document the behavior and assess the security of the destination and restore path. Keep user-controlled export separate from automatic backup policy.
+
+**Acceptance criteria:**
+- The chosen backup policy is documented and matches the manifest and applicable backup-rule files.
+- Tests or repeatable device validation confirm whether note storage is included or excluded as intended across supported Android versions.
+- Disabling backup does not remove or break the in-app user-controlled JSON export/restore feature.
+- Privacy documentation explains actual backup behavior without overstating protection.
+
+#### 🟠 Medium — Note input lacks explicit validation limits
+
+**Location:** app/src/main/java/com/nestnote/app/NoteStore.kt (load/save paths; verify current implementation).
+
+**Issue:** The assessment reports that titles, bodies, and categories are persisted and loaded without sufficient explicit validation or size limits.
+
+**Potential impact:** In the current local-only app, direct injection risk is limited because no WebView or network processing was found in the reviewed areas. Oversized or malformed data can still cause reliability problems. If notes are later rendered in web content, exported to other formats, or synced, context-specific injection risks may arise.
+
+**Recommendation:**
+- Define reasonable, documented field-size limits and validate required fields, IDs, categories, timestamps, and duplicate records at the storage/backup boundary.
+- Reject malformed imports safely and validate the entire import before modifying stored notes.
+- Do not strip or rewrite ordinary user text unnecessarily. Apply context-appropriate escaping only when rendering or exporting into a format that requires it; input validation is not a substitute for output encoding.
+
+**Acceptance criteria:**
+- Validation rules are centralized and documented, including legacy-record handling.
+- Tests cover empty/oversized fields, malformed JSON, missing required fields, duplicate IDs, invalid timestamps, and large imports.
+- A rejected import leaves existing local notes unchanged and provides a clear error to the user.
+- Normal Unicode and multiline note content continue to round-trip without unwanted modification.
+
+#### 🟡 Low — Release minification and obfuscation are not enabled
+
+**Location:** app/build.gradle.kts (release build configuration; verify current settings).
+
+**Issue:** The assessment reports that release builds do not enable R8/ProGuard minification or resource shrinking.
+
+**Potential impact:** The APK may be easier to inspect or reverse-engineer. Obfuscation raises the effort required for analysis but is not a replacement for secure storage, sound authorization, or secret management.
+
+**Recommendation:**
+- Evaluate enabling isMinifyEnabled = true and isShrinkResources = true for release builds, with an appropriate ProGuard/R8 rules file where required.
+- Keep debug builds easy to diagnose and ensure release builds retain needed Android/Compose functionality.
+- Preserve mapping files securely for crash diagnosis and do not publish them unintentionally.
+
+**Acceptance criteria:**
+- A release variant builds successfully with the intended R8/resource-shrinking configuration.
+- Unit/instrumentation coverage and a manual smoke test cover note creation/editing, backup/restore, settings, and app launch in the minified build.
+- Required keep rules are minimal and justified; mapping-file handling is documented.
+
+#### 🟡 Low — Release workflow uses a temporary signing key
+
+**Location:** .github/workflows/android-release.yml (assessment cited lines 11–23; verify current workflow).
+
+**Issue:** The assessment reports that the release workflow generates a temporary keystore. This can be acceptable for CI validation, but not for publishing production updates that need a stable signing identity.
+
+**Potential impact:** Builds signed with a newly generated key cannot serve as seamless updates to an app installed with a different signing key. Users may need to uninstall and reinstall, risking local data loss.
+
+**Recommendation:**
+- Keep ephemeral signing for non-distribution CI artifacts only, if needed.
+- Before public distribution, configure a permanent app-signing key through GitHub Secrets or a managed signing service. The assessment reports secret names SIGNING_KEY, KEY_ALIAS, KEY_STORE_PASSWORD, and KEY_PASSWORD; verify the workflow's expected formats and variable names before configuring them.
+- Restrict access to signing secrets, avoid printing them in logs, and document key backup and rotation/recovery procedures.
+- Make tagged production releases fail closed if production signing configuration is missing; never silently fall back to a temporary key for a public release.
+
+**Acceptance criteria:**
+- CI validation builds and production release signing are distinct, explicit paths.
+- A tagged production release cannot be published unless configured permanent signing credentials are present and valid.
+- The resulting artifact's signer is verified against the expected certificate.
+- Signing secrets and keystore material never appear in repository files, build logs, or generated artifacts.
+- The signing-key backup, access, and recovery procedure is documented before the first public release.
+
+### Positive observations from the assessment
+
+These are observations from the reviewed scope, not a guarantee that every file and dependency has been exhaustively audited. Recheck them when the implementation or dependency set changes.
+
+- **No hardcoded secrets found:** Searches for password, secret, api_key, and token in MainActivity.kt and NoteStore.kt reportedly returned no matches.
+- **No network permissions or network calls reported:** The manifest was reported to request no permissions, and the reviewed code reportedly contains no network calls, WebViews, or dynamic code loading.
+- **Small exposed-component surface reported:** MainActivity is the only exported component noted in the assessment and serves as the launcher. Verify the merged manifest and component declarations when adding features.
+- **PR #4 migration is backward-compatible:** The creation timestamp decoding expression was reported as o.optLong("created", o.optLong("id", …)), allowing older records without created to fall back to an identifier-derived value. Preserve and test this compatibility when changing storage or backup formats.
+
+### PR #4-specific security notes
+
+PR #4 introduced a created field to the note model and updated JSON serialization.
+
+- **Security regression:** The assessment found no new storage location or network activity attributable to this change.
+- **Backward compatibility:** The reported fallback for older records without created supports legacy data; retain regression tests for these records.
+- **Test coverage:** The assessment reports that NoteStoreTest.kt and NestNoteE2ETest.kt cover persistence of the new field. Verify the exact tests on current main before relying on this statement.
+- **Backup/export:** Ensure created is preserved by every current and future export, import, merge, migration, and restore path.
+
+### Prioritized implementation plan
+
+- [ ] **P0 — Verify findings against current main.** Inspect NoteStore.kt, the merged manifest and backup rules, release build configuration, and .github/workflows/android-release.yml. Record exact paths and line references; update any finding that no longer applies.
+- [ ] **P0 — Define the local-data threat model and storage-protection decision.** Document encryption options and migration/recovery risks before selecting an implementation.
+- [ ] **P0 — Prevent silent data loss during storage changes.** Add regression tests for malformed local data, interrupted migration, backup/restore, and recovery before changing persistence.
+- [ ] **P0 — Set an explicit Android automatic-backup policy.** Decide whether to exclude note data or support system backup intentionally, and validate manifest/rules on supported API levels.
+- [ ] **P1 — Add storage and import validation.** Centralize field limits and schema validation; reject invalid imports atomically and preserve valid Unicode/multiline content.
+- [ ] **P1 — Harden production release signing.** Separate CI signing from production signing and require stable signing credentials for tagged releases before public distribution.
+- [ ] **P1 — Evaluate R8 and resource shrinking.** Enable them for release only after a minified-release smoke test and regression suite pass.
+- [ ] **P1 — Update privacy and release documentation.** Explain local storage, encryption status, automatic backup behavior, user-controlled exports, and signing/release safeguards accurately.
+- [ ] **P1 — Add a security release checklist.** Include dependency/configuration review, manifest inspection, backup/restore tests, release signer verification, and installation/upgrade validation.
+
+### Security release gate
+
+Before a public release intended for sensitive personal notes:
+
+1. All P0 findings are remediated or have a documented, owner-approved risk decision.
+2. Existing-note migration and backup/restore have passed regression tests with no silent data loss.
+3. Automatic backup behavior is verified and disclosed.
+4. A production artifact is signed with the expected stable certificate; temporary CI keys are not used for distribution.
+5. The release variant builds and passes the agreed regression/smoke tests, including if R8 is enabled.
+6. User-facing privacy documentation matches the shipped implementation.
+
+**Overall assessment:** NESTNOTE has a promising local-first MVP foundation, but the reviewed data-at-rest and release-process controls should be strengthened before recommending it for sensitive personal information. Treat severity as a prioritization aid, verify each observation against current source, and do not mark a finding resolved until its acceptance criteria have been tested.
+
