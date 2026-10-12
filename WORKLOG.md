@@ -1,6 +1,6 @@
 # NESTNOTE Work Log
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 > Maintenance rule: update this log in the same commit as every implementation commit, including the commit SHA, summary, and validation status. If a separate commit is unavoidable, update the log immediately afterward.  
 Repository: [dukeoftoad/toadNOTES](https://github.com/dukeoftoad/toadNOTES)
@@ -325,3 +325,10 @@ Branch: `feature/phase-5-settings-editor-ux` (from `main` after PR #4 merge). No
 - Refreshed `README.md` to describe the shipped Phase 5 feature scope, backup/restore merge semantics, project structure, build/test commands, and explicit limitations.
 - Reconciled the Phase 5 status in `ROADMAP.md`: automated Android CI success is recorded separately from manual UI/accessibility/keyboard/edge-to-edge checks, which remain outstanding. Phase 5 is not marked complete.
 - The implementation PR remains [#5](https://github.com/dukeoftoad/toadNOTES/pull/5), targeting `main`. The owner has requested discovery, documentation updates, and merge. Device/emulator instrumentation execution is not claimed.
+
+
+### Phase 5 merge — 2026-10-12
+
+- Owner requested discovery, documentation reconciliation, and merge of PR [#5](https://github.com/dukeoftoad/toadNOTES/pull/5). The PR was squash-merged into `main`; merge commit: `ee046eaa67fe2b2be713ef96becabf0892f034fe`.
+- Final docs now include the README feature/limitations/build guide, roadmap status, and this worklog history. Phase 5 remains in progress until the manual UI, accessibility/larger-font, keyboard/edge-to-edge, and final regression checks are completed.
+- CI runs recorded before the final documentation-only commits passed. No fresh workflow run was returned for the final docs head. Instrumentation tests were compiled, not executed on a device.
