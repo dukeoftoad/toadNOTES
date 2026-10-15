@@ -663,3 +663,12 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added JVM tests for wrapping/unwrapping selected text and inserting a marker pair at the cursor.
 - Commits: `2fa1064` (formatting helper), `178e1f2` (tests), `0691bfbb` (toolbar commit; full SHA: `0691bfbbda94c7423bfd10ab8da46ff64ae5d507`).
 - Validation: exact-head Android CI remains unconfirmed; no emulator or accessibility testing claimed.
+
+
+### Expanded Markdown toolbar — 2026-10-15
+
+- Extended the existing contextual formatting row with strikethrough and inline-code actions, using the same tested selection-preserving helper as bold/italic.
+- Made the toolbar horizontally scrollable so the additional controls do not force the word/character/read-time summary or formatting actions to compress into a narrow row; removed the weighted spacer that is incompatible with a horizontally scrolling row.
+- Added JVM regression cases for strikethrough/code wrap-and-unwrap behavior, clamped selection bounds, and rejecting an empty marker.
+- Commits: `0addc28` (toolbar actions and scroll behavior), `05a0e50` (formatting regression tests).
+- Validation: Android CI was green on the previous head (`936e10e`); the new commits require a fresh exact-head CI run. No emulator/device or visual/accessibility testing claimed.
