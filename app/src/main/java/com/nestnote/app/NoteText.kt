@@ -31,16 +31,26 @@ object NoteText {
         return if (i < 0) text.length else i
     }
 
-    private fun prefixOf(line: String): String? = listPrefixes.firstOrNull { line.startsWith(it) }
+    /** Leading whitespace of a line. Checklist views already tolerate it, so formatting actions must too. */
+    private fun indentOf(line: String): String = line.takeWhile { it.isWhitespace() }
+
+    /** The list prefix of [line], ignoring leading indentation; null for plain lines. */
+    private fun prefixOf(line: String): String? {
+        val content = line.substring(indentOf(line).length)
+        return listPrefixes.firstOrNull { content.startsWith(it) }
+    }
 
     /** Replaces the list prefix of the cursor's line. Returns new text and new cursor. */
     private fun setPrefix(text: String, cursor: Int, newPrefix: String): Pair<String, Int> {
         val c = cursor.coerceIn(0, text.length)
         val start = lineStart(text, c)
         val end = lineEnd(text, c)
-        val old = prefixOf(text.substring(start, end)).orEmpty()
-        val next = text.substring(0, start) + newPrefix + text.substring(start + old.length)
-        val newCursor = (c - old.length + newPrefix.length).coerceAtLeast(start + newPrefix.length)
+        val line = text.substring(start, end)
+        val old = prefixOf(line).orEmpty()
+        // Replace the prefix after any indentation so an indented item never gets a second prefix.
+        val contentStart = start + indentOf(line).length
+        val next = text.substring(0, contentStart) + newPrefix + text.substring(contentStart + old.length)
+        val newCursor = (c - old.length + newPrefix.length).coerceAtLeast(contentStart + newPrefix.length)
         return next to newCursor
     }
 
@@ -71,11 +81,13 @@ object NoteText {
         val start = lineStart(old, cursor - 1)
         val beforeCursor = old.substring(start, cursor - 1)
         val prefix = prefixOf(beforeCursor) ?: return null
-        if (beforeCursor.removePrefix(prefix).isBlank()) {
+        val indent = indentOf(beforeCursor)
+        if (beforeCursor.removePrefix(indent).removePrefix(prefix).isBlank()) {
             // Empty item: Enter ends the list instead of adding another bullet.
-            return old.removeRange(start, start + prefix.length) to start
+            return old.removeRange(start, start + indent.length + prefix.length) to start
         }
-        val nextPrefix = if (prefix == CHECKED) UNCHECKED else prefix
+        // Keep the item's indentation so nested lists continue at the same level.
+        val nextPrefix = indent + if (prefix == CHECKED) UNCHECKED else prefix
         return (new.substring(0, cursor) + nextPrefix + new.substring(cursor)) to (cursor + nextPrefix.length)
     }
 
@@ -161,6 +173,15 @@ object NoteText {
     fun laterToday(now: Calendar): Calendar = (now.clone() as Calendar).apply {
         add(Calendar.HOUR_OF_DAY, 3)
         set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }
+
+    /**
+     * [laterToday], or null when that time would land on a different calendar day
+     * (from 21:00 onwards), so a "Later today" preset is never offered for tomorrow.
+     */
+    fun laterTodayOrNull(now: Calendar): Calendar? = laterToday(now).takeIf {
+        it.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+            it.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
     }
 
     /** Tomorrow at 09:00. */

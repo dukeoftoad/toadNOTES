@@ -2,6 +2,7 @@ package com.nestnote.app
 
 import java.util.Calendar
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -132,4 +133,70 @@ class NoteTextTest {
         // The input calendar is not mutated.
         assertEquals(14, now.get(Calendar.DAY_OF_MONTH))
     }
+ 
+    @Test
+    fun checklistActionOnIndentedItemReplacesPrefixInsteadOfStackingIt() {
+        // The checklist view and progress count already accept indented items.
+        val indented = "  ☐ buy milk"
+        val (checked, cursor) = NoteText.cycleChecklist(indented, 8)
+        assertEquals("  ☑ buy milk", checked)
+        assertEquals(true, cursor >= 4)
+        val (plain, _) = NoteText.cycleChecklist(checked, cursor)
+        assertEquals("  buy milk", plain)
+        val (restarted, _) = NoteText.cycleChecklist(plain, 4)
+        assertEquals("  ☐ buy milk", restarted)
+        // Only the cursor's line changes in multi-line text.
+        assertEquals("a\n\t☑ b\nc", NoteText.cycleChecklist("a\n\t☐ b\nc", 5).first)
+    }
+
+    @Test
+    fun bulletToggleOnIndentedItemDoesNotStackPrefixes() {
+        assertEquals("  • x", NoteText.toggleBullet("  x", 3).first)
+        assertEquals("  x", NoteText.toggleBullet("  • x", 4).first)
+        // A bullet replaces an indented checkbox rather than sitting beside it.
+        assertEquals("  • x", NoteText.toggleBullet("  ☐ x", 4).first)
+    }
+
+    @Test
+    fun enterContinuesIndentedListItemsAtTheSameIndentation() {
+        val old = "  • nested"
+        val (text, cursor) = NoteText.continueList(old, "$old\n", old.length + 1)!!
+        assertEquals("  • nested\n  • ", text)
+        assertEquals(text.length, cursor)
+        val checklist = "\t☑ done"
+        assertEquals("\t☑ done\n\t☐ ", NoteText.continueList(checklist, "$checklist\n", checklist.length + 1)!!.first)
+    }
+
+    @Test
+    fun enterOnEmptyIndentedListItemEndsTheListAndClearsTheLine() {
+        val old = "a\n  • "
+        val (text, cursor) = NoteText.continueList(old, "$old\n", old.length + 1)!!
+        assertEquals("a\n", text)
+        assertEquals(2, cursor)
+    }
+
+    @Test
+    fun indentedChecklistItemsStayConsistentAcrossViewProgressAndActions() {
+        val text = "  ☐ one\n  ☑ two"
+        assertEquals(2, NoteText.checklistItems(text).size)
+        assertEquals(2 to 1, NoteText.checklistProgress(text))
+        val toggled = NoteText.cycleChecklist(text, 3).first
+        assertEquals(2 to 2, NoteText.checklistProgress(toggled))
+    }
+
+    @Test
+    fun laterTodayIsOfferedOnlyWhenItStaysOnTheSameDay() {
+        fun at(hour: Int, minute: Int) =
+            Calendar.getInstance().apply { clear(); set(2026, Calendar.OCTOBER, 14, hour, minute, 0) }
+        assertEquals("2026-10-14 13:00", NoteText.formatReminder(NoteText.laterTodayOrNull(at(10, 5))!!))
+        assertEquals("2026-10-14 23:00", NoteText.formatReminder(NoteText.laterTodayOrNull(at(20, 59))!!))
+        // 21:00 + 3h is midnight, which is tomorrow: "Later today" must not be offered.
+        assertNull(NoteText.laterTodayOrNull(at(21, 0)))
+        assertNull(NoteText.laterTodayOrNull(at(23, 59)))
+        // Year boundary.
+        val newYearsEve = Calendar.getInstance().apply { clear(); set(2026, Calendar.DECEMBER, 31, 22, 0, 0) }
+        assertNull(NoteText.laterTodayOrNull(newYearsEve))
+        assertNotNull(NoteText.laterTodayOrNull(Calendar.getInstance().apply { clear(); set(2026, Calendar.DECEMBER, 31, 8, 0, 0) }))
+    }
+
 }
