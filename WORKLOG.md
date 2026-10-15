@@ -654,3 +654,12 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added JVM regression tests for toggling, multi-line isolation, indentation, and cursor adjustment.
 - Commits: `e1c9d0a` (helper), `0ae9089` (tests), `dff5a02` (editor control).
 - Validation boundary: source changes are committed; Android CI has not yet reported for this branch. No emulator/device, dark/light visual, keyboard/insets, large-text, or TalkBack validation is claimed.
+
+
+### Inline formatting controls — 2026-10-15
+
+- Extended the contextual toolbar with **Bold** and *Italic* controls, alongside H1, checklist, and bullet actions.
+- Selected text is wrapped in Markdown markers and remains selected; invoking the same control on an already-wrapped selection removes the markers. With a collapsed cursor, the control inserts a marker pair and places the cursor between them.
+- Added JVM tests for wrapping/unwrapping selected text and inserting a marker pair at the cursor.
+- Commits: `2fa1064` (formatting helper), `178e1f2` (tests), `0691bf b` (toolbar; abbreviated SHA should be read as `0691bf b` only for this note).
+- Validation: exact-head Android CI remains unconfirmed; no emulator or accessibility testing claimed.
