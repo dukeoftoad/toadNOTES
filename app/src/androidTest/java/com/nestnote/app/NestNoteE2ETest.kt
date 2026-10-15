@@ -2,6 +2,7 @@ package com.nestnote.app
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextClearance
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -91,6 +93,15 @@ class NestNoteE2ETest {
                     .getString("default_sort", null)
             )
         }
+        composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle {
+            assertEquals(
+                "CREATED",
+                composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+                    .getString("default_sort", null)
+            )
+        }
     }
 
 
@@ -136,6 +147,44 @@ class NestNoteE2ETest {
     }
 
     @Test
+    fun settingsCardMetadataTogglesUpdatePreferencesOnceAndPersist() {
+        composeRule.onNodeWithContentDescription("Open settings").performClick()
+        composeRule.onNodeWithText("Show note previews").assertIsDisplayed()
+        composeRule.onNodeWithText("Show note previews").performClick()
+        composeRule.onNodeWithText("Show dates and reminders").assertIsDisplayed()
+        composeRule.onNodeWithText("Show dates and reminders").performClick()
+
+        composeRule.runOnIdle {
+            val preferences = composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+            assertEquals(false, preferences.getBoolean("show_note_previews", true))
+            assertEquals(false, preferences.getBoolean("show_note_timestamps", true))
+        }
+
+        composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Open settings").performClick()
+        composeRule.onNodeWithText("Show note previews").assertIsDisplayed()
+        composeRule.onNodeWithText("Show dates and reminders").assertIsDisplayed()
+        composeRule.runOnIdle {
+            val preferences = composeRule.activity.getSharedPreferences("nestnote_preferences", 0)
+            assertEquals(false, preferences.getBoolean("show_note_previews", true))
+            assertEquals(false, preferences.getBoolean("show_note_timestamps", true))
+        }
+    }
+
+    @Test
+    fun systemBackReturnsFromSettingsToHome() {
+        composeRule.onNodeWithContentDescription("Open settings").performClick()
+        composeRule.onNodeWithText("Backup & privacy").assertIsDisplayed()
+
+        composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Your notes").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Create note").assertIsDisplayed()
+    }
+
+    @Test
     fun categorySelectionFiltersDashboardNotes() {
         composeRule.onNodeWithText("Categories").performClick()
         composeRule.onNodeWithText("Work").performClick()
@@ -144,21 +193,36 @@ class NestNoteE2ETest {
     }
 
     @Test
+    fun searchMatchesNoteBodyAndCategoryCaseInsensitively() {
+        composeRule.onNodeWithTag("note_search_field").performTextInput("quiet trail")
+        composeRule.onNodeWithText("Trip to the Mountains").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Project Plan").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("note_search_field").performTextClearance()
+        composeRule.onNodeWithText("Search your notes").performTextInput("PERSONAL")
+        composeRule.onNodeWithText("Trip to the Mountains").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Project Plan").assertCountEquals(0)
+    }
+
+    @Test
     fun searchWithNoMatchesShowsHelpfulEmptyState() {
         composeRule.onNodeWithText("Search your notes").performTextInput("no-note-should-match-this")
-        composeRule.onNodeWithText("A fresh page awaits").assertIsDisplayed()
-        composeRule.onNodeWithText("Create a note and let ideas flow.").assertIsDisplayed()
+        composeRule.onNodeWithText("No matching notes").assertIsDisplayed()
+        composeRule.onNodeWithText("Try another search, or clear it to see all your notes.").assertIsDisplayed()
+        composeRule.onNodeWithText("Clear search").assertIsDisplayed()
     }
 
     @Test
     fun appearancePickerChangesAndPersistsColorAndWallpaper() {
         composeRule.onNodeWithContentDescription("Create note").performClick()
         composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
-        composeRule.onNodeWithText("Colour").assertIsDisplayed()
-        composeRule.onNodeWithText("Background").assertIsDisplayed()
+        composeRule.onNodeWithText("Colour palette").assertIsDisplayed()
+        composeRule.onNodeWithText("Backgrounds").assertIsDisplayed()
         composeRule.onNodeWithTag("note_color_2").performClick()
+        composeRule.onNodeWithTag("note_color_2").assertIsSelected()
         composeRule.onNodeWithTag("note_background_1").performClick()
-        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithTag("note_background_1").assertIsSelected()
+        composeRule.onNodeWithText("Apply").performClick()
         composeRule.onNodeWithText("Title").performTextInput("Wallpaper note")
         composeRule.onNodeWithText("Note").performTextInput("Illustrated background")
         composeRule.onNodeWithText("Save note").performClick()
@@ -166,6 +230,78 @@ class NestNoteE2ETest {
             val saved = com.nestnote.app.NoteStore(composeRule.activity).load().first { it.title == "Wallpaper note" }
             assertEquals(2, saved.color)
             assertEquals(1, saved.background)
+        }
+    }
+
+    @Test
+    fun cancellingAppearanceRestoresOriginalDraftSelection() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
+        composeRule.onNodeWithTag("note_color_2").performClick()
+        composeRule.onNodeWithTag("note_background_1").performClick()
+        composeRule.onNodeWithTag("appearance_cancel").performClick()
+        composeRule.onNodeWithText("Title").performTextInput("Cancelled appearance")
+        composeRule.onNodeWithText("Note").performTextInput("Appearance should stay default")
+        composeRule.onNodeWithText("Save note").performClick()
+        composeRule.runOnIdle {
+            val saved = com.nestnote.app.NoteStore(composeRule.activity).load().first { it.title == "Cancelled appearance" }
+            assertEquals(0, saved.color)
+            assertEquals(0, saved.background)
+        }
+    }
+
+    @Test
+    fun closingAppearancePanelRestoresOriginalDraftSelection() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
+        composeRule.onNodeWithTag("note_color_3").performClick()
+        composeRule.onNodeWithTag("note_background_2").performClick()
+        composeRule.onNodeWithTag("appearance_close").performClick()
+        composeRule.onNodeWithText("Title").performTextInput("Closed appearance")
+        composeRule.onNodeWithText("Save note").performClick()
+        composeRule.runOnIdle {
+            val saved = com.nestnote.app.NoteStore(composeRule.activity).load().first { it.title == "Closed appearance" }
+            assertEquals(0, saved.color)
+            assertEquals(0, saved.background)
+        }
+    }
+
+    @Test
+    fun systemBackClosesAppearanceAndRestoresDraftSelection() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
+        composeRule.onNodeWithTag("note_color_4").performClick()
+        composeRule.onNodeWithTag("note_background_3").performClick()
+
+        composeRule.activity.runOnUiThread {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Colour palette").assertDoesNotExist()
+        composeRule.onNodeWithText("Title").performTextInput("Back cancelled appearance")
+        composeRule.onNodeWithText("Save note").performClick()
+        composeRule.runOnIdle {
+            val saved = NoteStore(composeRule.activity).load().first { it.title == "Back cancelled appearance" }
+            assertEquals(0, saved.color)
+            assertEquals(0, saved.background)
+        }
+    }
+
+    @Test
+    fun tappingAppearanceScrimClosesPanelAndRestoresDraftSelection() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
+        composeRule.onNodeWithTag("note_color_5").performClick()
+        composeRule.onNodeWithTag("note_background_4").performClick()
+        composeRule.onNodeWithTag("appearance_scrim").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Colour palette").assertDoesNotExist()
+        composeRule.onNodeWithText("Title").performTextInput("Scrim cancelled appearance")
+        composeRule.onNodeWithText("Save note").performClick()
+        composeRule.runOnIdle {
+            val saved = NoteStore(composeRule.activity).load().first { it.title == "Scrim cancelled appearance" }
+            assertEquals(0, saved.color)
+            assertEquals(0, saved.background)
         }
     }
 
@@ -203,6 +339,20 @@ class NestNoteE2ETest {
         settings.performScrollToNode(hasText("Back up notes"))
         composeRule.onNodeWithText("Back up notes").assertIsDisplayed()
         composeRule.onNodeWithText("Restore backup").assertIsDisplayed()
+    }
+
+    @Test
+    fun quickDialogUsesSharedEditorAndAppearanceFlow() {
+        composeRule.onNodeWithText("Settings").performClick()
+        val settings = composeRule.onNodeWithTag("settings_scroll")
+        settings.performScrollToNode(hasText("Quick dialog"))
+        composeRule.onNodeWithText("Quick dialog").performClick()
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithText("Title").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Choose note appearance").performClick()
+        composeRule.onNodeWithText("Colour palette").assertIsDisplayed()
+        composeRule.onNodeWithTag("appearance_cancel").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
     }
 
     @Test

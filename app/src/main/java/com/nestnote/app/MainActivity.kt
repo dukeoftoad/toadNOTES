@@ -9,14 +9,21 @@ import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,6 +41,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FormatListBulleted
@@ -64,8 +72,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -265,7 +275,8 @@ private fun NestNoteApp(store: NoteStore) {
 
     val filteredNotes = notes.filter { note ->
         ((selectedView == "Archived" && note.archived) ||
-            (selectedView != "Archived" && !note.archived && (selectedView == "Home" || selectedView == "All notes" || note.category == selectedView ||
+            (selectedView != "Archived" && !note.archived && (selectedView == "Home" || selectedView == "All notes" ||
+            (selectedView == "Pinned" && note.pinned) || note.category == selectedView ||
             (selectedView == "Reminders" && note.reminder.isNotBlank())))) &&
             (search.isBlank() || (note.title + " " + note.body + " " + note.category).contains(search, true))
     }.let { visible ->
@@ -274,6 +285,13 @@ private fun NestNoteApp(store: NoteStore) {
             sortByCreated -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.created })
             else -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.updated })
         }
+    }
+
+    // System Back should unwind secondary destinations before leaving the app.
+    BackHandler(enabled = !editorVisible && selectedView != "Home") {
+        selectedView = "Home"
+        search = ""
+        searchVisible = false
     }
 
     MaterialTheme(colorScheme = scheme) {
@@ -285,20 +303,35 @@ private fun NestNoteApp(store: NoteStore) {
                 TopAppBar(
                     title = {
                         Column {
-                            Text("NestNote", fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp)
-                            Text("Your thoughts, organized.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            Text(
+                                when (selectedView) { "Settings" -> "Settings"; "More" -> "More"; else -> "NestNote" },
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.2.sp
+                            )
+                            Text(
+                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant
+                            )
                         }
                     },
                     actions = {
-                        IconButton(onClick = { selectedView = "Settings" }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Open settings")
+                        // Settings is already the active destination; don't show a
+                        // redundant settings shortcut inside the settings screen.
+                        if (selectedView != "Settings") {
+                            IconButton(
+                                onClick = { selectedView = "Settings" },
+                                modifier = Modifier.semantics { contentDescription = "Open settings" }
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = null)
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
                 )
             },
             floatingActionButton = {
-                if (selectedView != "Settings" && selectedView != "Categories") {
+                if (selectedView !in listOf("Settings", "Categories", "More")) {
                     FloatingActionButton(
                         onClick = { editorNoteId = null; editorVisible = true },
                         shape = CircleShape,
@@ -311,9 +344,9 @@ private fun NestNoteApp(store: NoteStore) {
             },
             bottomBar = {
                 NavigationBar {
-                    listOf("Home", "All notes", "Categories", "Reminders", "Archived", "Settings").forEach { item ->
+                    listOf("Home", "All notes", "Categories", "Reminders", "More", "Settings").forEach { item ->
                         NavigationBarItem(
-                            selected = selectedView == item || (item == "All notes" && selectedView !in listOf("Home", "Categories", "Reminders", "Archived", "Settings") && categories.contains(selectedView)),
+                            selected = selectedView == item || (item == "All notes" && selectedView !in listOf("Home", "Categories", "Reminders", "More", "Settings") && categories.contains(selectedView)),
                             onClick = { selectedView = item },
                             icon = {
                                 Icon(when (item) {
@@ -321,9 +354,10 @@ private fun NestNoteApp(store: NoteStore) {
                                     "Settings" -> Icons.Default.Settings
                                     "Categories" -> Icons.Default.GridView
                                     "All notes" -> Icons.Default.List
-                                    "Archived" -> Icons.Default.Delete
+                                    "More" -> Icons.Default.MoreVert
+                                    "Reminders" -> Icons.Default.NotificationsNone
                                     else -> Icons.Default.Check
-                                }, contentDescription = item)
+                                }, contentDescription = null)
                             },
                             label = { Text(item, maxLines = 1, fontSize = 10.sp) }
                         )
@@ -335,7 +369,7 @@ private fun NestNoteApp(store: NoteStore) {
                 if (selectedView == "Home" || selectedView == "All notes" || searchVisible) {
                     OutlinedTextField(
                         value = search, onValueChange = { search = it },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("note_search_field"),
                         placeholder = { Text("Search your notes") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true,
@@ -348,7 +382,90 @@ private fun NestNoteApp(store: NoteStore) {
                         )
                     )
                 }
-                if (selectedView == "Settings") {
+                // Keep common category filters one tap away on the dashboard.
+                if (selectedView == "Home" || selectedView == "All notes" || categories.contains(selectedView)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(start = 18.dp, end = 18.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedView == "Home" || selectedView == "All notes",
+                            onClick = { selectedView = "Home" },
+                            label = { Text("All notes") },
+                            leadingIcon = if (selectedView == "Home" || selectedView == "All notes") {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null
+                        )
+                        categories.forEach { category ->
+                            FilterChip(
+                                selected = selectedView == category,
+                                onClick = { selectedView = category },
+                                label = { Text(category) }
+                            )
+                        }
+                    }
+                }
+                if (selectedView == "More") {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text("More", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Useful spaces for the features we add next.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurfaceVariant
+                        )
+                        listOf(
+                            Triple("Pinned notes", "${notes.count { it.pinned && !it.archived }} important notes at a glance", Icons.Default.PushPin),
+                            Triple("Archived notes", "${notes.count { it.archived }} notes kept out of your main lists", Icons.Default.Archive)
+                        ).forEach { (title, description, icon) ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    selectedView = if (title == "Pinned notes") "Pinned" else "Archived"
+                                },
+                                border = BorderStroke(1.dp, colors.outlineVariant),
+                                colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(18.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = colors.secondaryContainer,
+                                        contentColor = colors.onSecondaryContainer
+                                    ) {
+                                        Icon(icon, contentDescription = null, modifier = Modifier.padding(12.dp).size(24.dp))
+                                    }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = colors.outlineVariant)
+                        Text("Backup & preferences", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Manage your appearance, editor, and note backups in Settings.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = { selectedView = "Settings" },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Open Settings")
+                        }
+                    }
+                } else if (selectedView == "Settings") {
                     SettingsScreen(
                         themeMode = themeMode,
                         onThemeChange = { themeMode = it; savePreference(PREF_THEME, it.name) },
@@ -392,7 +509,7 @@ private fun NestNoteApp(store: NoteStore) {
                                     ) {
                                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                             Text(category, style = MaterialTheme.typography.titleMedium)
-                                            Text("${notes.count { it.category == category }} notes", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                            Text("${notes.count { it.category == category && !it.archived }} active notes", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                 }
@@ -412,6 +529,7 @@ private fun NestNoteApp(store: NoteStore) {
                                 Text(
                                     when (selectedView) {
                                         "All notes" -> "All your notes"
+                                        "Pinned" -> "Pinned notes"
                                         "Reminders" -> "Things to remember"
                                         "Archived" -> "Archived notes"
                                         else -> selectedView
@@ -461,9 +579,55 @@ private fun NestNoteApp(store: NoteStore) {
                         }
                     }
                     if (filteredNotes.isEmpty()) {
-                        Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("A fresh page awaits", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                            Text("Create a note and let ideas flow.", color = colors.onSurfaceVariant)
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 44.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = colors.secondaryContainer,
+                                contentColor = colors.onSecondaryContainer
+                            ) {
+                                Icon(
+                                    when {
+                                        search.isNotBlank() -> Icons.Default.Search
+                                        selectedView == "Archived" -> Icons.Default.Archive
+                                        selectedView == "Pinned" -> Icons.Default.PushPin
+                                        selectedView == "Reminders" -> Icons.Default.NotificationsNone
+                                        else -> Icons.Default.Add
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(18.dp).size(30.dp)
+                                )
+                            }
+                            Text(
+                                when {
+                                    search.isNotBlank() -> "No matching notes"
+                                    selectedView == "Archived" -> "Nothing archived yet"
+                                    selectedView == "Pinned" -> "No pinned notes yet"
+                                    selectedView == "Reminders" -> "No reminders yet"
+                                    categories.contains(selectedView) -> "No $selectedView notes yet"
+                                    else -> "A fresh page awaits"
+                                },
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                when {
+                                    search.isNotBlank() -> "Try another search, or clear it to see all your notes."
+                                    selectedView == "Archived" -> "Notes you archive will be kept here, away from your main lists."
+                                    selectedView == "Pinned" -> "Pin important notes to keep them easy to find."
+                                    selectedView == "Reminders" -> "Add a reminder to a note and it will show up here."
+                                    categories.contains(selectedView) -> "Notes assigned to this category will appear here."
+                                    else -> "Create a note and let ideas flow."
+                                },
+                                color = colors.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (search.isNotBlank()) {
+                                TextButton(onClick = { search = "" }) { Text("Clear search") }
+                            }
                         }
                     } else if (dashboardLayout == DashboardLayout.GRID) {
                         LazyVerticalGrid(
@@ -575,21 +739,35 @@ private fun NestNoteApp(store: NoteStore) {
                         NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
-                EditorMode.QUICK_DIALOG -> AlertDialog(
+                EditorMode.QUICK_DIALOG -> Dialog(
                     onDismissRequest = dismissEditor,
-                    title = { Text(if (editorNote == null) "Quick note" else "Edit note") },
-                    text = {
-                        QuickNoteFields(
+                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 520.dp)
+                            .heightIn(max = 760.dp)
+                            .padding(horizontal = 18.dp, vertical = 24.dp)
+                            .imePadding(),
+                        shape = RoundedCornerShape(28.dp),
+                        color = colors.surface,
+                        tonalElevation = 6.dp
+                    ) {
+                        NoteEditorContent(
                             original = editorNote,
-                            defaultCategory = defaultNoteCategory,
+                            defaultNoteCategory = defaultNoteCategory,
+                            textSize = editorTextSize,
+                            showCounts = showEditorCounts,
                             onSave = saveNote,
                             onDismiss = dismissEditor,
-                            onDelete = editorDeleteAction
+                            onDelete = editorDeleteAction,
+                            onUnsavedChangesChange = { editorHasUnsavedChanges = it },
+                            compactDialog = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    },
-                    confirmButton = {},
-                    dismissButton = {}
-                )
+                    }
+                }
             }
             if (confirmSystemDiscard) {
                 AlertDialog(
@@ -791,7 +969,9 @@ private fun <T> SegmentedChoice(
 @Composable
 private fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 6.dp),
+        Modifier.fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
@@ -800,7 +980,9 @@ private fun SwitchRow(title: String, summary: String?, checked: Boolean, onChang
                 Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        // The row owns the toggle semantics so tapping the switch itself cannot
+        // invoke the same state callback twice through nested click handlers.
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
@@ -851,7 +1033,8 @@ private fun OverviewTile(
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
+        onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         color = colors.surfaceContainerLow,
         border = BorderStroke(1.dp, colors.outlineVariant)
@@ -960,6 +1143,7 @@ private fun NoteEditorContent(
     onDelete: (() -> Unit)?,
     onUnsavedChangesChange: (Boolean) -> Unit = {},
     fullScreen: Boolean = false,
+    compactDialog: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
@@ -973,6 +1157,8 @@ private fun NoteEditorContent(
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
     var appearanceVisible by remember { mutableStateOf(false) }
+    var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
+    var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
     var discardConfirmation by remember { mutableStateOf(false) }
     var reminderMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
@@ -1120,7 +1306,11 @@ private fun NoteEditorContent(
                         Icon(Icons.Default.Archive, contentDescription = "Archive note", tint = Color(0xFF55515C))
                     }
                 }
-                IconButton(onClick = { appearanceVisible = true }) {
+                IconButton(onClick = {
+                    appearanceStartColor = colorIndex
+                    appearanceStartBackground = backgroundIndex
+                    appearanceVisible = true
+                }) {
                     Icon(Icons.Default.Palette, contentDescription = "Choose note appearance", tint = accent)
                 }
                 Box {
@@ -1149,7 +1339,7 @@ private fun NoteEditorContent(
                     .padding(horizontal = 22.dp),
                 verticalArrangement = Arrangement.Top
             ) {
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(if (compactDialog) 8.dp else 18.dp))
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -1210,13 +1400,13 @@ private fun NoteEditorContent(
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = textSize.bodySp.sp, lineHeight = (textSize.bodySp * 1.45f).sp
                     ),
-                    minLines = if (fullScreen) 10 else 5,
+                    minLines = if (fullScreen) 10 else if (compactDialog) 3 else 5,
                     shape = RoundedCornerShape(0.dp),
                     colors = fieldColors,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
                 Text("Category", style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(horizontal = 12.dp))
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
@@ -1271,38 +1461,53 @@ private fun NoteEditorContent(
                         color = muted
                     )
                 }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(if (compactDialog) 8.dp else 24.dp))
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = if (compactDialog) 8.dp else 14.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
             ) {
-                IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } }) {
-                    Icon(Icons.Default.CheckBox, contentDescription = "Toggle checklist item", tint = Color(0xFF45434A))
-                }
-                IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }) {
-                    Icon(Icons.Default.FormatListBulleted, contentDescription = "Toggle bullet point", tint = Color(0xFF45434A))
-                }
-                Spacer(Modifier.weight(1f))
-                if (showCounts) {
-                    val words = NoteText.wordCount(body)
-                    val minutes = NoteText.readingMinutes(words)
-                    Text(
-                        buildString {
-                            append(if (words == 1) "1 word" else "$words words")
-                            append(" · ${body.length} characters")
-                            if (minutes > 0) append(" · $minutes min read")
-                        },
-                        modifier = Modifier.padding(end = 12.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = muted
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Insert checklist item" }
+                    ) {
+                        Icon(Icons.Default.CheckBox, contentDescription = "Insert checklist item", tint = accent)
+                    }
+                    IconButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Insert bullet point" }
+                    ) {
+                        Icon(Icons.Default.FormatListBulleted, contentDescription = "Insert bullet point", tint = accent)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (showCounts) {
+                        val words = NoteText.wordCount(body)
+                        val minutes = NoteText.readingMinutes(words)
+                        Text(
+                            buildString {
+                                append(if (words == 1) "1 word" else "$words words")
+                                append(" · ${body.length} characters")
+                                if (minutes > 0) append(" · $minutes min read")
+                            },
+                            modifier = Modifier.padding(end = 10.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = muted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
             HorizontalDivider(color = Color(0x1F6F6878))
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = if (compactDialog) 8.dp else 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -1325,14 +1530,40 @@ private fun NoteEditorContent(
         }
     }
 
-    if (appearanceVisible) {
-        AppearancePickerSheet(
-            colorIndex = colorIndex,
-            backgroundIndex = backgroundIndex,
-            onColorSelected = { colorIndex = it },
-            onBackgroundSelected = { backgroundIndex = it },
-            onDismiss = { appearanceVisible = false }
-        )
+    fun dismissAppearance(discardDraft: Boolean) {
+        if (discardDraft) {
+            colorIndex = appearanceStartColor
+            backgroundIndex = appearanceStartBackground
+        }
+        appearanceVisible = false
+    }
+    BackHandler(enabled = appearanceVisible) { dismissAppearance(discardDraft = true) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Keep the writing canvas dominant on phones, while giving the appearance
+        // controls a little more room on tablets and other wide editor windows.
+        val appearancePanelMaxWidth = if (maxWidth >= 600.dp) 480.dp else 360.dp
+        AnimatedVisibility(visible = appearanceVisible, enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.fillMaxSize().background(Color(0x660F0D17)).clickable { dismissAppearance(discardDraft = true) }.testTag("appearance_scrim"))
+        }
+        AnimatedVisibility(
+            visible = appearanceVisible,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+        ) {
+            AppearanceSidePanel(
+                colorIndex = colorIndex,
+                backgroundIndex = backgroundIndex,
+                onColorSelected = { colorIndex = it },
+                onBackgroundSelected = { backgroundIndex = it },
+                onDismiss = { dismissAppearance(discardDraft = true) },
+                onApply = { dismissAppearance(discardDraft = false) },
+                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.88f).widthIn(max = appearancePanelMaxWidth)
+                    .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .testTag("appearance_side_panel")
+            )
+        }
     }
 
     if (discardConfirmation) {
@@ -1353,104 +1584,111 @@ private fun NoteEditorContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppearancePickerSheet(
+private fun AppearanceSidePanel(
     colorIndex: Int,
     backgroundIndex: Int,
     onColorSelected: (Int) -> Unit,
     onBackgroundSelected: (Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onApply: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFFFBF4),
-        contentColor = Color(0xFF211F26),
-        dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFFBDB5A6)) }
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier.fillMaxHeight().verticalScroll(rememberScrollState())
+            .statusBarsPadding().navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
-            Box(Modifier.fillMaxWidth().height(258.dp)) {
-                if (backgroundIndex == 0) {
-                    Box(Modifier.fillMaxSize().background(Color(0xFFF9F4EA)))
-                } else {
-                    NoteWallpaperArtwork(backgroundIndex, Modifier.fillMaxSize())
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Appearance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                Text("Make this note feel like yours", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
-            Column(
-                Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-                Text("Colour", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    noteAccents.forEachIndexed { index, accent ->
-                        Box(
-                            Modifier.size(52.dp).clip(CircleShape)
-                                .testTag("note_color_$index")
-                                .background(accent)
-                                .border(
-                                    width = if (index == colorIndex) 2.dp else 1.dp,
-                                    color = if (index == colorIndex) Color(0xFF514783) else Color(0xFFB8B1A7),
-                                    shape = CircleShape
-                                )
-                                .clickable { onColorSelected(index) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (index == colorIndex) {
-                                Icon(Icons.Default.Check, contentDescription = "Selected note color", tint = Color(0xFF514783), modifier = Modifier.size(25.dp))
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(3.dp))
-                Text("Background", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    (0..5).forEach { index ->
-                        Box(
-                            Modifier.size(70.dp).clip(CircleShape)
-                                .testTag("note_background_$index")
-                                .border(
-                                    width = if (index == backgroundIndex) 2.dp else 1.dp,
-                                    color = if (index == backgroundIndex) Color(0xFF5A538A) else Color(0x66807870),
-                                    shape = CircleShape
-                                )
-                                .clickable { onBackgroundSelected(index) }
-                        ) {
-                            if (index == 0) {
-                                Canvas(Modifier.fillMaxSize()) {
-                                    drawRect(Color(0xFFF9F4EA))
-                                    drawLine(Color(0xFF77716A), Offset(size.width * 0.28f, size.height * 0.28f), Offset(size.width * 0.72f, size.height * 0.72f), strokeWidth = 3.dp.toPx())
-                                }
-                            } else {
-                                NoteWallpaperArtwork(index, Modifier.fillMaxSize())
-                            }
-                            if (index == backgroundIndex) {
-                                Surface(
-                                    modifier = Modifier.align(Alignment.TopEnd).size(23.dp),
-                                    shape = CircleShape,
-                                    color = Color(0xFF514783),
-                                    contentColor = Color.White,
-                                    border = BorderStroke(1.dp, Color(0xFFFFF6E5))
-                                ) {
-                                    Icon(Icons.Default.Check, contentDescription = "Selected background", modifier = Modifier.padding(3.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Done") }
+            IconButton(onClick = onDismiss, modifier = Modifier.testTag("appearance_close")) {
+                Icon(Icons.Default.Close, contentDescription = "Close appearance panel")
+            }
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth().height(150.dp).testTag("appearance_preview"),
+            shape = RoundedCornerShape(18.dp),
+            color = noteTints[colorIndex],
+            border = BorderStroke(1.dp, colors.outlineVariant)
+        ) {
+            Box {
+                if (backgroundIndex > 0) NoteWallpaperArtwork(backgroundIndex, Modifier.fillMaxSize())
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Your note", style = MaterialTheme.typography.titleMedium, color = Color(0xFF292633))
+                    Text("A little space for your thoughts…", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF514D57))
                 }
             }
         }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Colour palette", style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
+            Text("Choose a soft tint", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            // Keep each swatch comfortably tappable; allow horizontal scrolling on
+            // narrow phones rather than shrinking seven targets below 48 dp.
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                noteAccents.forEachIndexed { index, tint ->
+                    val isSelected = index == colorIndex
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .background(tint)
+                            .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.primary else colors.outlineVariant, CircleShape)
+                            .clickable { onColorSelected(index) }
+                            .semantics { contentDescription = "Note colour " + (index + 1) + (if (isSelected) ", selected" else ""); this.selected = isSelected }
+                            .testTag("note_color_$index"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF383044))
+                    }
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Backgrounds", style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
+            Text("Add a little atmosphere", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            (0..5).forEach { index ->
+                val isSelected = index == backgroundIndex
+                Surface(
+                    modifier = Modifier.fillMaxWidth().height(58.dp)
+                        .testTag("note_background_$index")
+                        .clickable { onBackgroundSelected(index) }
+                        .semantics { contentDescription = (if (index == 0) "Plain colour" else listOf("", "Botanical", "Sunset", "Waves", "Soft shapes", "Paper")[index]) + (if (isSelected) ", selected" else ""); this.selected = isSelected },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.primary else colors.outlineVariant),
+                    color = noteTints[colorIndex]
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 10.dp)) {
+                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(9.dp))) {
+                            if (index == 0) Box(Modifier.fillMaxSize().background(noteTints[colorIndex]))
+                            else NoteWallpaperArtwork(index, Modifier.fillMaxSize())
+                        }
+                        Text(
+                            if (index == 0) "Plain colour" else listOf("", "Botanical", "Sunset", "Waves", "Soft shapes", "Paper")[index],
+                            modifier = Modifier.weight(1f).padding(start = 12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurface
+                        )
+                        if (isSelected) Icon(Icons.Default.Check, contentDescription = "Selected background", tint = colors.primary)
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).testTag("appearance_cancel")) {
+                Text("Cancel")
+            }
+            Button(onClick = onApply, modifier = Modifier.weight(1f)) {
+                Text("Apply")
+            }
+        }
+        Text("Your choice is saved with the note when you tap Save.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -1528,37 +1766,3 @@ private fun NoteWallpaperArtwork(index: Int, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun QuickNoteFields(
-    original: NestNote?,
-    defaultCategory: String,
-    onSave: (NestNote) -> Unit,
-    onDismiss: () -> Unit,
-    onDelete: (() -> Unit)?
-) {
-    var title by remember(original?.id) { mutableStateOf(original?.title.orEmpty()) }
-    var body by remember(original?.id) { mutableStateOf(original?.body.orEmpty()) }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
-        OutlinedTextField(body, { body = it }, label = { Text("Note") }, minLines = 3)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete") }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-            Button(
-                onClick = {
-                    if (title.isNotBlank() && body.isNotBlank()) onSave(
-                        NestNote(
-                            id = original?.id ?: System.currentTimeMillis(), title = title.trim(), body = body.trim(),
-                            category = original?.category ?: defaultCategory, color = original?.color ?: 0,
-                            pinned = original?.pinned ?: false, reminder = original?.reminder.orEmpty(),
-                            updated = original?.updated ?: 0L, created = original?.created ?: System.currentTimeMillis(),
-                            archived = original?.archived ?: false, background = original?.background ?: 0
-                        )
-                    )
-                },
-                enabled = title.isNotBlank() && body.isNotBlank()
-            ) { Text("Save") }
-        }
-    }
-}

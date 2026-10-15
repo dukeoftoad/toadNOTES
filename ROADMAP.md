@@ -425,3 +425,124 @@ Before a public release intended for sensitive personal notes:
 4. Continue architecture work incrementally (repository boundary and lifecycle-aware state) only with migration-safe tests; avoid a broad rewrite.
 
 **Validation boundary:** CI build/test success does not prove device behavior or production signing correctness. See RELEASE_CHECKLIST.md for release gates and WORKLOG.md for dated run evidence.
+
+
+## UI/UX maturity roadmap — approved direction (2026-10-12)
+
+This roadmap is governed by [UI_UX_RULES.md](UI_UX_RULES.md). The approved prototype direction is a focused note editor with an animated **right-side Appearance panel**; the existing bottom appearance picker is not the target interaction.
+
+### P0 — Note creation/editor redesign (start here)
+- [ ] Audit all editor modes and the create/edit entry points before changing layout.
+- [ ] Rework title, body, formatting toolbar, category and primary/secondary action hierarchy.
+- [ ] Replace the appearance bottom sheet with a reusable right-side slide-in panel; on phones it overlays the editor instead of permanently narrowing the writing canvas.
+- [ ] Provide wallpaper/background thumbnails, colour swatches, selected indicators, live draft preview, theme controls, and predictable Apply/Cancel/Back behavior.
+- [ ] Reuse the same editor and Appearance component for new and existing notes.
+- [ ] Preserve save/discard prompts, stale-draft protection, pinning, reminders, archive, delete, share/copy and persistence.
+- [ ] Validate keyboard/insets, narrow screens, large text, light/dark themes, and accessible labels.
+- **Exit gate:** relevant automated checks and CI pass on the exact final commit; record manual/device verification separately. Do not mark complete from compilation alone.
+
+### P1 — Whole-app UI/UX maturity audit
+- [ ] Audit Home, All notes, Categories, Reminders, More, Pinned, Archive, Settings, menus, dialogs, icons, empty/error states and navigation.
+- [ ] Standardize spacing, typography, shape, motion, selected/disabled states and primary-action hierarchy.
+- [ ] Verify accessible contrast across themes and note appearance variants; check touch targets, focus, screen readers, text scaling and system insets.
+- [ ] Remove duplicated controls/pickers and ensure every visible action works or is clearly identified as unavailable/deferred.
+- **Exit gate:** shared patterns are reused consistently and a screen-by-screen audit records pass, issue, or not-tested status.
+
+### P2 — Backend and new features on the mature UI
+- Start feature expansion only after the relevant UI components and interaction contracts are stable.
+- Reuse existing note models, storage boundary, navigation, design tokens, and components; do not introduce parallel UI or persistence for the same concept.
+- Each feature must document its owner/state, failure/empty states, accessibility, migration needs and tests.
+
+### Required rule
+Every UI PR must follow [UI_UX_RULES.md](UI_UX_RULES.md): audit → reference → acceptance criteria → reuse-first implementation → tests → responsive/accessibility review → worklog update. P0 is the immediate priority; later feature work must not bypass it.
+
+
+### P0 implementation status update — 2026-10-12
+- [x] Replace the bottom appearance picker call with the reusable animated right-side panel.
+- [x] Add dismissible scrim, system Back handling, colour/background previews, selected states and test tags.
+- [x] Improve formatting toolbar hierarchy with a grouped tonal surface and clearer action labels.
+- [ ] Audit/unify the Quick Dialog editor path so it does not become a parallel reduced-feature editor.
+- [ ] Verify keyboard/insets, reduced motion, accessibility, large fonts and actual narrow/wide device layouts.
+- [x] Re-run required CI on the latest branch head and record exact evidence (run `38315174209`, commit `d9d134eb72ab2bfcd5125dad69b7f3cd6c5023b2`, result: success; hosted emulator execution intentionally excluded).
+- **Status:** implementation in progress; do not mark P0 complete yet.
+
+
+### P0 editor audit follow-up — 2026-10-13
+
+- [x] Remove the parallel reduced-feature Quick Dialog form and reuse `NoteEditorContent` for Quick Dialog create/edit.
+- [x] Preserve Quick Dialog as a user-selectable bounded dialog layout; reuse the same appearance, category, pin/reminder, formatting, sharing/copying, delete, save and discard interactions.
+- [x] Add explicit appearance Apply/Cancel draft semantics; Cancel, close, outside tap, and system Back restore the panel-opening appearance draft, while Apply keeps selections in the editor draft.
+- [ ] Validate compact-dialog keyboard/insets and scroll reachability at narrow sizes and large font settings.
+- [x] Confirm required CI passes on the exact branch head `fb6c096e85c55d78286e02c59aeb26f49efbcd0c` (run [#38315774563](https://github.com/dukeoftoad/toadNOTES/actions/runs/38315774563): unit tests, debug APK build, minified release compilation, and instrumentation-test compilation passed; hosted emulator execution intentionally excluded).
+- [ ] Execute instrumentation tests and manually verify compact-dialog keyboard/insets, narrow screens, large fonts, and accessibility on an available local device/emulator.
+
+
+### Appearance accessibility regression coverage — 2026-10-13
+- [x] Extend the appearance persistence regression test to assert the selected semantics state for chosen colour and background options (`assertIsSelected`).
+- [x] Required CI passed on commit `26608734f1bc53dc04b592c4542baf86619cbd8e` (run [#38386226195](https://github.com/dukeoftoad/toadNOTES/actions/runs/38386226195)): unit tests, debug APK, minified release build, and instrumentation-test compilation succeeded.
+- [ ] Execute instrumentation tests on a local emulator/device; CI compilation does not prove the Compose selection assertions execute successfully.
+- **P0 remains open** for keyboard/insets, narrow layouts, large-font and TalkBack/device verification.
+
+
+### Responsive appearance panel — 2026-10-13
+- [x] Use a 360 dp max panel width on phone-sized windows and a 480 dp cap when the editor window is at least 600 dp wide, while retaining the 88% width limit.
+- [ ] Visually verify phone and tablet layouts on an available emulator/device; source-level responsive sizing is not device verification.
+
+
+### Appearance palette touch targets — 2026-10-13
+- [x] Set colour swatches to 48 dp touch targets and allow horizontal scrolling on narrow screens rather than compressing all seven swatches.
+- [ ] Verify palette discoverability and horizontal scroll behavior on a small device with TalkBack and large font settings.
+
+
+## Execution track — P0 through P3 (active as of 2026-10-13)
+
+This sequence is cumulative: later work must not bypass earlier safety gates.
+
+### P0 — Protect notes and finish the editor
+- [ ] Keep create/edit/save/discard and stale-draft protection regression-tested.
+- [ ] Cover Appearance panel Apply, Cancel, close, outside tap, and system Back rollback in instrumentation tests.
+- [ ] Re-verify encrypted storage, legacy migration, backup validation/merge, and recovery behavior with unit tests.
+- [ ] Close keyboard/insets, narrow-window, large-text, TalkBack, and device checks only when actually executed and recorded.
+- **Current status:** editor implementation is in place; additional dismissal tests were added on the active branch. Exact-head CI and device execution remain pending.
+
+### P1 — Audit and polish the whole app
+- [ ] Add regression coverage for search across title/body/category and combined filtering/sorting.
+- [ ] Review Home, All notes, Categories, Reminders, More, Pinned, Archive, Settings, menus, dialogs, and empty/error states.
+- [ ] Correct contrast, touch target, selected/disabled semantics, focus order, and large-text issues found in the audit.
+- [ ] Record every screen as pass, issue, or not tested; don't equate test tags/build success with accessibility verification.
+- **Current status:** search regression coverage is being expanded; whole-app and device review remain open.
+
+### P2 — Improve editing and architecture incrementally
+- [ ] Improve checklist interaction/cursor preservation without introducing a parallel rich-text model.
+- [ ] Extract the existing NoteStore behind a small repository boundary with tests before moving UI state.
+- [ ] Consider ViewModel/Room migration only after behavior and compatibility tests demonstrate the need.
+- [ ] Document migration, error, empty, and recovery states for each new feature.
+- **Gate:** no broad rewrite and no storage migration without backward-compatibility and recovery tests.
+
+### P3 — Release engineering and production proof
+- [ ] Align release checklist with actual GitHub Actions secret names and release triggers.
+- [ ] Verify the permanent keystore, alias, and certificate fingerprint without printing secrets or committing key material.
+- [ ] Confirm manual release dispatch produces a signed APK artifact; version-tag release publishes the version-named APK.
+- [ ] Verify APK signature and compare the certificate fingerprint to the approved production fingerprint.
+- [ ] Install/smoke-test the downloaded artifact and record owner approval before production release.
+- **Current status:** release workflow and checklist are under audit; signing and installed-APK proof must be run with the owner's configured secrets/device.
+
+
+### UI/UX roadmap cross-check — 2026-10-13
+
+This section reconciles the implementation checklists above with the latest P0–P3 execution track and current PR #10 state. It does not erase historical status entries.
+
+- **P0 implementation:** the right-side Appearance panel, responsive width caps, 48 dp horizontally scrollable colour swatches, shared Quick Dialog/full-screen editor, Apply/Cancel draft semantics, and appearance dismissal/search regression tests are implemented on `feature/phase-7-dashboard-ux`.
+- **Exact-head CI:** run [#38415822493](https://github.com/dukeoftoad/toadNOTES/actions/runs/38415822493) passed on commit `867f61f2f7f1d6baff42c8db1d3644ac126145e1`: JVM unit tests, debug APK build, minified release APK build, and instrumentation-test APK compilation passed.
+- **Still open for P0:** instrumentation tests have not been executed on an emulator/device. Compact-dialog keyboard/insets and scroll reachability, narrow/wide visual review, large text, reduced motion, contrast and TalkBack remain unverified. P0 must not be marked complete until available device checks are performed and recorded.
+- **P1 progress:** search regression coverage for title/body/category has been added, but combined filtering/sorting and the screen-by-screen Home/All notes/Categories/Reminders/More/Pinned/Archive/Settings audit remain incomplete.
+- **P2:** defer architecture/new-feature expansion until P0/P1 UI contracts are stable; then extract a tested repository boundary without a broad rewrite.
+- **P3:** release checklist now uses `KEYSTORE_BASE64`; verify the actual production certificate fingerprint, signed release publication, installation and upgrade behavior only with configured owner secrets and an available device. No production-signing proof is claimed here.
+- **PR #10:** remains open pending owner approval and outstanding P0 manual/device validation. CI success means compile/build/test-task success only; it is not a device/accessibility sign-off.
+
+
+### P1 implementation follow-up — 2026-10-14
+
+- Fixed the combined filter/sort instrumentation test's unsupported Compose assertion API after CI run [#38520909916](https://github.com/dukeoftoad/toadNOTES/actions/runs/38520909916) failed during instrumentation-test compilation. The run's unit tests and debug/minified release builds passed; test APK compilation did not.
+- Code audit identified a double-dispatch risk in Settings `SwitchRow`: both the parent row and nested Switch handled clicks. The row now owns the switch role/toggle semantics and the nested Switch has no independent change callback.
+- **Validation pending:** exact-head CI for commits `30b1a4104a6a43ed996f8e77cc5fca1821db3fa4` and `240adb7479a53f127bb2dc76df7f7b9d9dd53941` has not yet been confirmed. Keep P0/P1 gates open until CI passes and device/accessibility validation is actually performed.

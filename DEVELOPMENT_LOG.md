@@ -29,3 +29,13 @@ This file records durable engineering decisions. Implementation and validation h
 - Use focused pull requests and update documentation with behavior/status changes.
 - Keep the work log factual; separate implemented code, automated validation, manual validation, and release sign-off.
 - Never distribute unsigned, inspection-only, or legacy CI-signed APKs as production builds.
+
+
+## UI/UX design decision — 2026-10-12
+- **Decision:** treat UI/UX maturity as a product gate, not as a per-screen polish task.
+- **Approved editor direction:** a focused note editor with an animated right-side Appearance panel instead of a bottom colour-picker sheet. The panel overlays the editor on phones, includes wallpaper previews, colour swatches, selected indicators, live draft preview, and clear dismissal/apply behavior.
+- **Reuse rule:** one shared editor for create/edit, one shared Appearance component, one note save/persistence path, and consistent design tokens. No duplicate UI or parallel state/persistence paths.
+- **Sequencing:** P0 editor redesign; P1 whole-app screen/menu/icon/accessibility audit; P2 backend and new features on the mature reusable UI.
+- **Source finding:** current `NoteEditorContent` still invokes `AppearancePickerSheet` backed by `ModalBottomSheet`. This remains to be changed; this documentation decision does not claim implementation completion.
+- **Validation boundary:** require CI for the exact final commit and separately record manual/device visual, keyboard/insets, large-font, contrast and TalkBack checks. Never infer these from a successful compile.
+- Governing contract: [UI_UX_RULES.md](UI_UX_RULES.md).
