@@ -1165,9 +1165,16 @@ private fun NoteEditorContent(
     var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
-    val ink = Color(0xFF292633)
-    val muted = Color(0xFF66616D)
-    val accent = Color(0xFF514783)
+    val colors = MaterialTheme.colorScheme
+    val darkEditor = colors.surface.red < 0.5f
+    val ink = if (darkEditor) colors.onSurface else Color(0xFF292633)
+    val muted = if (darkEditor) colors.onSurfaceVariant else Color(0xFF66616D)
+    val accent = if (darkEditor) colors.primary else Color(0xFF514783)
+    val editorCanvas = if (backgroundIndex == 0) {
+        if (darkEditor) colors.surface else noteTints[colorIndex]
+    } else {
+        colors.surface
+    }
     val hasUnsavedChanges = title != original?.title.orEmpty() ||
         body != original?.body.orEmpty() ||
         category != (original?.category ?: defaultNoteCategory) ||
@@ -1256,7 +1263,7 @@ private fun NoteEditorContent(
     Box(
         modifier = modifier
             .then(if (fullScreen) Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding() else Modifier.fillMaxWidth().navigationBarsPadding())
-            .background(if (backgroundIndex == 0) noteTints[colorIndex] else Color.White)
+            .background(editorCanvas)
     ) {
         if (backgroundIndex > 0) {
             NoteWallpaperArtwork(backgroundIndex, Modifier.fillMaxSize())
@@ -1268,14 +1275,14 @@ private fun NoteEditorContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { requestDismiss() }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Close editor", tint = Color(0xFF45434A))
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Close editor", tint = if (darkEditor) colors.onSurface else Color(0xFF45434A))
                 }
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { pinned = !pinned }) {
                     Icon(
                         Icons.Default.PushPin,
                         contentDescription = if (pinned) "Unpin note" else "Pin note",
-                        tint = if (pinned) accent else Color(0xFF55515C)
+                        tint = if (pinned) accent else if (darkEditor) colors.onSurfaceVariant else Color(0xFF55515C)
                     )
                 }
                 Box {
@@ -1283,7 +1290,7 @@ private fun NoteEditorContent(
                         Icon(
                             Icons.Default.NotificationsNone,
                             contentDescription = "Choose reminder time",
-                            tint = if (reminder.isNotBlank()) accent else Color(0xFF55515C)
+                            tint = if (reminder.isNotBlank()) accent else colors.onSurfaceVariant
                         )
                     }
                     DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
@@ -1311,7 +1318,7 @@ private fun NoteEditorContent(
                 }
                 if (original != null) {
                     IconButton(onClick = { onSave(buildNote(archived = true)) }) {
-                        Icon(Icons.Default.Archive, contentDescription = "Archive note", tint = Color(0xFF55515C))
+                        Icon(Icons.Default.Archive, contentDescription = "Archive note", tint = colors.onSurfaceVariant)
                     }
                 }
                 IconButton(onClick = {
@@ -1323,7 +1330,7 @@ private fun NoteEditorContent(
                 }
                 Box {
                     IconButton(onClick = { moreMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More editor actions", tint = Color(0xFF55515C))
+                        Icon(Icons.Default.MoreVert, contentDescription = "More editor actions", tint = colors.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
                         DropdownMenuItem(
@@ -1426,12 +1433,12 @@ private fun NoteEditorContent(
                             onClick = { category = item },
                             label = { Text(item) },
                             colors = FilterChipDefaults.filterChipColors(
-                                containerColor = Color.White.copy(alpha = 0.55f),
+                                containerColor = colors.surfaceVariant.copy(alpha = if (darkEditor) 0.72f else 0.55f),
                                 labelColor = ink,
                                 selectedContainerColor = accent,
-                                selectedLabelColor = Color.White
+                                selectedLabelColor = colors.onPrimary
                             ),
-                            border = BorderStroke(1.dp, Color(0x33514783))
+                            border = BorderStroke(1.dp, colors.outlineVariant)
                         )
                     }
                 }
@@ -1440,7 +1447,7 @@ private fun NoteEditorContent(
                         onClick = { pickReminder() },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = colors.surfaceVariant.copy(alpha = if (darkEditor) 0.72f else 0.6f)
                     ) {
                         Row(
                             Modifier.padding(start = 14.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
@@ -1455,7 +1462,7 @@ private fun NoteEditorContent(
                                 )
                             }
                             IconButton(onClick = { reminder = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear reminder", tint = Color(0xFF55515C))
+                                Icon(Icons.Default.Close, contentDescription = "Clear reminder", tint = colors.onSurfaceVariant)
                             }
                         }
                     }
@@ -1513,7 +1520,7 @@ private fun NoteEditorContent(
                     }
                 }
             }
-            HorizontalDivider(color = Color(0x1F6F6878))
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.6f))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = if (compactDialog) 8.dp else 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1529,9 +1536,9 @@ private fun NoteEditorContent(
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accent,
-                        contentColor = Color.White,
-                        disabledContainerColor = Color(0xFFE2DFE9),
-                        disabledContentColor = accent
+                        contentColor = colors.onPrimary,
+                        disabledContainerColor = colors.surfaceVariant,
+                        disabledContentColor = colors.onSurfaceVariant
                     )
                 ) { Text("Save note") }
             }
@@ -1551,7 +1558,7 @@ private fun NoteEditorContent(
         // controls a little more room on tablets and other wide editor windows.
         val appearancePanelMaxWidth = if (maxWidth >= 600.dp) 480.dp else 360.dp
         AnimatedVisibility(visible = appearanceVisible, enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.fillMaxSize().background(Color(0x660F0D17)).clickable { dismissAppearance(discardDraft = true) }.testTag("appearance_scrim"))
+            Box(Modifier.fillMaxSize().background(colors.scrim.copy(alpha = 0.40f)).clickable { dismissAppearance(discardDraft = true) }.testTag("appearance_scrim"))
         }
         AnimatedVisibility(
             visible = appearanceVisible,
