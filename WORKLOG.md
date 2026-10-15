@@ -630,3 +630,18 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Continued PR #16 by reusing the app's existing Material 3 color scheme for reminder/archive/more/clear icons, category-chip outlines, editor divider, disabled save-button state, and Appearance scrim instead of keeping separate hard-coded light-only values.
 - Implementation commit: `17f6dac9d20332a512c8b0955568cd6fd10427b8`.
 - This is source-level work only. Exact-head Android CI and device/emulator visual checks have not yet been confirmed; no accessibility/device verification is claimed.
+
+
+## 2026-10-15 — Open-source Markdown preview
+- Added an opt-in Markdown preview toggle to the note editor, using Markor's `GsSimpleMarkdownParser` copied from [Markor source](https://github.com/gsantner/markor/blob/master/app/src/main/java/net/gsantner/opoc/format/GsSimpleMarkdownParser.java).
+- Upstream file identifies SPDX `Unlicense OR CC0-1.0` and credits Gregor Santner (2017–2025); that header is retained in `app/src/main/java/com/nestnote/app/opensource/GsSimpleMarkdownParser.java`.
+- Added a small adapter that escapes raw HTML in user note text before passing it through the parser, then renders via AndroidX `HtmlCompat`. Preview is opt-in; existing Markdown/plain-text content remains unchanged in encrypted storage.
+- Added parser regression tests for common formatting, lists, and links.
+- Implementation commit chain on `feature/markdown-preview-markor-parser`: `b071cb8f` (vendored parser), `df7b9bed` (adapter), `d29d2627` (editor toggle), `83da445d` (typography fix), `48751ab4` (parser tests).
+- Validation: Android CI has not yet been run for this branch. No emulator/device validation claimed. The upstream parser is intentionally limited to common Markdown syntax; this is not a full CommonMark implementation.
+
+
+### Markdown preview CI fix — 2026-10-15
+
+- Fixed Kotlin compilation failure in the Markdown preview's Android TextView initialization by using `setTextSize(TypedValue.COMPLEX_UNIT_SP, markdownBodySize)`, avoiding the outer editor `textSize` enum shadowing the TextView property.
+- Validation before fix: Android CI run #274 failed at `MainActivity.kt:1436` with “val cannot be reassigned” and a Float/EditorTextSize type mismatch. Awaiting exact-head CI after this fix; no device validation claimed.

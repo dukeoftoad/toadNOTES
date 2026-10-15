@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.widget.TextView
 import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
@@ -70,7 +71,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -1162,12 +1165,14 @@ private fun NoteEditorContent(
         mutableStateOf(TextFieldValue(original?.body.orEmpty()))
     }
     val body = bodyValue.text
+    val markdownBodySize = textSize.bodySp.toFloat()
     var category by rememberSaveable(original?.id) { mutableStateOf(original?.category ?: defaultNoteCategory) }
     var colorIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.color?.coerceIn(0, noteAccents.lastIndex) ?: 0) }
     var backgroundIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.background?.coerceIn(0, 5) ?: 0) }
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
     var appearanceVisible by remember { mutableStateOf(false) }
+    var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
     var discardConfirmation by remember { mutableStateOf(false) }
@@ -1417,19 +1422,59 @@ private fun NoteEditorContent(
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = bodyValue,
-                    onValueChange = { onBodyChange(it) },
-                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
-                    placeholder = { Text("Note") },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = textSize.bodySp.sp, lineHeight = (textSize.bodySp * 1.45f).sp
-                    ),
-                    minLines = if (fullScreen) 10 else if (compactDialog) 3 else 5,
-                    shape = RoundedCornerShape(0.dp),
-                    colors = fieldColors,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { previewVisible = !previewVisible }) {
+                        Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
+                    }
+                }
+                if (previewVisible) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = colors.surface.copy(alpha = 0.82f),
+                        border = BorderStroke(1.dp, colors.outlineVariant)
+                    ) {
+                        AndroidView(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            factory = { viewContext ->
+                                TextView(viewContext).apply {
+                                    setTextColor(ink.toArgb())
+                                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, markdownBodySize)
+                                    setTextIsSelectable(true)
+                                }
+                            },
+                            update = { textView ->
+                                textView.setTextColor(ink.toArgb())
+                                textView.textSize = markdownBodySize
+                                textView.text = MarkdownPreview.toSpanned(body)
+                            }
+                        )
+                    }
+                    Text(
+                        "Preview supports basic headings, emphasis, inline code, links and simple lists.",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = bodyValue,
+                        onValueChange = { onBodyChange(it) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
+                        placeholder = { Text("Note") },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = textSize.bodySp.sp, lineHeight = (textSize.bodySp * 1.45f).sp
+                        ),
+                        minLines = if (fullScreen) 10 else if (compactDialog) 3 else 5,
+                        shape = RoundedCornerShape(0.dp),
+                        colors = fieldColors,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+                    )
+                }
 
                 Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
                 Text("Category", style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(horizontal = 12.dp))
