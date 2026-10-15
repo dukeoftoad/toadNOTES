@@ -1548,7 +1548,7 @@ private fun NoteEditorContent(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
@@ -1578,13 +1578,26 @@ private fun NoteEditorContent(
                         Text("I", style = MaterialTheme.typography.labelLarge.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = accent)
                     }
                     TextButton(
+                        onClick = { applyInlineEdit("~~") },
+                        modifier = Modifier.semantics { contentDescription = "Strikethrough selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("S", style = MaterialTheme.typography.labelLarge.copy(textDecoration = TextDecoration.LineThrough), color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("`") },
+                        modifier = Modifier.semantics { contentDescription = "Inline code selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("``", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
                         onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeading(text, cursor) } },
                         modifier = Modifier.semantics { contentDescription = "Toggle heading on current line" },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text("H1", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
-                    Spacer(Modifier.weight(1f))
                     if (showCounts) {
                         val words = NoteText.wordCount(body)
                         val minutes = NoteText.readingMinutes(words)
