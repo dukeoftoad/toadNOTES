@@ -54,6 +54,24 @@ object NoteText {
         return next to newCursor
     }
 
+    /** Toggles a Markdown level-one heading prefix on the cursor's line. */
+    fun toggleHeading(text: String, cursor: Int): Pair<String, Int> {
+        val c = cursor.coerceIn(0, text.length)
+        val start = lineStart(text, c)
+        val line = text.substring(start, lineEnd(text, c))
+        val contentStart = start + indentOf(line).length
+        val prefix = if (text.startsWith("# ", contentStart)) "" else "# "
+        val next = if (prefix.isEmpty()) {
+            text.removeRange(contentStart, contentStart + 2)
+        } else {
+            text.substring(0, contentStart) + prefix + text.substring(contentStart)
+        }
+        val nextCursor = if (prefix.isEmpty() && c >= contentStart + 2) c - 2
+            else if (prefix.isNotEmpty() && c >= contentStart) c + 2
+            else c
+        return next to nextCursor.coerceIn(0, next.length)
+    }
+
     /** Cycles the current line: plain → ☐ → ☑ → plain. */
     fun cycleChecklist(text: String, cursor: Int): Pair<String, Int> {
         val line = text.substring(lineStart(text, cursor), lineEnd(text, cursor))
