@@ -1245,6 +1245,13 @@ private fun NoteEditorContent(
         )
         bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
     }
+    fun applyInlineEdit(marker: String) {
+        val oldValue = bodyValue
+        val (text, selectionStart, selectionEnd) = NoteText.toggleInlineFormat(
+            oldValue.text, oldValue.selection.start, oldValue.selection.end, marker
+        )
+        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+    }
     fun shareNote() {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -1555,6 +1562,20 @@ private fun NoteEditorContent(
                         modifier = Modifier.semantics { contentDescription = "Insert bullet point" }
                     ) {
                         Icon(Icons.Default.FormatListBulleted, contentDescription = "Insert bullet point", tint = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("**") },
+                        modifier = Modifier.semantics { contentDescription = "Bold selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("B", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("_") },
+                        modifier = Modifier.semantics { contentDescription = "Italic selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("I", style = MaterialTheme.typography.labelLarge.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = accent)
                     }
                     TextButton(
                         onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeading(text, cursor) } },
