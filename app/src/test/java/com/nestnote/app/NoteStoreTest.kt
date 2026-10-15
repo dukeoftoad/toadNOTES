@@ -163,6 +163,24 @@ class NoteStoreTest {
     }
 
     @Test
+    fun mergeHandlesLargeImportsAndPreservesStableOrder() {
+        val existing = (1L..5_000L).map { id ->
+            NestNote(id = id, title = "Saved $id", body = "Existing", updated = 1)
+        }
+        val incoming = (2_501L..6_000L).map { id ->
+            NestNote(id = id, title = "Imported $id", body = "Incoming", updated = 2)
+        }
+
+        val result = NoteStore.merge(existing, incoming)
+
+        assertEquals(1_000, result.added)
+        assertEquals(2_500, result.updated)
+        assertEquals(6_000, result.notes.size)
+        assertEquals((1L..6_000L).toList(), result.notes.map { it.id })
+        assertEquals("Imported 2501", result.notes[2_500].title)
+    }
+
+    @Test
     fun decodeRejectsDuplicateIdsInImportedBackup() {
         val raw = """[{"id":7,"title":"One","body":"A"},{"id":7,"title":"Two","body":"B"}]"""
         assertEquals(null, NoteStore.decode(raw, requireFields = true))

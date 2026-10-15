@@ -663,21 +663,31 @@ private fun NestNoteApp(store: NoteStore) {
 
         pendingRestore?.let { incoming ->
             val preview = NoteStore.merge(notes, incoming)
+            val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
             AlertDialog(
                 onDismissRequest = { pendingRestore = null },
                 title = { Text("Review backup restore") },
                 text = {
-                    Text("This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Notes not present in the backup will not be deleted.")
+                    Text(
+                        if (withinNoteLimit) {
+                            "This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Notes not present in the backup will not be deleted."
+                        } else {
+                            "This restore would exceed NESTNOTE's ${NoteStore.MAX_NOTES}-note limit. Remove notes or choose a smaller backup before restoring."
+                        }
+                    )
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        if (persist(preview.notes, allowRecovery = true)) {
-                            pendingRestore = null
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
+                    TextButton(
+                        enabled = withinNoteLimit,
+                        onClick = {
+                            if (persist(preview.notes, allowRecovery = true)) {
+                                pendingRestore = null
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
+                                }
                             }
                         }
-                    }) { Text("Restore notes") }
+                    ) { Text("Restore notes") }
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }

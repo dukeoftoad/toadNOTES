@@ -235,7 +235,9 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     note.updated > current.updated -> { byId[note.id] = note; updated++ }
                 }
             }
-            val order = existing.map { it.id } + incoming.map { it.id }.filter { id -> existing.none { it.id == id } }
+            // Build membership once: repeated scans of `existing` make large restores quadratic.
+            val existingIds = existing.asSequence().map { it.id }.toHashSet()
+            val order = existing.map { it.id } + incoming.map { it.id }.filter { id -> id !in existingIds }
             return MergeResult(order.distinct().mapNotNull { byId[it] }, added, updated)
         }
     }
