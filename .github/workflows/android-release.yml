@@ -58,8 +58,17 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon testDebugUnitTest
 
-      - name: Build release APK
-        run: gradle --no-daemon assembleRelease
+      - name: Build release APK with release version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          VERSION_CODE: ${{ github.run_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="${RELEASE_TAG#v}"
+          gradle --no-daemon assembleRelease \
+            -PversionName="$VERSION_NAME" \
+            -PversionCode="$VERSION_CODE"
 
       - name: Sign APK with permanent key
         env:
