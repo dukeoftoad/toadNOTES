@@ -661,5 +661,5 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Extended the contextual toolbar with **Bold** and *Italic* controls, alongside H1, checklist, and bullet actions.
 - Selected text is wrapped in Markdown markers and remains selected; invoking the same control on an already-wrapped selection removes the markers. With a collapsed cursor, the control inserts a marker pair and places the cursor between them.
 - Added JVM tests for wrapping/unwrapping selected text and inserting a marker pair at the cursor.
-- Commits: `2fa1064` (formatting helper), `178e1f2` (tests), `0691bf b` (toolbar; abbreviated SHA should be read as `0691bf b` only for this note).
+- Commits: `2fa1064` (formatting helper), `178e1f2` (tests), `0691bfbb` (toolbar commit; full SHA: `0691bfbbda94c7423bfd10ab8da46ff64ae5d507`).
 - Validation: exact-head Android CI remains unconfirmed; no emulator or accessibility testing claimed.
