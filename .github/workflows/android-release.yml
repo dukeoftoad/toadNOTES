@@ -1,18 +1,13 @@
 name: Android Release
 
-# No push/tag trigger: a person must start this workflow.
+# Releases happen only when someone manually runs this workflow.
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Version to publish only if publication is explicitly approved (for example v1.2.1).'
-        required: false
-        type: string
-      publish_release:
-        description: 'APPROVAL GATE: create a version tag and publish a GitHub Release. Leave unchecked for artifact only.'
+        description: 'Release version (for example v1.2.1)'
         required: true
-        default: false
-        type: boolean
+        type: string
 
 permissions:
   contents: write
@@ -24,45 +19,54 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Use a version like v1.2.1."
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::That release already exists."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::That tag already exists."
+            exit 1
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
       - name: Install Android SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Validate release approval and version
-        env:
-          PUBLISH_RELEASE: ${{ inputs.publish_release }}
-          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$PUBLISH_RELEASE" == "true" ]]; then
-            if [[ ! "$RELEASE_TAG_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "::error::Approval requires a vMAJOR.MINOR.PATCH tag, e.g. v1.2.1."
-              exit 1
-            fi
-          elif [[ -n "$RELEASE_TAG_INPUT" ]]; then
-            echo "::notice::Publication is not approved; no tag or release will be created."
-          fi
+
       - name: Run unit tests
         run: gradle --no-daemon testDebugUnitTest
+
       - name: Build release APK
         run: gradle --no-daemon assembleRelease
-      - name: Sign production APK with permanent key
+
+      - name: Sign APK with permanent key
         env:
           SIGNING_KEY: ${{ secrets.KEYSTORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          PUBLISH_RELEASE: ${{ inputs.publish_release }}
-          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -70,6 +74,7 @@ jobs:
           : "${KEY_ALIAS:?KEY_ALIAS secret is required}"
           : "${KEY_STORE_PASSWORD:?KEYSTORE_PASSWORD secret is required}"
           : "${KEY_PASSWORD:?KEY_PASSWORD secret is required}"
+
           KEYSTORE_PATH="$RUNNER_TEMP/nestnote-production.jks"
           trap 'rm -f "$KEYSTORE_PATH"' EXIT
           if ! printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 --decode > "$KEYSTORE_PATH"; then
@@ -77,28 +82,27 @@ jobs:
             exit 1
           fi
           test -s "$KEYSTORE_PATH" || { echo "::error::Decoded keystore is empty."; exit 1; }
-          if [[ "$PUBLISH_RELEASE" == "true" ]]; then APK_NAME="NESTNOTE-$RELEASE_TAG_INPUT.apk"; else APK_NAME="NESTNOTE-${GITHUB_SHA:0:7}.apk"; fi
+
           keytool -list -keystore "$KEYSTORE_PATH" -storepass "$KEY_STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$KEYSTORE_PATH" --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$KEY_STORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out "$APK_NAME" app/build/outputs/apk/release/app-release-unsigned.apk
+          APK_NAME="NESTNOTE-$RELEASE_TAG.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEY_STORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --out "$APK_NAME" \
+            app/build/outputs/apk/release/app-release-unsigned.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK_NAME"
           echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
-      - name: Upload signed APK as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: NESTNOTE-signed-${{ github.sha }}
-          path: NESTNOTE-*.apk
-          if-no-files-found: error
-          retention-days: 30
-      - name: Publish release (explicit approval only)
-        if: inputs.publish_release == true
+
+      - name: Publish APK to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
-        shell: bash
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          TARGET_TAG="$RELEASE_TAG_INPUT"
-          if gh release view "$TARGET_TAG" >/dev/null 2>&1; then echo "::error::Release already exists; refusing to overwrite."; exit 1; fi
-          if git rev-parse -q --verify "refs/tags/$TARGET_TAG" >/dev/null; then echo "::error::Tag already exists; refusing to move or overwrite it."; exit 1; fi
-          gh release create "$TARGET_TAG" "$APK_NAME" --title "NESTNOTE $TARGET_TAG" --generate-notes --target "$GITHUB_SHA"
-          gh release view "$TARGET_TAG" --json assets --jq '.assets[].name' | grep -Fx "$APK_NAME"
+          gh release create "$RELEASE_TAG" "$APK_NAME" \
+            --title "NESTNOTE $RELEASE_TAG" \
+            --generate-notes \
+            --target "$GITHUB_SHA"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fx "$APK_NAME"
