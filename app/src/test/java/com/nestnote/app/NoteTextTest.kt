@@ -22,6 +22,22 @@ class NoteTextTest {
     }
 
     @Test
+    fun headingToggleAddsAndRemovesPrefixWithoutChangingOtherLines() {
+        assertEquals("# Heading\nbody", NoteText.toggleHeading("Heading\nbody", 3).first)
+        assertEquals("Heading\nbody", NoteText.toggleHeading("# Heading\nbody", 5).first)
+    }
+
+    @Test
+    fun headingTogglePreservesIndentationAndCursorPosition() {
+        val (heading, cursor) = NoteText.toggleHeading("  title", 5)
+        assertEquals("  # title", heading)
+        assertEquals(7, cursor)
+        val (plain, plainCursor) = NoteText.toggleHeading(heading, cursor)
+        assertEquals("  title", plain)
+        assertEquals(5, plainCursor)
+    }
+
+    @Test
     fun checklistCyclesThroughUncheckedCheckedAndPlain() {
         val (unchecked, c1) = NoteText.cycleChecklist("buy milk", 8)
         assertEquals("☐ buy milk", unchecked)
