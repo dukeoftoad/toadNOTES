@@ -1556,6 +1556,13 @@ private fun NoteEditorContent(
                     ) {
                         Icon(Icons.Default.FormatListBulleted, contentDescription = "Insert bullet point", tint = accent)
                     }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeading(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle heading on current line" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("H1", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
                     Spacer(Modifier.weight(1f))
                     if (showCounts) {
                         val words = NoteText.wordCount(body)
