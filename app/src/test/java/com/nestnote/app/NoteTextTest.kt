@@ -39,6 +39,30 @@ class NoteTextTest {
     }
 
     @Test
+    fun inlineFormattingSupportsStrikethroughAndInlineCodeMarkers() {
+        val struck = NoteText.toggleInlineFormat("not this", 4, 8, "~~")
+        assertEquals("not ~~this~~", struck.first)
+        assertEquals("not this", NoteText.toggleInlineFormat(struck.first, struck.second, struck.third, "~~").first)
+
+        val code = NoteText.toggleInlineFormat("run command", 4, 11, "`")
+        assertEquals("run `command`", code.first)
+        assertEquals("run command", NoteText.toggleInlineFormat(code.first, code.second, code.third, "`").first)
+    }
+
+    @Test
+    fun inlineFormattingClampsSelectionAndRejectsEmptyMarker() {
+        val result = NoteText.toggleInlineFormat("abc", -10, 20, "**")
+        assertEquals("**abc**", result.first)
+        assertEquals(2 to 5, result.second to result.third)
+        try {
+            NoteText.toggleInlineFormat("abc", 0, 1, "")
+            throw AssertionError("An empty marker must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // Expected: empty formatting markers would make toggling ambiguous.
+        }
+    }
+
+    @Test
     fun headingToggleAddsAndRemovesPrefixWithoutChangingOtherLines() {
         assertEquals("# Heading\nbody", NoteText.toggleHeading("Heading\nbody", 3).first)
         assertEquals("Heading\nbody", NoteText.toggleHeading("# Heading\nbody", 5).first)
