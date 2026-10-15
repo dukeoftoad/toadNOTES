@@ -645,3 +645,12 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 
 - Fixed Kotlin compilation failure in the Markdown preview's Android TextView initialization by using `setTextSize(TypedValue.COMPLEX_UNIT_SP, markdownBodySize)`, avoiding the outer editor `textSize` enum shadowing the TextView property.
 - Validation before fix: Android CI run #274 failed at `MainActivity.kt:1436` with “val cannot be reassigned” and a Float/EditorTextSize type mismatch. Awaiting exact-head CI after this fix; no device validation claimed.
+
+
+### Contextual Markdown heading control — 2026-10-15
+
+- Started the editor UX milestone on a fresh branch from updated `main`, rather than trying to merge the stale audit-only PR #17 branch.
+- Added a compact **H1** control beside checklist and bullet actions. It toggles a Markdown `# ` prefix on the current line, preserves indentation, and uses the existing text-selection update path; no new UI files or dependencies were added.
+- Added JVM regression tests for toggling, multi-line isolation, indentation, and cursor adjustment.
+- Commits: `e1c9d0a` (helper), `0ae9089` (tests), `dff5a02` (editor control).
+- Validation boundary: source changes are committed; Android CI has not yet reported for this branch. No emulator/device, dark/light visual, keyboard/insets, large-text, or TalkBack validation is claimed.
