@@ -22,6 +22,23 @@ class NoteTextTest {
     }
 
     @Test
+    fun inlineFormatWrapsSelectionAndCanRemoveExistingMarkers() {
+        val wrapped = NoteText.toggleInlineFormat("hello world", 6, 11, "**")
+        assertEquals("hello **world**", wrapped.first)
+        assertEquals(8 to 13, wrapped.second to wrapped.third)
+        val unwrapped = NoteText.toggleInlineFormat(wrapped.first, wrapped.second, wrapped.third, "**")
+        assertEquals("hello world", unwrapped.first)
+        assertEquals(6 to 11, unwrapped.second to unwrapped.third)
+    }
+
+    @Test
+    fun inlineFormatInsertsMarkerPairAtCollapsedCursor() {
+        val result = NoteText.toggleInlineFormat("abcd", 2, 2, "_")
+        assertEquals("ab__cd", result.first)
+        assertEquals(3 to 3, result.second to result.third)
+    }
+
+    @Test
     fun headingToggleAddsAndRemovesPrefixWithoutChangingOtherLines() {
         assertEquals("# Heading\nbody", NoteText.toggleHeading("Heading\nbody", 3).first)
         assertEquals("Heading\nbody", NoteText.toggleHeading("# Heading\nbody", 5).first)
