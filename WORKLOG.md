@@ -672,3 +672,10 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added JVM regression cases for strikethrough/code wrap-and-unwrap behavior, clamped selection bounds, and rejecting an empty marker.
 - Commits: `0addc28` (toolbar actions and scroll behavior), `05a0e50` (formatting regression tests).
 - Validation: Android CI was green on the previous head (`936e10e`); the new commits require a fresh exact-head CI run. No emulator/device or visual/accessibility testing claimed.
+
+
+### Markdown preview safety regression tests — 2026-10-15
+
+- Added Robolectric JVM tests for the Markdown preview boundary: raw HTML must not create image or link spans, normal Markdown links remain links, raw HTML anchors do not become links, and empty/plain-text bodies are handled.
+- Test file commit: `547dbffbe2da79e7341158d411b448da6c428801`.
+- Validation pending for this new commit; the earlier exact-head CI success does not validate this increment. No device or visual testing claimed.
