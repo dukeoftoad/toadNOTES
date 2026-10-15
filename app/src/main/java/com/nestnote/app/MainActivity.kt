@@ -201,7 +201,8 @@ private fun NestNoteApp(store: NoteStore) {
         return saved
     }
     fun deleteNote(note: NestNote, closeEditor: Boolean = false) {
-        persist(notes.filterNot { it.id == note.id })
+        // Do not dismiss the editor or offer Undo unless deletion was persisted.
+        if (!persist(notes.filterNot { it.id == note.id })) return
         if (closeEditor) editorVisible = false
         coroutineScope.launch {
             val result = snackbarHostState.showSnackbar(
@@ -1286,9 +1287,16 @@ private fun NoteEditorContent(
                         )
                     }
                     DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
-                        DropdownMenuItem(text = { Text("Later today") }, onClick = {
-                            reminderMenu = false; reminder = NoteText.formatReminder(NoteText.laterToday(Calendar.getInstance()))
-                        })
+                        // Hide this preset when three hours from now would cross into tomorrow.
+                        val laterToday = NoteText.laterTodayOrNull(Calendar.getInstance())
+                        if (laterToday != null) {
+                            DropdownMenuItem(text = { Text("Later today") }, onClick = {
+                                reminderMenu = false
+                                NoteText.laterTodayOrNull(Calendar.getInstance())?.let {
+                                    reminder = NoteText.formatReminder(it)
+                                }
+                            })
+                        }
                         DropdownMenuItem(text = { Text("Tomorrow morning") }, onClick = {
                             reminderMenu = false; reminder = NoteText.formatReminder(NoteText.tomorrowMorning(Calendar.getInstance()))
                         })
