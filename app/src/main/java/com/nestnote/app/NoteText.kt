@@ -38,6 +38,7 @@ object NoteText {
     private fun prefixOf(line: String): String? {
         val content = line.substring(indentOf(line).length)
         return listPrefixes.firstOrNull { content.startsWith(it) }
+            ?: Regex("""^\\d+\\. """).find(content)?.value
     }
 
     /** Replaces the list prefix of the cursor's line. Returns new text and new cursor. */
@@ -96,6 +97,28 @@ object NoteText {
         return next to nextCursor.coerceIn(0, next.length)
     }
 
+    /** Toggles a Markdown numbered-list prefix on the current line. */
+    fun toggleNumberedList(text: String, cursor: Int): Pair<String, Int> {
+        val c = cursor.coerceIn(0, text.length)
+        val start = lineStart(text, c)
+        val end = lineEnd(text, c)
+        val line = text.substring(start, end)
+        val indent = indentOf(line)
+        val contentStart = start + indent.length
+        val content = text.substring(contentStart, end)
+        val match = Regex("""^\\d+\\. """).find(content)
+        val replacement = if (match != null) {
+            content.removeRange(0, match.value.length)
+        } else {
+            val existing = prefixOf(line).orEmpty()
+            val plain = content.removePrefix(existing)
+            "1. " + plain
+        }
+        val updated = text.substring(0, contentStart) + replacement + text.substring(end)
+        val delta = replacement.length - content.length
+        return updated to (c + if (c >= contentStart) delta else 0).coerceIn(0, updated.length)
+    }
+
     /** Cycles the current line: plain → ☐ → ☑ → plain. */
     fun cycleChecklist(text: String, cursor: Int): Pair<String, Int> {
         val line = text.substring(lineStart(text, cursor), lineEnd(text, cursor))
@@ -129,7 +152,12 @@ object NoteText {
             return old.removeRange(start, start + indent.length + prefix.length) to start
         }
         // Keep the item's indentation so nested lists continue at the same level.
-        val nextPrefix = indent + if (prefix == CHECKED) UNCHECKED else prefix
+        val continuedPrefix = when {
+            prefix == CHECKED -> UNCHECKED
+            Regex("""^\\d+\\. """).matches(prefix) -> "${prefix.substringBefore('.').toInt() + 1}. "
+            else -> prefix
+        }
+        val nextPrefix = indent + continuedPrefix
         return (new.substring(0, cursor) + nextPrefix + new.substring(cursor)) to (cursor + nextPrefix.length)
     }
 
