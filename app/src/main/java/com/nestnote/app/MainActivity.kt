@@ -1580,6 +1580,13 @@ private fun NoteEditorContent(
                         Text("1.", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
                     TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle blockquote" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("Quote", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
                         onClick = { applyMarkdownLink() },
                         modifier = Modifier.semantics { contentDescription = "Insert Markdown link" },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
