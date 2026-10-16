@@ -696,3 +696,11 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added JVM regression tests for add/remove, indentation, current-line isolation, prefix replacement, and sequential numbering including rollover from 9 to 10.
 - Storage schema, encrypted persistence, backup format, and dependencies are unchanged.
 - Validation: exact-head Android CI must pass after this change. No device/emulator, keyboard/insets, accessibility, or visual testing is claimed by this source update.
+
+
+### Markdown link insertion — 2026-10-16
+
+- Added a `Link` action to the existing horizontally scrollable editor toolbar. With selected text, it wraps the selection as a Markdown link label; with a collapsed cursor, it inserts an editable `[text](https://)` template.
+- Places the cursor after the URL scheme so the destination can be typed immediately, while keeping the note's Markdown source editable and compatible with the existing safe preview.
+- Added JVM regression coverage for selected labels and collapsed-cursor insertion. No storage schema, backup format, or dependency changes.
+- Validation: exact-head Android CI is still required; no device/emulator or accessibility checks are claimed.
