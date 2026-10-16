@@ -3,18 +3,6 @@ name: NESTNOTE F-Droid Repository
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Published release tag to publish (for example v2.0.0)'
-        required: true
-        type: string
-      emergency_publish:
-        description: 'Allow publishing a non-major release for a critical security or bug fix'
-        required: false
-        default: false
-        type: boolean
-
 permissions:
   contents: write
 
@@ -24,14 +12,13 @@ concurrency:
 
 jobs:
   publish:
-    # Automatic publishing is limited to major SemVer releases (vX.0.0).
-    # Manual runs remain available for an explicitly approved emergency release.
+    # Publish only stable major SemVer releases (vX.0.0).
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'release' &&
-       startsWith(github.event.release.tag_name, 'v') &&
-       endsWith(github.event.release.tag_name, '.0.0') &&
-       !contains(github.event.release.tag_name, '-'))
+      github.event_name == 'release' &&
+      github.event.action == 'published' &&
+      startsWith(github.event.release.tag_name, 'v') &&
+      endsWith(github.event.release.tag_name, '.0.0') &&
+      !contains(github.event.release.tag_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,23 +29,11 @@ jobs:
       - name: Validate release asset
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || github.ref_name }}
-          EMERGENCY_PUBLISH: ${{ inputs.emergency_publish || false }}
-          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::F-Droid publishing requires a release tag like v2.0.0."
-            exit 1
-          fi
-
-          if [[ "$EVENT_NAME" == "release" && ! "$RELEASE_TAG" =~ ^v[0-9]+\.0\.0$ ]]; then
-            echo "Skipping non-major release $RELEASE_TAG; automatic F-Droid publishing is major-only."
-            exit 0
-          fi
-
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && ! "$RELEASE_TAG" =~ ^v[0-9]+\.0\.0$ && "$EMERGENCY_PUBLISH" != "true" ]]; then
-            echo "::error::Manual publishing of a non-major release requires emergency_publish=true."
             exit 1
           fi
 
