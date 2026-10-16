@@ -79,6 +79,29 @@ class NoteTextTest {
     }
 
     @Test
+    fun numberedListToggleAddsAndRemovesPrefixWithoutChangingIndentation() {
+        val (numbered, cursor) = NoteText.toggleNumberedList("  first", 7)
+        assertEquals("  1. first", numbered)
+        assertEquals(10, cursor)
+        val (plain, plainCursor) = NoteText.toggleNumberedList(numbered, cursor)
+        assertEquals("  first", plain)
+        assertEquals(7, plainCursor)
+    }
+
+    @Test
+    fun numberedListToggleOnlyChangesCurrentLineAndReplacesOtherListPrefix() {
+        assertEquals("☐ first\\n1. second\\nthird", NoteText.toggleNumberedList("☐ first\\n• second\\nthird", 12).first)
+    }
+
+    @Test
+    fun enterContinuesNumberedListsAndIncrementsTheNumber() {
+        val old = "1. first"
+        assertEquals("1. first\\n2. ", NoteText.continueList(old, "$old\\n", old.length + 1)!!.first)
+        val second = "  9. nested"
+        assertEquals("  9. nested\\n  10. ", NoteText.continueList(second, "$second\\n", second.length + 1)!!.first)
+    }
+
+    @Test
     fun checklistCyclesThroughUncheckedCheckedAndPlain() {
         val (unchecked, c1) = NoteText.cycleChecklist("buy milk", 8)
         assertEquals("☐ buy milk", unchecked)
