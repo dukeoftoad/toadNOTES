@@ -1566,6 +1566,13 @@ private fun NoteEditorContent(
                         Icon(Icons.Default.FormatListBulleted, contentDescription = "Insert bullet point", tint = accent)
                     }
                     TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle numbered list" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("1.", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
                         onClick = { applyInlineEdit("**") },
                         modifier = Modifier.semantics { contentDescription = "Bold selected text" },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
