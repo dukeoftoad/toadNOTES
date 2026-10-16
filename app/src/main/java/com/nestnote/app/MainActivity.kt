@@ -1622,11 +1622,25 @@ private fun NoteEditorContent(
                         Text("``", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
                     TextButton(
-                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeading(text, cursor) } },
-                        modifier = Modifier.semantics { contentDescription = "Toggle heading on current line" },
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 1) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle level one heading on current line" },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text("H1", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 2) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle level two heading on current line" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("H2", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 3) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle level three heading on current line" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("H3", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
                     if (showCounts) {
                         val words = NoteText.wordCount(body)
