@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import android.app.TimePickerDialog
 import android.os.Build
@@ -1452,6 +1453,7 @@ private fun NoteEditorContent(
                                     setTextColor(ink.toArgb())
                                     setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, markdownBodySize)
                                     setTextIsSelectable(true)
+                                    movementMethod = LinkMovementMethod.getInstance()
                                 }
                             },
                             update = { textView ->
