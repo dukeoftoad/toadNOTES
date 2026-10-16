@@ -704,3 +704,10 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Places the cursor after the URL scheme so the destination can be typed immediately, while keeping the note's Markdown source editable and compatible with the existing safe preview.
 - Added JVM regression coverage for selected labels and collapsed-cursor insertion. No storage schema, backup format, or dependency changes.
 - Validation: exact-head Android CI is still required; no device/emulator or accessibility checks are claimed.
+
+
+### Blockquote formatting — 2026-10-16
+
+- Added a `Quote` action to toggle the Markdown `> ` prefix on the current line, preserving indentation and adjusting the cursor when adding/removing the prefix.
+- Added JVM regression coverage for add/remove behavior, indentation, cursor movement, and limiting the change to the current line.
+- Works with the existing Markdown source/preview pipeline; no storage or dependency changes. Exact-head CI remains pending.
