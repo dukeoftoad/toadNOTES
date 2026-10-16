@@ -105,23 +105,31 @@ object NoteText {
         return updated to nextCursor.coerceIn(0, updated.length)
     }
 
-    /** Toggles a Markdown level-one heading prefix on the cursor's line. */
-    fun toggleHeading(text: String, cursor: Int): Pair<String, Int> {
+    /** Toggles a Markdown heading level (1–6) on the cursor's line. */
+    fun toggleHeadingLevel(text: String, cursor: Int, level: Int): Pair<String, Int> {
+        require(level in 1..6) { "Heading level must be between 1 and 6" }
         val c = cursor.coerceIn(0, text.length)
         val start = lineStart(text, c)
-        val line = text.substring(start, lineEnd(text, c))
+        val end = lineEnd(text, c)
+        val line = text.substring(start, end)
         val contentStart = start + indentOf(line).length
-        val prefix = if (text.startsWith("# ", contentStart)) "" else "# "
-        val next = if (prefix.isEmpty()) {
-            text.removeRange(contentStart, contentStart + 2)
+        val content = text.substring(contentStart, end)
+        val existing = Regex("""^#{1,6} """).find(content)?.value.orEmpty()
+        val desired = "#".repeat(level) + " "
+        val replacement = if (existing == desired) "" else desired
+        val next = text.substring(0, contentStart) + replacement +
+            text.substring(contentStart + existing.length)
+        val nextCursor = if (c >= contentStart + existing.length) {
+            c + replacement.length - existing.length
         } else {
-            text.substring(0, contentStart) + prefix + text.substring(contentStart)
+            c
         }
-        val nextCursor = if (prefix.isEmpty() && c >= contentStart + 2) c - 2
-            else if (prefix.isNotEmpty() && c >= contentStart) c + 2
-            else c
         return next to nextCursor.coerceIn(0, next.length)
     }
+
+    /** Backwards-compatible level-one heading action. */
+    fun toggleHeading(text: String, cursor: Int): Pair<String, Int> =
+        toggleHeadingLevel(text, cursor, 1)
 
     /** Toggles a Markdown numbered-list prefix on the current line. */
     fun toggleNumberedList(text: String, cursor: Int): Pair<String, Int> {
