@@ -72,11 +72,11 @@ class NoteTextTest {
     fun headingLevelsCanBeChangedAndToggledOffWithoutStackingMarkers() {
         val (h2, h2Cursor) = NoteText.toggleHeadingLevel("Title", 3, 2)
         assertEquals("## Title", h2)
-        assertEquals(5, h2Cursor)
+        assertEquals(6, h2Cursor)
 
         val (h3, h3Cursor) = NoteText.toggleHeadingLevel(h2, h2Cursor, 3)
         assertEquals("### Title", h3)
-        assertEquals(6, h3Cursor)
+        assertEquals(7, h3Cursor)
 
         val (plain, plainCursor) = NoteText.toggleHeadingLevel(h3, h3Cursor, 3)
         assertEquals("Title", plain)
@@ -87,7 +87,7 @@ class NoteTextTest {
     fun headingLevelsPreserveIndentationAndOnlyChangeCurrentLine() {
         val (updated, cursor) = NoteText.toggleHeadingLevel("first\n  title\nlast", 9, 2)
         assertEquals("first\n  ## title\nlast", updated)
-        assertEquals(11, cursor)
+        assertEquals(12, cursor)
     }
 
     @Test
