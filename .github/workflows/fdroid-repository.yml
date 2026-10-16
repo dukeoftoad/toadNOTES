@@ -82,8 +82,14 @@ jobs:
 
       - name: Install F-Droid server tools
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fdroidserver
+          sudo apt-get install -y python3-pip
+          # Ubuntu's packaged fdroidserver 2.2.1 ships an old Androguard
+          # that cannot parse the Android resource table in current APKs.
+          # Install the current upstream F-Droid server package instead.
+          python3 -m pip install --break-system-packages --upgrade fdroidserver
+          fdroid --version
 
       - name: Configure repository signing
         env:
