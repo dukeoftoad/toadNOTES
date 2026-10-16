@@ -79,6 +79,17 @@ object NoteText {
         }
     }
 
+    /** Inserts a Markdown link; selected text becomes its label, with the URL ready to edit. */
+    fun insertMarkdownLink(text: String, selectionStart: Int, selectionEnd: Int): Triple<String, Int, Int> {
+        val start = selectionStart.coerceIn(0, text.length)
+        val end = selectionEnd.coerceIn(start, text.length)
+        val label = if (start == end) "text" else text.substring(start, end)
+        val replacement = "[$label](https://)"
+        val updated = text.substring(0, start) + replacement + text.substring(end)
+        val urlStart = start + label.length + 3
+        return Triple(updated, urlStart, urlStart)
+    }
+
     /** Toggles a Markdown level-one heading prefix on the cursor's line. */
     fun toggleHeading(text: String, cursor: Int): Pair<String, Int> {
         val c = cursor.coerceIn(0, text.length)
