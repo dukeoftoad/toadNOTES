@@ -79,6 +79,18 @@ class NoteTextTest {
     }
 
     @Test
+    fun markdownLinkInsertionUsesSelectedTextAndPlacesCursorInUrl() {
+        val selected = NoteText.insertMarkdownLink("visit site now", 6, 10)
+        assertEquals("visit [site](https://) now", selected.first)
+        assertEquals(selected.second, selected.third)
+        assertEquals("visit [site](https://) now".indexOf("https://") + "https://".length, selected.second)
+
+        val empty = NoteText.insertMarkdownLink("abc", 1, 1)
+        assertEquals("a[text](https://)bc", empty.first)
+        assertEquals(empty.first.indexOf("https://") + "https://".length, empty.second)
+    }
+
+    @Test
     fun numberedListToggleAddsAndRemovesPrefixWithoutChangingIndentation() {
         val (numbered, cursor) = NoteText.toggleNumberedList("  first", 7)
         assertEquals("  1. first", numbered)
