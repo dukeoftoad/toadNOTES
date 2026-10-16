@@ -1,7 +1,10 @@
 name: Android Release
 
-# Releases happen only when someone manually runs this workflow.
+# Publish a signed release when a version tag is pushed, or run manually.
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -19,11 +22,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
 
       - name: Validate version
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -34,8 +39,9 @@ jobs:
             echo "::error::That release already exists."
             exit 1
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "::error::That tag already exists."
+          # Manual runs create the tag; tag-triggered runs already have one.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] && git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::That tag already exists. Push a new version tag to publish automatically."
             exit 1
           fi
 
@@ -60,7 +66,7 @@ jobs:
 
       - name: Build release APK with release version
         env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
           VERSION_CODE: ${{ github.run_number }}
         shell: bash
         run: |
@@ -76,7 +82,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,11 +114,18 @@ jobs:
       - name: Publish APK to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          gh release create "$RELEASE_TAG" "$APK_NAME" \
-            --title "NESTNOTE $RELEASE_TAG" \
-            --generate-notes \
-            --target "$GITHUB_SHA"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            gh release create "$RELEASE_TAG" "$APK_NAME" \
+              --title "NESTNOTE $RELEASE_TAG" \
+              --generate-notes \
+              --target "$GITHUB_SHA"
+          else
+            gh release create "$RELEASE_TAG" "$APK_NAME" \
+              --title "NESTNOTE $RELEASE_TAG" \
+              --generate-notes
+          fi
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fx "$APK_NAME"

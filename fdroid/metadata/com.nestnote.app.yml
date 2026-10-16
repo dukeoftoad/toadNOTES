@@ -1,0 +1,19 @@
+Categories:
+  - Writing
+License: GPL-3.0-only
+AuthorName: dukeoftoad
+WebSite: https://github.com/dukeoftoad/toadNOTES
+SourceCode: https://github.com/dukeoftoad/toadNOTES
+IssueTracker: https://github.com/dukeoftoad/toadNOTES/issues
+AutoName: NESTNOTE
+Summary: A local-first, encrypted note-taking app for Android.
+Description: |
+  NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, and Material 3.
+
+  Features include creating, editing, pinning, archiving, restoring, searching, sorting, and deleting notes; categories and note colours; light and dark themes; full-screen and quick editors; checklist and bullet tools; writing statistics; JSON backup and restore; and local-data recovery safeguards.
+
+  Notes are stored locally with encrypted payloads using AES-GCM and Android Keystore. NESTNOTE has no account or cloud sync. User-exported JSON backups are plaintext and should be stored securely.
+
+RepoType: git
+Repo: https://github.com/dukeoftoad/toadNOTES
+Binaries: https://github.com/dukeoftoad/toadNOTES/releases/download/v%v/NESTNOTE-v%v.apk

@@ -1,0 +1,6 @@
+# Local F-Droid repository signing material
+fdroid/keystore.p12
+fdroid/keystore.p12.*
+fdroid/*.p12.bak
+fdroid/*.jks
+fdroid/*.keystore
