@@ -679,3 +679,11 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added Robolectric JVM tests for the Markdown preview boundary: raw HTML must not create image or link spans, normal Markdown links remain links, raw HTML anchors do not become links, and empty/plain-text bodies are handled.
 - Test file commit: `547dbffbe2da79e7341158d411b448da6c428801`.
 - Validation pending for this new commit; the earlier exact-head CI success does not validate this increment. No device or visual testing claimed.
+
+
+### Markdown preview link interaction — 2026-10-16
+
+- Source review found that Markdown links were parsed into `URLSpan`s but the preview `TextView` did not install a movement method, so the links were not reliably actionable despite being rendered as links.
+- Enabled Android's `LinkMovementMethod` on the preview `TextView`; this does not change note storage, parsing, or backup formats.
+- Implementation commit: `18f4d41d30c2d2bc4719ed189755ac7fce8c0fc6`.
+- Exact-head CI is pending. No device/emulator or visual/accessibility validation claimed.
