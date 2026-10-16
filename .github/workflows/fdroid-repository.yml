@@ -1,0 +1,157 @@
+name: NESTNOTE F-Droid Repository
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fdroid-repository
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::F-Droid publishing requires a release tag like v1.2.3."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/apk"
+          gh release download "$RELEASE_TAG" --pattern "NESTNOTE-$RELEASE_TAG.apk" --dir "$RUNNER_TEMP/apk"
+          test -s "$RUNNER_TEMP/apk/NESTNOTE-$RELEASE_TAG.apk"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "APK_PATH=$RUNNER_TEMP/apk/NESTNOTE-$RELEASE_TAG.apk" >> "$GITHUB_ENV"
+
+      - name: Install Android APK inspection tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android build tools
+        run: sdkmanager "build-tools;36.0.0"
+
+      - name: Validate APK identity, version, and signing certificate
+        env:
+          FDROID_ALLOWED_APK_CERT_SHA256: ${{ secrets.FDROID_ALLOWED_APK_CERT_SHA256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${FDROID_ALLOWED_APK_CERT_SHA256:?Add FDROID_ALLOWED_APK_CERT_SHA256 after independently verifying the production release certificate}"
+
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          BADGING="$("$AAPT" dump badging "$APK_PATH")"
+          PACKAGE_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n1)"
+          VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionCode='\([^']*\)'.*/\1/p" | head -n1)"
+          VERSION_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p" | head -n1)"
+
+          [[ "$PACKAGE_NAME" == "com.nestnote.app" ]] || { echo "::error::Unexpected APK application ID: $PACKAGE_NAME"; exit 1; }
+          [[ "$VERSION_CODE" =~ ^[0-9]+$ ]] || { echo "::error::Could not read a numeric APK versionCode."; exit 1; }
+          [[ "$VERSION_NAME" == "${RELEASE_TAG#v}" ]] || { echo "::error::APK versionName '$VERSION_NAME' does not match release tag '$RELEASE_TAG'."; exit 1; }
+
+          "$APKSIGNER" verify --verbose "$APK_PATH"
+          CERT_LINE="$("$APKSIGNER" verify --print-certs "$APK_PATH" | grep -m1 'Signer #1 certificate SHA-256 digest:')"
+          ACTUAL_CERT_SHA256="$(printf '%s\n' "$CERT_LINE" | sed 's/.*: //' | tr -d '[:space:]:-' | tr '[:upper:]' '[:lower:]')"
+          EXPECTED_CERT_SHA256="$(printf '%s' "$FDROID_ALLOWED_APK_CERT_SHA256" | tr -d '[:space:]:-' | tr '[:upper:]' '[:lower:]')"
+          [[ "$EXPECTED_CERT_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::FDROID_ALLOWED_APK_CERT_SHA256 must be a SHA-256 certificate fingerprint."; exit 1; }
+          [[ "$ACTUAL_CERT_SHA256" == "$EXPECTED_CERT_SHA256" ]] || { echo "::error::Release APK certificate does not match the pinned production certificate fingerprint."; exit 1; }
+
+          echo "Validated APK package=$PACKAGE_NAME versionCode=$VERSION_CODE versionName=$VERSION_NAME and pinned signer fingerprint."
+          echo "APK_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "APK_CERT_SHA256=$ACTUAL_CERT_SHA256" >> "$GITHUB_ENV"
+
+      - name: Install F-Droid server tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fdroidserver
+
+      - name: Configure repository signing
+        env:
+          FDROID_KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+          FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
+          FDROID_KEY_ALIAS: ${{ secrets.FDROID_KEY_ALIAS }}
+          FDROID_KEY_PASS: ${{ secrets.FDROID_KEY_PASS }}
+        run: |
+          set -euo pipefail
+          : "${FDROID_KEYSTORE_BASE64:?Add FDROID_KEYSTORE_BASE64 repository secret}"
+          : "${FDROID_KEYSTORE_PASS:?Add FDROID_KEYSTORE_PASS repository secret}"
+          : "${FDROID_KEY_ALIAS:?Add FDROID_KEY_ALIAS repository secret}"
+          : "${FDROID_KEY_PASS:?Add FDROID_KEY_PASS repository secret}"
+          printf '%s' "$FDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > fdroid/keystore.p12
+          test -s fdroid/keystore.p12
+          FDROID_KEYSTORE_PASS="$FDROID_KEYSTORE_PASS" FDROID_KEY_ALIAS="$FDROID_KEY_ALIAS" FDROID_KEY_PASS="$FDROID_KEY_PASS" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path("fdroid/config.yml")
+          text = path.read_text()
+          for placeholder, env_name in (
+              ("${FDROID_KEY_ALIAS}", "FDROID_KEY_ALIAS"),
+              ("${FDROID_KEYSTORE_PASS}", "FDROID_KEYSTORE_PASS"),
+              ("${FDROID_KEY_PASS}", "FDROID_KEY_PASS"),
+          ):
+              text = text.replace(placeholder, os.environ[env_name])
+          path.write_text(text)
+          PY
+          chmod 600 fdroid/keystore.p12
+
+      - name: Prepare F-Droid metadata and repository
+        run: |
+          set -euo pipefail
+          # The committed metadata deliberately has no unverified signing key.
+          # Add the fingerprint only after the APK has passed the pinned-cert check.
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path("fdroid/metadata/com.nestnote.app.yml")
+          text = path.read_text()
+          text = "\n".join(
+              line for line in text.splitlines()
+              if not line.startswith("AllowedAPKSigningKeys:")
+          ).rstrip()
+          text += "\nAllowedAPKSigningKeys:\n  - " + os.environ["APK_CERT_SHA256"] + "\n"
+          path.write_text(text)
+          PY
+
+          mkdir -p fdroid/repo
+          APK_NAME="com.nestnote.app_${APK_VERSION_CODE}.apk"
+          install -m 644 "$APK_PATH" "fdroid/repo/$APK_NAME"
+
+          # Run from the directory that owns config.yml, metadata/, and repo/.
+          cd fdroid
+          fdroid update --verbose
+          test -s repo/index.jar || test -s repo/index-v1.jar
+          test -s "repo/$APK_NAME"
+
+      - name: Publish repository to GitHub Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Publish only generated public repository files. Never publish config.yml,
+          # metadata, or the private signing keystore to the gh-pages branch.
+          mkdir -p "$RUNNER_TEMP/fdroid-pages/fdroid"
+          cp -a fdroid/repo "$RUNNER_TEMP/fdroid-pages/fdroid/repo"
+          rm -f fdroid/keystore.p12
+          cd "$RUNNER_TEMP/fdroid-pages"
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "Publish NESTNOTE F-Droid repository for $RELEASE_TAG"
+          git push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" HEAD:gh-pages
