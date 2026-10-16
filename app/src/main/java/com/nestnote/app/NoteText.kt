@@ -38,7 +38,7 @@ object NoteText {
     private fun prefixOf(line: String): String? {
         val content = line.substring(indentOf(line).length)
         return listPrefixes.firstOrNull { content.startsWith(it) }
-            ?: Regex("""^\\d+\\. """).find(content)?.value
+            ?: Regex("""^\d+\. """).find(content)?.value
     }
 
     /** Replaces the list prefix of the cursor's line. Returns new text and new cursor. */
@@ -106,7 +106,7 @@ object NoteText {
         val indent = indentOf(line)
         val contentStart = start + indent.length
         val content = text.substring(contentStart, end)
-        val match = Regex("""^\\d+\\. """).find(content)
+        val match = Regex("""^\d+\. """).find(content)
         val replacement = if (match != null) {
             content.removeRange(0, match.value.length)
         } else {
@@ -154,7 +154,7 @@ object NoteText {
         // Keep the item's indentation so nested lists continue at the same level.
         val continuedPrefix = when {
             prefix == CHECKED -> UNCHECKED
-            Regex("""^\\d+\\. """).matches(prefix) -> "${prefix.substringBefore('.').toInt() + 1}. "
+            Regex("""^\d+\. """).matches(prefix) -> "${prefix.substringBefore('.').toInt() + 1}. "
             else -> prefix
         }
         val nextPrefix = indent + continuedPrefix
