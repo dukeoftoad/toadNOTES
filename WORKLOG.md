@@ -711,3 +711,12 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added a `Quote` action to toggle the Markdown `> ` prefix on the current line, preserving indentation and adjusting the cursor when adding/removing the prefix.
 - Added JVM regression coverage for add/remove behavior, indentation, cursor movement, and limiting the change to the current line.
 - Works with the existing Markdown source/preview pipeline; no storage or dependency changes. Exact-head CI remains pending.
+
+
+### Markdown heading levels — 2026-10-16
+
+- Generalized heading toggling to support Markdown levels 1–6, switching an existing heading level instead of stacking prefixes.
+- Added H1, H2, and H3 toolbar actions with explicit accessibility descriptions; the existing horizontal scroll keeps the controls reachable on narrow screens.
+- Added JVM regression coverage for switching levels, toggling a heading off, indentation, line isolation, cursor adjustment, and invalid levels.
+- Existing H1 helper remains as a compatibility wrapper. Note storage, backup format, and dependencies are unchanged.
+- Exact-head Android CI and device/accessibility checks remain to be verified.
