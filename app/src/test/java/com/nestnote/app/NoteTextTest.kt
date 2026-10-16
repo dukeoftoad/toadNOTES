@@ -69,6 +69,38 @@ class NoteTextTest {
     }
 
     @Test
+    fun headingLevelsCanBeChangedAndToggledOffWithoutStackingMarkers() {
+        val (h2, h2Cursor) = NoteText.toggleHeadingLevel("Title", 3, 2)
+        assertEquals("## Title", h2)
+        assertEquals(5, h2Cursor)
+
+        val (h3, h3Cursor) = NoteText.toggleHeadingLevel(h2, h2Cursor, 3)
+        assertEquals("### Title", h3)
+        assertEquals(6, h3Cursor)
+
+        val (plain, plainCursor) = NoteText.toggleHeadingLevel(h3, h3Cursor, 3)
+        assertEquals("Title", plain)
+        assertEquals(3, plainCursor)
+    }
+
+    @Test
+    fun headingLevelsPreserveIndentationAndOnlyChangeCurrentLine() {
+        val (updated, cursor) = NoteText.toggleHeadingLevel("first\n  title\nlast", 9, 2)
+        assertEquals("first\n  ## title\nlast", updated)
+        assertEquals(11, cursor)
+    }
+
+    @Test
+    fun headingLevelRejectsValuesOutsideMarkdownRange() {
+        try {
+            NoteText.toggleHeadingLevel("Title", 2, 7)
+            throw AssertionError("Invalid heading levels must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // Expected: Markdown heading levels range from 1 through 6.
+        }
+    }
+
+    @Test
     fun headingTogglePreservesIndentationAndCursorPosition() {
         val (heading, cursor) = NoteText.toggleHeading("  title", 5)
         assertEquals("  # title", heading)
