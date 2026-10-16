@@ -687,3 +687,12 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Enabled Android's `LinkMovementMethod` on the preview `TextView`; this does not change note storage, parsing, or backup formats.
 - Implementation commit: `18f4d41d30c2d2bc4719ed189755ac7fce8c0fc6`.
 - Exact-head CI is pending. No device/emulator or visual/accessibility validation claimed.
+
+
+### Numbered Markdown lists — 2026-10-16
+
+- Added a contextual `1.` toolbar action that toggles a numbered-list prefix on the current line, preserves indentation, and replaces an existing checklist/bullet prefix rather than stacking list markers.
+- Pressing Enter on a numbered item continues the list and increments the number; Enter on an empty numbered item ends the list using the existing continuation behavior.
+- Added JVM regression tests for add/remove, indentation, current-line isolation, prefix replacement, and sequential numbering including rollover from 9 to 10.
+- Storage schema, encrypted persistence, backup format, and dependencies are unchanged.
+- Validation: exact-head Android CI must pass after this change. No device/emulator, keyboard/insets, accessibility, or visual testing is claimed by this source update.
