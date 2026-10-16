@@ -38,6 +38,7 @@ object NoteText {
     private fun prefixOf(line: String): String? {
         val content = line.substring(indentOf(line).length)
         return listPrefixes.firstOrNull { content.startsWith(it) }
+            ?: Regex("""^\d+\. """).find(content)?.value
     }
 
     /** Replaces the list prefix of the cursor's line. Returns new text and new cursor. */
@@ -52,6 +53,104 @@ object NoteText {
         val next = text.substring(0, contentStart) + newPrefix + text.substring(contentStart + old.length)
         val newCursor = (c - old.length + newPrefix.length).coerceAtLeast(contentStart + newPrefix.length)
         return next to newCursor
+    }
+
+    /**
+     * Wraps the current selection in Markdown markers, or inserts an empty marker pair
+     * at a collapsed cursor. Returns updated text and selection bounds.
+     */
+    fun toggleInlineFormat(text: String, selectionStart: Int, selectionEnd: Int, marker: String): Triple<String, Int, Int> {
+        require(marker.isNotEmpty())
+        val start = selectionStart.coerceIn(0, text.length)
+        val end = selectionEnd.coerceIn(start, text.length)
+        if (start == end) {
+            val updated = text.substring(0, start) + marker + marker + text.substring(end)
+            return Triple(updated, start + marker.length, start + marker.length)
+        }
+        val alreadyWrapped = start >= marker.length && end + marker.length <= text.length &&
+            text.substring(start - marker.length, start) == marker &&
+            text.substring(end, end + marker.length) == marker
+        return if (alreadyWrapped) {
+            val updated = text.removeRange(end, end + marker.length).removeRange(start - marker.length, start)
+            Triple(updated, start - marker.length, end - marker.length)
+        } else {
+            val updated = text.substring(0, start) + marker + text.substring(start, end) + marker + text.substring(end)
+            Triple(updated, start + marker.length, end + marker.length)
+        }
+    }
+
+    /** Inserts a Markdown link; selected text becomes its label, with the URL ready to edit. */
+    fun insertMarkdownLink(text: String, selectionStart: Int, selectionEnd: Int): Triple<String, Int, Int> {
+        val start = selectionStart.coerceIn(0, text.length)
+        val end = selectionEnd.coerceIn(start, text.length)
+        val label = if (start == end) "text" else text.substring(start, end)
+        val replacement = "[$label](https://)"
+        val updated = text.substring(0, start) + replacement + text.substring(end)
+        val urlStart = start + label.length + 3 + "https://".length
+        return Triple(updated, urlStart, urlStart)
+    }
+
+    /** Toggles a Markdown blockquote prefix on the cursor's line. */
+    fun toggleBlockquote(text: String, cursor: Int): Pair<String, Int> {
+        val c = cursor.coerceIn(0, text.length)
+        val start = lineStart(text, c)
+        val end = lineEnd(text, c)
+        val line = text.substring(start, end)
+        val contentStart = start + indentOf(line).length
+        val alreadyQuoted = text.startsWith("> ", contentStart)
+        val updated = if (alreadyQuoted) text.removeRange(contentStart, contentStart + 2)
+            else text.substring(0, contentStart) + "> " + text.substring(contentStart)
+        val nextCursor = if (alreadyQuoted && c >= contentStart + 2) c - 2
+            else if (!alreadyQuoted && c >= contentStart) c + 2 else c
+        return updated to nextCursor.coerceIn(0, updated.length)
+    }
+
+    /** Toggles a Markdown heading level (1–6) on the cursor's line. */
+    fun toggleHeadingLevel(text: String, cursor: Int, level: Int): Pair<String, Int> {
+        require(level in 1..6) { "Heading level must be between 1 and 6" }
+        val c = cursor.coerceIn(0, text.length)
+        val start = lineStart(text, c)
+        val end = lineEnd(text, c)
+        val line = text.substring(start, end)
+        val contentStart = start + indentOf(line).length
+        val content = text.substring(contentStart, end)
+        val existing = Regex("""^#{1,6} """).find(content)?.value.orEmpty()
+        val desired = "#".repeat(level) + " "
+        val replacement = if (existing == desired) "" else desired
+        val next = text.substring(0, contentStart) + replacement +
+            text.substring(contentStart + existing.length)
+        val nextCursor = if (c >= contentStart + existing.length) {
+            c + replacement.length - existing.length
+        } else {
+            c
+        }
+        return next to nextCursor.coerceIn(0, next.length)
+    }
+
+    /** Backwards-compatible level-one heading action. */
+    fun toggleHeading(text: String, cursor: Int): Pair<String, Int> =
+        toggleHeadingLevel(text, cursor, 1)
+
+    /** Toggles a Markdown numbered-list prefix on the current line. */
+    fun toggleNumberedList(text: String, cursor: Int): Pair<String, Int> {
+        val c = cursor.coerceIn(0, text.length)
+        val start = lineStart(text, c)
+        val end = lineEnd(text, c)
+        val line = text.substring(start, end)
+        val indent = indentOf(line)
+        val contentStart = start + indent.length
+        val content = text.substring(contentStart, end)
+        val match = Regex("""^\d+\. """).find(content)
+        val replacement = if (match != null) {
+            content.removeRange(0, match.value.length)
+        } else {
+            val existing = prefixOf(line).orEmpty()
+            val plain = content.removePrefix(existing)
+            "1. " + plain
+        }
+        val updated = text.substring(0, contentStart) + replacement + text.substring(end)
+        val delta = replacement.length - content.length
+        return updated to (c + if (c >= contentStart) delta else 0).coerceIn(0, updated.length)
     }
 
     /** Cycles the current line: plain → ☐ → ☑ → plain. */
@@ -87,7 +186,12 @@ object NoteText {
             return old.removeRange(start, start + indent.length + prefix.length) to start
         }
         // Keep the item's indentation so nested lists continue at the same level.
-        val nextPrefix = indent + if (prefix == CHECKED) UNCHECKED else prefix
+        val continuedPrefix = when {
+            prefix == CHECKED -> UNCHECKED
+            Regex("""^\d+\. """).matches(prefix) -> "${prefix.substringBefore('.').toInt() + 1}. "
+            else -> prefix
+        }
+        val nextPrefix = indent + continuedPrefix
         return (new.substring(0, cursor) + nextPrefix + new.substring(cursor)) to (cursor + nextPrefix.length)
     }
 

@@ -22,6 +22,141 @@ class NoteTextTest {
     }
 
     @Test
+    fun inlineFormatWrapsSelectionAndCanRemoveExistingMarkers() {
+        val wrapped = NoteText.toggleInlineFormat("hello world", 6, 11, "**")
+        assertEquals("hello **world**", wrapped.first)
+        assertEquals(8 to 13, wrapped.second to wrapped.third)
+        val unwrapped = NoteText.toggleInlineFormat(wrapped.first, wrapped.second, wrapped.third, "**")
+        assertEquals("hello world", unwrapped.first)
+        assertEquals(6 to 11, unwrapped.second to unwrapped.third)
+    }
+
+    @Test
+    fun inlineFormatInsertsMarkerPairAtCollapsedCursor() {
+        val result = NoteText.toggleInlineFormat("abcd", 2, 2, "_")
+        assertEquals("ab__cd", result.first)
+        assertEquals(3 to 3, result.second to result.third)
+    }
+
+    @Test
+    fun inlineFormattingSupportsStrikethroughAndInlineCodeMarkers() {
+        val struck = NoteText.toggleInlineFormat("not this", 4, 8, "~~")
+        assertEquals("not ~~this~~", struck.first)
+        assertEquals("not this", NoteText.toggleInlineFormat(struck.first, struck.second, struck.third, "~~").first)
+
+        val code = NoteText.toggleInlineFormat("run command", 4, 11, "`")
+        assertEquals("run `command`", code.first)
+        assertEquals("run command", NoteText.toggleInlineFormat(code.first, code.second, code.third, "`").first)
+    }
+
+    @Test
+    fun inlineFormattingClampsSelectionAndRejectsEmptyMarker() {
+        val result = NoteText.toggleInlineFormat("abc", -10, 20, "**")
+        assertEquals("**abc**", result.first)
+        assertEquals(2 to 5, result.second to result.third)
+        try {
+            NoteText.toggleInlineFormat("abc", 0, 1, "")
+            throw AssertionError("An empty marker must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // Expected: empty formatting markers would make toggling ambiguous.
+        }
+    }
+
+    @Test
+    fun headingToggleAddsAndRemovesPrefixWithoutChangingOtherLines() {
+        assertEquals("# Heading\nbody", NoteText.toggleHeading("Heading\nbody", 3).first)
+        assertEquals("Heading\nbody", NoteText.toggleHeading("# Heading\nbody", 5).first)
+    }
+
+    @Test
+    fun headingLevelsCanBeChangedAndToggledOffWithoutStackingMarkers() {
+        val (h2, h2Cursor) = NoteText.toggleHeadingLevel("Title", 3, 2)
+        assertEquals("## Title", h2)
+        assertEquals(6, h2Cursor)
+
+        val (h3, h3Cursor) = NoteText.toggleHeadingLevel(h2, h2Cursor, 3)
+        assertEquals("### Title", h3)
+        assertEquals(7, h3Cursor)
+
+        val (plain, plainCursor) = NoteText.toggleHeadingLevel(h3, h3Cursor, 3)
+        assertEquals("Title", plain)
+        assertEquals(3, plainCursor)
+    }
+
+    @Test
+    fun headingLevelsPreserveIndentationAndOnlyChangeCurrentLine() {
+        val (updated, cursor) = NoteText.toggleHeadingLevel("first\n  title\nlast", 9, 2)
+        assertEquals("first\n  ## title\nlast", updated)
+        assertEquals(12, cursor)
+    }
+
+    @Test
+    fun headingLevelRejectsValuesOutsideMarkdownRange() {
+        try {
+            NoteText.toggleHeadingLevel("Title", 2, 7)
+            throw AssertionError("Invalid heading levels must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // Expected: Markdown heading levels range from 1 through 6.
+        }
+    }
+
+    @Test
+    fun headingTogglePreservesIndentationAndCursorPosition() {
+        val (heading, cursor) = NoteText.toggleHeading("  title", 5)
+        assertEquals("  # title", heading)
+        assertEquals(7, cursor)
+        val (plain, plainCursor) = NoteText.toggleHeading(heading, cursor)
+        assertEquals("  title", plain)
+        assertEquals(5, plainCursor)
+    }
+
+    @Test
+    fun blockquoteTogglePreservesIndentationAndCursor() {
+        val (quoted, cursor) = NoteText.toggleBlockquote("  a thought", 6)
+        assertEquals("  > a thought", quoted)
+        assertEquals(8, cursor)
+        val (plain, plainCursor) = NoteText.toggleBlockquote(quoted, cursor)
+        assertEquals("  a thought", plain)
+        assertEquals(6, plainCursor)
+        assertEquals("first\n> second\nthird", NoteText.toggleBlockquote("first\nsecond\nthird", 9).first)
+    }
+
+    @Test
+    fun markdownLinkInsertionUsesSelectedTextAndPlacesCursorInUrl() {
+        val selected = NoteText.insertMarkdownLink("visit site now", 6, 10)
+        assertEquals("visit [site](https://) now", selected.first)
+        assertEquals(selected.second, selected.third)
+        assertEquals("visit [site](https://) now".indexOf("https://") + "https://".length, selected.second)
+
+        val empty = NoteText.insertMarkdownLink("abc", 1, 1)
+        assertEquals("a[text](https://)bc", empty.first)
+        assertEquals(empty.first.indexOf("https://") + "https://".length, empty.second)
+    }
+
+    @Test
+    fun numberedListToggleAddsAndRemovesPrefixWithoutChangingIndentation() {
+        val (numbered, cursor) = NoteText.toggleNumberedList("  first", 7)
+        assertEquals("  1. first", numbered)
+        assertEquals(10, cursor)
+        val (plain, plainCursor) = NoteText.toggleNumberedList(numbered, cursor)
+        assertEquals("  first", plain)
+        assertEquals(7, plainCursor)
+    }
+
+    @Test
+    fun numberedListToggleOnlyChangesCurrentLineAndReplacesOtherListPrefix() {
+        assertEquals("☐ first\n1. second\nthird", NoteText.toggleNumberedList("☐ first\n• second\nthird", 12).first)
+    }
+
+    @Test
+    fun enterContinuesNumberedListsAndIncrementsTheNumber() {
+        val old = "1. first"
+        assertEquals("1. first\n2. ", NoteText.continueList(old, "$old\n", old.length + 1)!!.first)
+        val second = "  9. nested"
+        assertEquals("  9. nested\n  10. ", NoteText.continueList(second, "$second\n", second.length + 1)!!.first)
+    }
+
+    @Test
     fun checklistCyclesThroughUncheckedCheckedAndPlain() {
         val (unchecked, c1) = NoteText.cycleChecklist("buy milk", 8)
         assertEquals("☐ buy milk", unchecked)

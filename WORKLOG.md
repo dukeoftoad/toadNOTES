@@ -647,6 +647,81 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Validation before fix: Android CI run #274 failed at `MainActivity.kt:1436` with “val cannot be reassigned” and a Float/EditorTextSize type mismatch. Awaiting exact-head CI after this fix; no device validation claimed.
 
 
+### Contextual Markdown heading control — 2026-10-15
+
+- Started the editor UX milestone on a fresh branch from updated `main`, rather than trying to merge the stale audit-only PR #17 branch.
+- Added a compact **H1** control beside checklist and bullet actions. It toggles a Markdown `# ` prefix on the current line, preserves indentation, and uses the existing text-selection update path; no new UI files or dependencies were added.
+- Added JVM regression tests for toggling, multi-line isolation, indentation, and cursor adjustment.
+- Commits: `e1c9d0a` (helper), `0ae9089` (tests), `dff5a02` (editor control).
+- Validation boundary: source changes are committed; Android CI has not yet reported for this branch. No emulator/device, dark/light visual, keyboard/insets, large-text, or TalkBack validation is claimed.
+
+
+### Inline formatting controls — 2026-10-15
+
+- Extended the contextual toolbar with **Bold** and *Italic* controls, alongside H1, checklist, and bullet actions.
+- Selected text is wrapped in Markdown markers and remains selected; invoking the same control on an already-wrapped selection removes the markers. With a collapsed cursor, the control inserts a marker pair and places the cursor between them.
+- Added JVM tests for wrapping/unwrapping selected text and inserting a marker pair at the cursor.
+- Commits: `2fa1064` (formatting helper), `178e1f2` (tests), `0691bfbb` (toolbar commit; full SHA: `0691bfbbda94c7423bfd10ab8da46ff64ae5d507`).
+- Validation: exact-head Android CI remains unconfirmed; no emulator or accessibility testing claimed.
+
+
+### Expanded Markdown toolbar — 2026-10-15
+
+- Extended the existing contextual formatting row with strikethrough and inline-code actions, using the same tested selection-preserving helper as bold/italic.
+- Made the toolbar horizontally scrollable so the additional controls do not force the word/character/read-time summary or formatting actions to compress into a narrow row; removed the weighted spacer that is incompatible with a horizontally scrolling row.
+- Added JVM regression cases for strikethrough/code wrap-and-unwrap behavior, clamped selection bounds, and rejecting an empty marker.
+- Commits: `0addc28` (toolbar actions and scroll behavior), `05a0e50` (formatting regression tests).
+- Validation: Android CI was green on the previous head (`936e10e`); the new commits require a fresh exact-head CI run. No emulator/device or visual/accessibility testing claimed.
+
+
+### Markdown preview safety regression tests — 2026-10-15
+
+- Added Robolectric JVM tests for the Markdown preview boundary: raw HTML must not create image or link spans, normal Markdown links remain links, raw HTML anchors do not become links, and empty/plain-text bodies are handled.
+- Test file commit: `547dbffbe2da79e7341158d411b448da6c428801`.
+- Validation pending for this new commit; the earlier exact-head CI success does not validate this increment. No device or visual testing claimed.
+
+
+### Markdown preview link interaction — 2026-10-16
+
+- Source review found that Markdown links were parsed into `URLSpan`s but the preview `TextView` did not install a movement method, so the links were not reliably actionable despite being rendered as links.
+- Enabled Android's `LinkMovementMethod` on the preview `TextView`; this does not change note storage, parsing, or backup formats.
+- Implementation commit: `18f4d41d30c2d2bc4719ed189755ac7fce8c0fc6`.
+- Exact-head CI is pending. No device/emulator or visual/accessibility validation claimed.
+
+
+### Numbered Markdown lists — 2026-10-16
+
+- Added a contextual `1.` toolbar action that toggles a numbered-list prefix on the current line, preserves indentation, and replaces an existing checklist/bullet prefix rather than stacking list markers.
+- Pressing Enter on a numbered item continues the list and increments the number; Enter on an empty numbered item ends the list using the existing continuation behavior.
+- Added JVM regression tests for add/remove, indentation, current-line isolation, prefix replacement, and sequential numbering including rollover from 9 to 10.
+- Storage schema, encrypted persistence, backup format, and dependencies are unchanged.
+- Validation: exact-head Android CI must pass after this change. No device/emulator, keyboard/insets, accessibility, or visual testing is claimed by this source update.
+
+
+### Markdown link insertion — 2026-10-16
+
+- Added a `Link` action to the existing horizontally scrollable editor toolbar. With selected text, it wraps the selection as a Markdown link label; with a collapsed cursor, it inserts an editable `[text](https://)` template.
+- Places the cursor after the URL scheme so the destination can be typed immediately, while keeping the note's Markdown source editable and compatible with the existing safe preview.
+- Added JVM regression coverage for selected labels and collapsed-cursor insertion. No storage schema, backup format, or dependency changes.
+- Validation: exact-head Android CI is still required; no device/emulator or accessibility checks are claimed.
+
+
+### Blockquote formatting — 2026-10-16
+
+- Added a `Quote` action to toggle the Markdown `> ` prefix on the current line, preserving indentation and adjusting the cursor when adding/removing the prefix.
+- Added JVM regression coverage for add/remove behavior, indentation, cursor movement, and limiting the change to the current line.
+- Works with the existing Markdown source/preview pipeline; no storage or dependency changes. Exact-head CI remains pending.
+
+
+### Markdown heading levels — 2026-10-16
+
+- Generalized heading toggling to support Markdown levels 1–6, switching an existing heading level instead of stacking prefixes.
+- Added H1, H2, and H3 toolbar actions with explicit accessibility descriptions; the existing horizontal scroll keeps the controls reachable on narrow screens.
+- Added JVM regression coverage for switching levels, toggling a heading off, indentation, line isolation, cursor adjustment, and invalid levels.
+- Existing H1 helper remains as a compatibility wrapper. Note storage, backup format, and dependencies are unchanged.
+- Exact-head Android CI and device/accessibility checks remain to be verified.
+
+
 ## F-Droid distribution readiness — 2026-10-16
 
 - Owner selected GPL-3.0-only. Added the complete canonical GPL v3 license text to root `LICENSE`; added a README license section.

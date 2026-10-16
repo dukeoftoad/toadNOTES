@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import android.app.TimePickerDialog
 import android.os.Build
@@ -1245,6 +1246,20 @@ private fun NoteEditorContent(
         )
         bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
     }
+    fun applyMarkdownLink() {
+        val oldValue = bodyValue
+        val (text, selectionStart, selectionEnd) = NoteText.insertMarkdownLink(
+            oldValue.text, oldValue.selection.start, oldValue.selection.end
+        )
+        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+    }
+    fun applyInlineEdit(marker: String) {
+        val oldValue = bodyValue
+        val (text, selectionStart, selectionEnd) = NoteText.toggleInlineFormat(
+            oldValue.text, oldValue.selection.start, oldValue.selection.end, marker
+        )
+        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+    }
     fun shareNote() {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -1445,6 +1460,7 @@ private fun NoteEditorContent(
                                     setTextColor(ink.toArgb())
                                     setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, markdownBodySize)
                                     setTextIsSelectable(true)
+                                    movementMethod = LinkMovementMethod.getInstance()
                                 }
                             },
                             update = { textView ->
@@ -1541,7 +1557,7 @@ private fun NoteEditorContent(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
@@ -1556,7 +1572,76 @@ private fun NoteEditorContent(
                     ) {
                         Icon(Icons.Default.FormatListBulleted, contentDescription = "Insert bullet point", tint = accent)
                     }
-                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle numbered list" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("1.", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle blockquote" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("Quote", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyMarkdownLink() },
+                        modifier = Modifier.semantics { contentDescription = "Insert Markdown link" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("Link", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("**") },
+                        modifier = Modifier.semantics { contentDescription = "Bold selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("B", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("_") },
+                        modifier = Modifier.semantics { contentDescription = "Italic selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("I", style = MaterialTheme.typography.labelLarge.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("~~") },
+                        modifier = Modifier.semantics { contentDescription = "Strikethrough selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("S", style = MaterialTheme.typography.labelLarge.copy(textDecoration = TextDecoration.LineThrough), color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyInlineEdit("`") },
+                        modifier = Modifier.semantics { contentDescription = "Inline code selected text" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("``", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 1) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle level one heading on current line" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("H1", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 2) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle level two heading on current line" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("H2", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 3) } },
+                        modifier = Modifier.semantics { contentDescription = "Toggle level three heading on current line" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("H3", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
                     if (showCounts) {
                         val words = NoteText.wordCount(body)
                         val minutes = NoteText.readingMinutes(words)
