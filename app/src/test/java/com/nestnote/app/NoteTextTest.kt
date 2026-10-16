@@ -79,6 +79,17 @@ class NoteTextTest {
     }
 
     @Test
+    fun blockquoteTogglePreservesIndentationAndCursor() {
+        val (quoted, cursor) = NoteText.toggleBlockquote("  a thought", 6)
+        assertEquals("  > a thought", quoted)
+        assertEquals(8, cursor)
+        val (plain, plainCursor) = NoteText.toggleBlockquote(quoted, cursor)
+        assertEquals("  a thought", plain)
+        assertEquals(6, plainCursor)
+        assertEquals("first\n> second\nthird", NoteText.toggleBlockquote("first\nsecond\nthird", 9).first)
+    }
+
+    @Test
     fun markdownLinkInsertionUsesSelectedTextAndPlacesCursorInUrl() {
         val selected = NoteText.insertMarkdownLink("visit site now", 6, 10)
         assertEquals("visit [site](https://) now", selected.first)
