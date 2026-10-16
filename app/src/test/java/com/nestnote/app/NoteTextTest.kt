@@ -90,15 +90,15 @@ class NoteTextTest {
 
     @Test
     fun numberedListToggleOnlyChangesCurrentLineAndReplacesOtherListPrefix() {
-        assertEquals("☐ first\\n1. second\\nthird", NoteText.toggleNumberedList("☐ first\\n• second\\nthird", 12).first)
+        assertEquals("☐ first\n1. second\nthird", NoteText.toggleNumberedList("☐ first\n• second\nthird", 12).first)
     }
 
     @Test
     fun enterContinuesNumberedListsAndIncrementsTheNumber() {
         val old = "1. first"
-        assertEquals("1. first\\n2. ", NoteText.continueList(old, "$old\\n", old.length + 1)!!.first)
+        assertEquals("1. first\n2. ", NoteText.continueList(old, "$old\n", old.length + 1)!!.first)
         val second = "  9. nested"
-        assertEquals("  9. nested\\n  10. ", NoteText.continueList(second, "$second\\n", second.length + 1)!!.first)
+        assertEquals("  9. nested\n  10. ", NoteText.continueList(second, "$second\n", second.length + 1)!!.first)
     }
 
     @Test
