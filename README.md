@@ -15,6 +15,10 @@ NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, an
 - JSON backup and restore through Android's system file picker.
 - Local-data recovery safeguards and validated, versioned backups.
 
+## License
+
+NESTNOTE is intended to be distributed under the GNU General Public License v3.0 only (GPL-3.0-only). See [`LICENSE`](LICENSE) and the [canonical license text](https://www.gnu.org/licenses/gpl-3.0.txt). Confirm contributor/copyright-holder rights before distribution.
+
 ## Install a release
 Visit [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases). Only download an APK attached to a versioned production release and verify its signature before installing. Historical “latest” or “CI-SIGNED” artifacts, if present, are not proof of production signing.
 

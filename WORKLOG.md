@@ -645,3 +645,13 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 
 - Fixed Kotlin compilation failure in the Markdown preview's Android TextView initialization by using `setTextSize(TypedValue.COMPLEX_UNIT_SP, markdownBodySize)`, avoiding the outer editor `textSize` enum shadowing the TextView property.
 - Validation before fix: Android CI run #274 failed at `MainActivity.kt:1436` with “val cannot be reassigned” and a Float/EditorTextSize type mismatch. Awaiting exact-head CI after this fix; no device validation claimed.
+
+
+## F-Droid distribution readiness — 2026-10-16
+
+- Owner selected GPL-3.0-only. Added the complete canonical GPL v3 license text to root `LICENSE`; added a README license section.
+- Added `F-DROID_METADATA_PROPOSAL.md` with package ID, candidate app summary/description, source links, and an explicitly unverified candidate build approach.
+- Updated `F-DROID_DISTRIBUTION.md` with audit results, distribution gates, and evidence limits.
+- Current published upstream release observed: `v1.2.4`. Do not use it as the F-Droid source revision if it predates the license file. Publish a new version tag after the licensing change is merged and validated.
+- Official F-Droid metadata submission is not complete. The metadata proposal must be transferred to the official `fdroiddata` repository and reviewed; this repository PR does not create an F-Droid listing or index.
+- Validation evidence: GitHub Android CI was observed in progress for the PR before the latest documentation commits. Exact-head CI must be checked again. No local F-Droid build, APK installation, reproducibility comparison, or device validation was performed in this session.
