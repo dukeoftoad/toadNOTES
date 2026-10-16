@@ -90,6 +90,21 @@ object NoteText {
         return Triple(updated, urlStart, urlStart)
     }
 
+    /** Toggles a Markdown blockquote prefix on the cursor's line. */
+    fun toggleBlockquote(text: String, cursor: Int): Pair<String, Int> {
+        val c = cursor.coerceIn(0, text.length)
+        val start = lineStart(text, c)
+        val end = lineEnd(text, c)
+        val line = text.substring(start, end)
+        val contentStart = start + indentOf(line).length
+        val alreadyQuoted = text.startsWith("> ", contentStart)
+        val updated = if (alreadyQuoted) text.removeRange(contentStart, contentStart + 2)
+            else text.substring(0, contentStart) + "> " + text.substring(contentStart)
+        val nextCursor = if (alreadyQuoted && c >= contentStart + 2) c - 2
+            else if (!alreadyQuoted && c >= contentStart) c + 2 else c
+        return updated to nextCursor.coerceIn(0, updated.length)
+    }
+
     /** Toggles a Markdown level-one heading prefix on the cursor's line. */
     fun toggleHeading(text: String, cursor: Int): Pair<String, Int> {
         val c = cursor.coerceIn(0, text.length)
