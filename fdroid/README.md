@@ -4,9 +4,7 @@ This directory contains the self-hosted F-Droid repository configuration and met
 
 ## Publishing policy
 
-The F-Droid publishing workflow runs automatically only for stable major-version GitHub Releases tagged `vMAJOR.0.0`, such as `v2.0.0`. It does not publish for patch/minor releases such as `v1.2.5` or `v1.3.0`, nor for prereleases. Ordinary commits, documentation edits, and internal refactoring do not trigger a repository update.
-
-For a critical security fix or urgent bug fix that must be distributed before the next major release, manually run **NESTNOTE F-Droid Repository** from Actions, enter the already-published release tag, and set `emergency_publish` to `true`. Manual publishing still validates the release APK identity, version, and production signing certificate.
+The F-Droid publishing workflow runs automatically when you publish a stable major-version GitHub Release tagged `vMAJOR.0.0`, such as `v2.0.0`. It ignores minor/patch releases such as `v1.2.5` or `v1.3.0`, prereleases, and ordinary code changes. No manual workflow run is needed for a normal major release.
 
 ## 1. Generate the repository signing key once
 
