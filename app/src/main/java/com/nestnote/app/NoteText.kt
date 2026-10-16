@@ -86,7 +86,7 @@ object NoteText {
         val label = if (start == end) "text" else text.substring(start, end)
         val replacement = "[$label](https://)"
         val updated = text.substring(0, start) + replacement + text.substring(end)
-        val urlStart = start + label.length + 3
+        val urlStart = start + label.length + 3 + "https://".length
         return Triple(updated, urlStart, urlStart)
     }
 
