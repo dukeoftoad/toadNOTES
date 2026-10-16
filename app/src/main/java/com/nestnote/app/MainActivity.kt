@@ -1246,6 +1246,13 @@ private fun NoteEditorContent(
         )
         bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
     }
+    fun applyMarkdownLink() {
+        val oldValue = bodyValue
+        val (text, selectionStart, selectionEnd) = NoteText.insertMarkdownLink(
+            oldValue.text, oldValue.selection.start, oldValue.selection.end
+        )
+        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+    }
     fun applyInlineEdit(marker: String) {
         val oldValue = bodyValue
         val (text, selectionStart, selectionEnd) = NoteText.toggleInlineFormat(
@@ -1571,6 +1578,13 @@ private fun NoteEditorContent(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text("1.", style = MaterialTheme.typography.labelLarge, color = accent)
+                    }
+                    TextButton(
+                        onClick = { applyMarkdownLink() },
+                        modifier = Modifier.semantics { contentDescription = "Insert Markdown link" },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("Link", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
                     TextButton(
                         onClick = { applyInlineEdit("**") },
