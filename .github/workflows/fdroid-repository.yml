@@ -6,9 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Published release tag to publish (for example v1.2.4)'
+        description: 'Published release tag to publish (for example v2.0.0)'
         required: true
         type: string
+      emergency_publish:
+        description: 'Allow publishing a non-major release for a critical security or bug fix'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -19,6 +24,14 @@ concurrency:
 
 jobs:
   publish:
+    # Automatic publishing is limited to major SemVer releases (vX.0.0).
+    # Manual runs remain available for an explicitly approved emergency release.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'release' &&
+       startsWith(github.event.release.tag_name, 'v') &&
+       endsWith(github.event.release.tag_name, '.0.0') &&
+       !contains(github.event.release.tag_name, '-'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -30,12 +43,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || github.ref_name }}
+          EMERGENCY_PUBLISH: ${{ inputs.emergency_publish || false }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::F-Droid publishing requires a release tag like v1.2.3."
+            echo "::error::F-Droid publishing requires a release tag like v2.0.0."
             exit 1
           fi
+
+          if [[ "$EVENT_NAME" == "release" && ! "$RELEASE_TAG" =~ ^v[0-9]+\.0\.0$ ]]; then
+            echo "Skipping non-major release $RELEASE_TAG; automatic F-Droid publishing is major-only."
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && ! "$RELEASE_TAG" =~ ^v[0-9]+\.0\.0$ && "$EMERGENCY_PUBLISH" != "true" ]]; then
+            echo "::error::Manual publishing of a non-major release requires emergency_publish=true."
+            exit 1
+          fi
+
           mkdir -p "$RUNNER_TEMP/apk"
           gh release download "$RELEASE_TAG" --pattern "NESTNOTE-$RELEASE_TAG.apk" --dir "$RUNNER_TEMP/apk"
           test -s "$RUNNER_TEMP/apk/NESTNOTE-$RELEASE_TAG.apk"
@@ -85,9 +111,6 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y python3-pip
-          # Ubuntu's packaged fdroidserver 2.2.1 ships an old Androguard
-          # that cannot parse the Android resource table in current APKs.
-          # Install the current upstream F-Droid server package instead.
           python3 -m pip install --break-system-packages --upgrade fdroidserver
           fdroid --version
 
@@ -123,8 +146,6 @@ jobs:
       - name: Prepare F-Droid metadata and repository
         run: |
           set -euo pipefail
-          # The committed metadata deliberately has no unverified signing key.
-          # Add the fingerprint only after the APK has passed the pinned-cert check.
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -141,8 +162,6 @@ jobs:
           mkdir -p fdroid/repo
           APK_NAME="com.nestnote.app_${APK_VERSION_CODE}.apk"
           install -m 644 "$APK_PATH" "fdroid/repo/$APK_NAME"
-
-          # Run from the directory that owns config.yml, metadata/, and repo/.
           cd fdroid
           fdroid update --verbose
           test -s repo/index.jar || test -s repo/index-v1.jar
@@ -153,8 +172,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Publish only generated public repository files. Never publish config.yml,
-          # metadata, or the private signing keystore to the gh-pages branch.
           mkdir -p "$RUNNER_TEMP/fdroid-pages/fdroid"
           cp -a fdroid/repo "$RUNNER_TEMP/fdroid-pages/fdroid/repo"
           rm -f fdroid/keystore.p12
