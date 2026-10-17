@@ -93,6 +93,39 @@ class VoiceAttachmentStoreTest {
         assertEquals(listOf("second"), store.list(14L).map { it.attachmentId })
     }
 
+
+    @Test fun deleteAllRemovesOnlySelectedNoteAttachments() {
+        val root = Files.createTempDirectory("nestnote-voice-delete-all").toFile()
+        val store = store(root)
+        store.save(21L, "one", ByteArrayInputStream(byteArrayOf(1)))
+        store.save(21L, "two", ByteArrayInputStream(byteArrayOf(2)))
+        store.save(22L, "keep", ByteArrayInputStream(byteArrayOf(3)))
+
+        assertTrue(store.deleteAll(21L))
+        assertTrue(store.list(21L).isEmpty())
+        assertEquals(listOf("keep"), store.list(22L).map { it.attachmentId })
+        assertTrue(store.deleteAll(21L))
+    }
+
+    @Test fun orphanCleanupOnlyRemovesNumericDirectoriesNotInLiveSet() {
+        val root = Files.createTempDirectory("nestnote-voice-orphans").toFile()
+        val store = store(root)
+        store.save(31L, "live", ByteArrayInputStream(byteArrayOf(1)))
+        store.save(32L, "orphan", ByteArrayInputStream(byteArrayOf(2)))
+        File(root, "unrelated").mkdirs()
+
+        assertEquals(1, store.removeOrphans(setOf(31L)))
+        assertEquals(listOf("live"), store.list(31L).map { it.attachmentId })
+        assertTrue(store.list(32L).isEmpty())
+        assertTrue(File(root, "unrelated").isDirectory)
+    }
+
+    @Test fun orphanCleanupRejectsInvalidLiveIds() {
+        val store = store()
+        try { store.removeOrphans(setOf(0L)); throw AssertionError("Invalid IDs must be rejected") }
+        catch (expected: IllegalArgumentException) { }
+    }
+
     @Test fun oversizedInputIsRejectedWithoutPublishingFile() {
         val root = Files.createTempDirectory("nestnote-voice-large").toFile()
         val store = store(root)

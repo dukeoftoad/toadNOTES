@@ -115,6 +115,38 @@ class VoiceAttachmentStore internal constructor(
         return !file.exists() || file.delete()
     }
 
+    /** Removes all attachments for a note after its deletion is committed. */
+    @Synchronized
+    fun deleteAll(noteId: Long): Boolean {
+        require(noteId > 0) { "Invalid note ID" }
+        val dir = noteDirectory(noteId)
+        if (!dir.exists()) return true
+        if (!dir.isDirectory) return false
+        val children = dir.listFiles() ?: return false
+        var success = true
+        children.forEach { file -> if (!file.delete()) success = false }
+        if (success && !dir.delete()) success = false
+        return success
+    }
+
+    /**
+     * Removes numeric note directories that no longer belong to a trustworthy, committed note set.
+     * Callers must not invoke this while note storage is in recovery-required state.
+     */
+    @Synchronized
+    fun removeOrphans(liveNoteIds: Set<Long>): Int {
+        require(liveNoteIds.all { it > 0 }) { "Invalid live note IDs" }
+        val directories = root.listFiles() ?: return 0
+        var removed = 0
+        directories.filter { it.isDirectory && it.name.toLongOrNull() != null }
+            .filter { it.name.toLong() !in liveNoteIds }
+            .forEach { dir ->
+                val files = dir.listFiles()
+                if (files != null && files.all { it.isFile && it.delete() } && dir.delete()) removed++
+            }
+        return removed
+    }
+
     @Synchronized
     fun list(noteId: Long): List<VoiceAttachment> {
         require(noteId > 0) { "Invalid note ID" }

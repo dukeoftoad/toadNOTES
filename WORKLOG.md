@@ -739,3 +739,10 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added Robolectric tests for encrypted-at-rest round trip, ciphertext tampering, wrong key, bounded input, invalid/path-traversal IDs, duplicate writes, failure cleanup, listing and deletion.
 - Scope deliberately excludes recording/playback UI, manifest integration, backup/export, and device-level verification. This is the storage milestone only.
 - Validation: pending GitHub Actions for PR head; no physical-device tests have been run.
+
+## Voice notes — attachment lifecycle safeguards (2026-10-17)
+- Follow-up to merged encrypted-storage foundation (PR #30; merge commit `38a18f1e964df09446962cbc2a53e428a54749e7`).
+- Added explicit per-note attachment cleanup and orphan-directory reconciliation APIs to `VoiceAttachmentStore`.
+- Orphan cleanup only considers numeric note-ID directories and must only run after note storage has loaded successfully; callers must not run it in recovery-required mode.
+- Added regression tests for deleting all attachments for one note, preserving another note's files, orphan cleanup, unrelated directories, and invalid IDs.
+- UI deletion/Undo integration and launch-time reconciliation remain gated until the lifecycle APIs are reviewed and tested; no recorder or playback UI is included in this milestone.
