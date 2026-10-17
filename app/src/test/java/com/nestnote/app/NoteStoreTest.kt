@@ -10,20 +10,25 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import android.util.Base64
+import java.nio.ByteBuffer
+import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
+import javax.crypto.spec.GCMParameterSpec
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NoteStoreTest {
     private lateinit var context: Context
     private lateinit var store: NoteStore
+    private lateinit var testKey: javax.crypto.SecretKey
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
             .edit().clear().commit()
-        val testKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        testKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
         store = NoteStore(context) { testKey }
     }
 
@@ -243,6 +248,59 @@ class NoteStoreTest {
         assertEquals(listOf(10L, 20L, 30L), result.notes.map { it.id })
         assertEquals("First", result.notes[0].title)
         assertEquals("Saved first", result.notes[0].body)
+    }
+
+    @Test
+    fun saveUsesV2AuthenticatedCiphertextAndNeverStoresPlaintextNotes() {
+        val note = NestNote(id = 901, title = "Secret title", body = "Secret body")
+        assertTrue(store.save(listOf(note)))
+
+        val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+        val encrypted = prefs.getString("notes_encrypted_v2", null)
+        assertTrue(encrypted != null)
+        assertEquals(null, prefs.getString("notes_encrypted_v1", null))
+        assertEquals(null, prefs.getString("notes", null))
+        assertFalse(encrypted!!.contains("Secret title"))
+        assertFalse(encrypted.contains("Secret body"))
+        assertEquals(listOf(note), store.load())
+    }
+
+    @Test
+    fun modifiedV2CiphertextRequiresRecoveryAndIsNotOverwritten() {
+        val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+        assertTrue(store.save(listOf(NestNote(id = 902, title = "Authenticated", body = "Keep bytes"))))
+        val original = prefs.getString("notes_encrypted_v2", null)!!
+        val bytes = Base64.decode(original, Base64.NO_WRAP)
+        bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
+        val tampered = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        prefs.edit().putString("notes_encrypted_v2", tampered).commit()
+
+        val result = store.loadSafely()
+
+        assertTrue(result.recoveryRequired)
+        assertTrue(result.notes.isEmpty())
+        assertEquals(tampered, prefs.getString("notes_encrypted_v2", null))
+    }
+
+    @Test
+    fun encryptedV1RecordsMigrateToV2WithoutPlaintextWindow() {
+        val expected = listOf(NestNote(id = 903, title = "Old encrypted note", body = "Migrate safely"))
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, testKey)
+        val encrypted = cipher.doFinal(NoteStore.encode(expected).toByteArray(Charsets.UTF_8))
+        val payload = ByteBuffer.allocate(cipher.iv.size + encrypted.size)
+            .put(cipher.iv).put(encrypted).array()
+        val oldValue = Base64.encodeToString(payload, Base64.NO_WRAP)
+        val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
+        prefs.edit().putString("notes_encrypted_v1", oldValue).commit()
+
+        val result = store.loadSafely()
+
+        assertFalse(result.recoveryRequired)
+        assertEquals(expected, result.notes)
+        assertTrue(prefs.getString("notes_encrypted_v2", null) != null)
+        assertEquals(null, prefs.getString("notes_encrypted_v1", null))
+        assertEquals(null, prefs.getString("notes", null))
     }
 
 }

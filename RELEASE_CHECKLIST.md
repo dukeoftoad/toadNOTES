@@ -35,6 +35,9 @@ Use this checklist for every candidate. A successful build is necessary but does
 - [ ] Test corrupt local data and confirm original bytes remain recoverable.
 - [ ] On a device with legacy notes, validate migration commits encrypted content before deleting plaintext.
 - [ ] Test missing/invalid Android Keystore key recovery and repeat launches.
+- [ ] Verify v2 AES-GCM ciphertext authentication rejects modified bytes without overwriting the original payload.
+- [ ] Verify existing v1 encrypted records migrate to v2 and remove v1 only after the v2 write commits.
+- [ ] Verify the v2 key alias is retained across app upgrades and document recovery limits if the Android Keystore key is invalidated.
 - [ ] Verify the shipped manifest and Android backup/data-extraction behavior on supported versions.
 - [ ] Confirm privacy copy states local storage is encrypted and exported JSON is plaintext.
 

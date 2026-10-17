@@ -65,7 +65,7 @@ class NoteBackupTest {
         assertEquals(expected, result.notes)
         assertEquals(false, result.recoveryRequired)
         assertEquals(null, prefs.getString("notes", null))
-        val encrypted = prefs.getString("notes_encrypted_v1", null)
+        val encrypted = prefs.getString("notes_encrypted_v2", null)
         assertNotNull(encrypted)
         assertTrue(!encrypted!!.contains("Private title"))
         assertEquals(expected, store.loadSafely().notes)

@@ -34,11 +34,11 @@ Production APKs are created from tags matching v*.*.* (for example, v1.2.0). The
 A manually dispatched/non-tag release workflow run is for unsigned inspection output only; it must not be distributed as a production APK. Never commit keystores, passwords, signing keys, or other secret values.
 
 ## Data, backups, and recovery
-Local notes are encrypted with AES-GCM using a key held by Android Keystore. Existing plaintext SharedPreferences records are migrated only after the encrypted payload is committed. If stored content cannot be read or decrypted, NESTNOTE preserves the original data and exposes a recovery path rather than silently replacing it with starter notes.
+Local notes use AES-256-GCM with a 96-bit random nonce and 128-bit authentication tag; the key is generated and held by Android Keystore. The current v2 storage format authenticates the app/storage purpose as additional authenticated data and uses a dedicated v2 key alias. Existing v1 encrypted records and legacy plaintext SharedPreferences records are migrated to v2 only after the new ciphertext is committed; the old record is removed in that same successful preferences commit. Failed decryption or authentication preserves the stored bytes and requires recovery rather than silently replacing notes. If stored content cannot be read or decrypted, NESTNOTE preserves the original data and exposes a recovery path rather than silently replacing it with starter notes.
 
 Backups exported by the user are **plaintext JSON** and should be stored securely. Restore validates the entire file before changing notes, supports the current versioned backup envelope and legacy JSON-array backups, merges by note ID, keeps the newer edited copy when timestamps differ, and does not delete notes absent from the backup. Automatic Android app-data backup is disabled.
 
-Encryption protects data at rest; it is not a guarantee against a compromised device while the app is running. Losing/resetting the Android Keystore key may prevent decryption, so test and document recovery before release.
+Encryption protects data at rest; it is not a guarantee against a compromised device while the app is running, screenshots, clipboard sharing, or exported backups. Losing/resetting the Android Keystore key may prevent decryption. Do not clear app data or uninstall before exporting a secure backup if key/device recovery is a concern. Verify key-loss recovery on a test device before release.
 
 ## Build and test
 Open the repository in a recent stable Android Studio, allow Gradle sync, and install Android SDK Platform 36 if prompted.
