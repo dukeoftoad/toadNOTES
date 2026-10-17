@@ -752,3 +752,14 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Added the next voice-notes safety step on `feature/voice-notes-delete-undo-integration`: keep encrypted attachments available throughout the existing Undo snackbar window, and delete a note's attachments only after the Undo window ends, the note remains deleted, and note storage is not in recovery-required mode.
 - Undo restores the note without touching its audio. A failed/blocked note save does not trigger attachment cleanup.
 - Validation: awaiting exact-head GitHub Actions CI. Device-level validation remains a separate production gate. Recorder/playback UI is not included in this milestone.
+
+
+## Voice notes — progress follow-up (2026-10-17)
+Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
+
+- **Merged PR #30** — encrypted attachment storage foundation; merge commit `38a18f1e964df09446962cbc2a53e428a54749e7`. Dedicated Android Keystore AES-256-GCM, per-file random IV, versioned envelope, identity-bound AAD, bounded streaming encryption, synced temporary ciphertext before publication, and authenticated reads. Robolectric tests cover round-trip/no plaintext, tamper/wrong key, size/identity checks, failure cleanup and listing/deletion. CI passed.
+- **Merged PR #31** — attachment lifecycle helpers; merge commit `8eeead7756916b6902d850ea918b26e956f4d555`. Adds per-note delete and conservative orphan-directory cleanup, with regression tests. Cleanup is not automatically run at launch.
+- **Merged PR #32** — delete/Undo integration; merge commit `9350182c2bc442c1c82857909e5dfd73a72bad2b`. Attachments remain available during the Undo window and are removed only when the note remains deleted and storage is not in recovery-required mode. Exact-head CI passed.
+- Updated [Issue #28](https://github.com/dukeoftoad/toadNOTES/issues/28) to check off the implemented storage/lifecycle items and leave outstanding requirements unchecked. Updated the [voice-notes delivery plan](https://github.com/dukeoftoad/toadNOTES/blob/docs/voice-notes-delivery-plan/docs/VOICE_NOTES_PLAN.md) with milestone status.
+- **Still pending:** durable attachment manifest and safe reconciliation wiring; recorder/player engine; editor permission/control UX; audio backup/import/export policy; broader error and lifecycle tests; accessibility and device/emulator verification; release APK/signing and staged production rollout.
+- **Validation boundary:** CI passed for the merged milestones. No physical-device or emulator audio recording/playback tests have been executed; do not treat test compilation as device validation.
