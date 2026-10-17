@@ -26,7 +26,7 @@ Production APKs are created from tags matching v*.*.* (for example, v1.2.0). The
 
 ### Production release steps
 1. Confirm the candidate commit has passing Android CI and release checklist sign-off, including required device/recovery checks.
-2. Confirm these repository Actions secrets exist without exposing their values: KEYSTORE_BASE64 (base64-encoded keystore), KEY_ALIAS, KEY_STORE_PASSWORD, and KEY_PASSWORD.
+2. Confirm these repository Actions secrets exist without exposing their values: KEYSTORE_BASE64 (base64-encoded keystore), KEY_ALIAS, KEYSTORE_PASSWORD, and KEY_PASSWORD.
 3. Create and push an approved version tag, e.g. git tag v1.2.0 && git push origin v1.2.0.
 4. Wait for [Android Release](https://github.com/dukeoftoad/toadNOTES/actions/workflows/android-release.yml) to finish.
 5. Independently compare the APK certificate fingerprint with the recorded production certificate, install the exact published APK, and record the result before distribution.
@@ -36,7 +36,7 @@ A manually dispatched/non-tag release workflow run is for unsigned inspection ou
 ## Data, backups, and recovery
 Local notes use AES-256-GCM with a 96-bit random nonce and 128-bit authentication tag; the key is generated and held by Android Keystore. The current v2 storage format authenticates the app/storage purpose as additional authenticated data and uses a dedicated v2 key alias. Existing v1 encrypted records and legacy plaintext SharedPreferences records are migrated to v2 only after the new ciphertext is committed; the old record is removed in that same successful preferences commit. Failed decryption or authentication preserves the stored bytes and requires recovery rather than silently replacing notes. If stored content cannot be read or decrypted, NESTNOTE preserves the original data and exposes a recovery path rather than silently replacing it with starter notes.
 
-Backups exported by the user are **plaintext JSON** and should be stored securely. Restore validates the entire file before changing notes, supports the current versioned backup envelope and legacy JSON-array backups, merges by note ID, keeps the newer edited copy when timestamps differ, and does not delete notes absent from the backup. Automatic Android app-data backup is disabled.
+Backups exported by the user are **plaintext JSON** and should be stored securely. **Voice-note audio attachments are intentionally excluded from backup and restore**; a restored note will not contain its recordings. This is the v1 policy, not a temporary claim that audio is protected by the JSON export. Do not copy local attachment ciphertext into backups: it is tied to this installation's key and attachment identity. Automatic Android app-data backup is disabled. Restore validates the entire file before changing notes, supports the current versioned backup envelope and legacy JSON-array backups, merges by note ID, keeps the newer edited copy when timestamps differ, and does not delete notes absent from the backup.
 
 Encryption protects data at rest; it is not a guarantee against a compromised device while the app is running, screenshots, clipboard sharing, or exported backups. Losing/resetting the Android Keystore key may prevent decryption. Do not clear app data or uninstall before exporting a secure backup if key/device recovery is a concern. Verify key-loss recovery on a test device before release.
 

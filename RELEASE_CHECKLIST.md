@@ -1,16 +1,16 @@
 # NESTNOTE Release & Validation Checklist
 
-Last updated: 2026-10-12
+Last updated: 2026-10-17
 
 Use this checklist for every candidate. A successful build is necessary but does not establish release readiness. Record the exact commit, CI run, device, results, and accepted risks in WORKLOG.md. Do not mark a check complete without evidence.
 
 ## 1. Candidate and CI
-- [ ] Candidate commit SHA recorded and matches the commit being tested.
-- [ ] Required Android CI passes on that exact commit.
-- [ ] Unit tests pass.
-- [ ] Debug APK builds successfully for API 36.
-- [ ] Minified/R8 release APK builds successfully.
-- [ ] Instrumentation tests compile; actual execution on a device/emulator is separately recorded.
+- [x] Candidate commit SHA recorded and matches the commit being tested (`618aa0896bcbc35b6ef912fdd9e72a8a38c87ef2`).
+- [x] Required Android CI passes on that exact commit ([run #39048049532](https://github.com/dukeoftoad/toadNOTES/actions/runs/39048049532)).
+- [x] Unit tests pass.
+- [x] Debug APK builds successfully for API 36.
+- [x] Minified/R8 release APK builds successfully.
+- [x] Instrumentation tests compile; actual execution on a device/emulator is separately recorded.
 - [ ] No unexplained build warnings, vulnerable dependencies, or new manifest permissions remain.
 - [ ] Release notes, version, and known limitations reviewed.
 
@@ -26,6 +26,7 @@ Use this checklist for every candidate. A successful build is necessary but does
 
 ## 3. Backup, encryption, and recovery
 - [ ] Export a backup and confirm expected note fields round-trip.
+- [ ] Verify backup/restore is **notes-only**: voice audio attachments are excluded, and the export/restore UI clearly warns that recordings are not included.
 - [ ] Restore versioned backup and legacy JSON-array backup.
 - [ ] Preview restore additions/updates before applying.
 - [ ] Confirm newer incoming notes update existing notes; older/equal timestamps do not overwrite.
@@ -41,10 +42,18 @@ Use this checklist for every candidate. A successful build is necessary but does
 - [ ] Verify the shipped manifest and Android backup/data-extraction behavior on supported versions.
 - [ ] Confirm privacy copy states local storage is encrypted and exported JSON is plaintext.
 
+## Voice recording JVM acceptance checklist
+- [x] Recording state transitions are isolated in an Android-independent lifecycle component.
+- [x] Fake PCM capture tests cover valid chunks, empty capture, simulated read failure, and size-limit overflow.
+- [x] Deterministic latch-based tests cover stop/discard and pause/resume/stop races.
+- [x] CI passes on the commit containing these tests; do not tick until a matching workflow run is green.
+
+Evidence: [Android CI run #39048049532 passed](https://github.com/dukeoftoad/toadNOTES/actions/runs/39048049532) on commit `618aa0896bcbc35b6ef912fdd9e72a8a38c87ef2` (2026-10-17). CI ran unit tests, API 36 debug build, minified release compilation, and instrumentation-test compilation. Device/emulator execution is not claimed.
+
 ## 4. Production signing and APK integrity
-- [ ] Confirm repository Actions secrets exist without exposing values: KEYSTORE_BASE64, KEY_ALIAS, KEY_STORE_PASSWORD, KEY_PASSWORD.
+- [ ] Confirm repository Actions secrets exist without exposing values: KEYSTORE_BASE64, KEY_ALIAS, KEYSTORE_PASSWORD, KEY_PASSWORD.
 - [ ] Confirm KEYSTORE_BASE64 decodes to the approved permanent production keystore; no keystore bytes are committed or logged.
-- [ ] Confirm a version tag matching vMAJOR.MINOR.PATCH publishes a version-named APK, and manual dispatch publishes only when a validated release_tag is supplied; a main-branch push produces a signed workflow artifact and only repairs an eligible existing release.
+- [ ] Confirm the release workflow runs for version tags matching `v*.*.*` or manual dispatch with a validated `release_tag`; it does not trigger on ordinary pushes to `main`.
 - [ ] Confirm missing or invalid signing secrets fail the tagged workflow and prevent publication.
 - [ ] Confirm release APK is minified/resource-shrunk and named NESTNOTE-vX.Y.Z.apk.
 - [ ] Verify the published APK signature using Android apksigner.

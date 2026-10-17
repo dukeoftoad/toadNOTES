@@ -242,6 +242,21 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
             decoded
         }.getOrNull()
 
+        /**
+         * Allocates an ID that cannot collide with any currently persisted note.
+         * Clock time is preferred for readable IDs, but collisions (same millisecond,
+         * clock rollback, or imported IDs) are resolved deterministically.
+         */
+        fun allocateNoteId(notes: Collection<NestNote>, nowMillis: Long = System.currentTimeMillis()): Long {
+            val used = notes.asSequence().map { it.id }.toHashSet()
+            var candidate = nowMillis.coerceAtLeast(1L)
+            while (candidate in used) {
+                if (candidate == Long.MAX_VALUE) candidate = 1L else candidate++
+            }
+            check(candidate !in used) { "No collision-free note ID is available" }
+            return candidate
+        }
+
         /** Prevents a draft based on an older saved version from replacing newer content. */
         fun isSameNoteVersion(expectedUpdated: Long, currentUpdated: Long): Boolean =
             expectedUpdated == currentUpdated

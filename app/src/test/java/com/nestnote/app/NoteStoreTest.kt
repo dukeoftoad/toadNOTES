@@ -134,6 +134,24 @@ class NoteStoreTest {
     }
 
     @Test
+    fun allocateNoteIdResolvesSameMillisecondAndImportedIdCollisions() {
+        val existing = listOf(
+            NestNote(id = 100L, title = "A", body = ""),
+            NestNote(id = 101L, title = "B", body = ""),
+            NestNote(id = 102L, title = "Imported", body = "")
+        )
+
+        assertEquals(103L, NoteStore.allocateNoteId(existing, nowMillis = 100L))
+        assertEquals(103L, NoteStore.allocateNoteId(existing, nowMillis = 103L))
+    }
+
+    @Test
+    fun allocateNoteIdNeverReturnsZeroOrNegativeForClockRollback() {
+        assertEquals(1L, NoteStore.allocateNoteId(emptyList(), nowMillis = 0L))
+        assertEquals(2L, NoteStore.allocateNoteId(listOf(NestNote(id = 1L, title = "Existing", body = "")), nowMillis = -50L))
+    }
+
+    @Test
     fun versionGuardAllowsUnchangedNoteAndRejectsStaleDraft() {
         assertTrue(NoteStore.isSameNoteVersion(100L, 100L))
         assertFalse(NoteStore.isSameNoteVersion(100L, 101L))

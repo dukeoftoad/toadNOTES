@@ -85,7 +85,7 @@ Risks / decisions:
 3. A future backup must define portable encryption, key/passphrase handling, limits, partial import behavior, and collision policy.
 4. Legacy schema compatibility must remain tested; do not change schema version 1 semantics in place.
 
-Required design: explicitly choose between (A) keep backups note-only and clearly disclose that voice audio is excluded, or (B) add a new versioned archive format with separately encrypted audio and an explicit portable encryption key/passphrase. Do not imply attachments are backed up until round-trip tests prove it.
+**Decision (v1): choose A — backups remain note-only.** Voice-note audio attachments are intentionally excluded from export and restore. The UI and user-facing documentation must disclose that restoring a backup restores notes, not their voice recordings. Do not copy installation-bound attachment ciphertext into a backup. Any future audio backup requires a separately approved, versioned portable archive design and round-trip tests; it is out of scope for v1.
 
 ## 5. Manifest and permissions
 
@@ -111,10 +111,10 @@ Observed:
 - Production release workflow triggers on version tags matching `v*.*.*` and manual dispatch with a validated `release_tag`.
 - It runs unit tests, builds a versioned release APK, requires signing secrets, signs/verifies the APK, and publishes a GitHub Release.
 - The release workflow does **not** currently trigger on pushes to `main`.
-- Workflow secret mapping is `KEYSTORE_BASE64`, `KEY_ALIAS`, `KEYSTORE_PASSWORD`, and `KEY_PASSWORD`. The checklist currently names `KEY_STORE_PASSWORD`, which is inconsistent with the workflow.
+- Workflow secret mapping is `KEYSTORE_BASE64`, `KEY_ALIAS`, `KEYSTORE_PASSWORD`, and `KEY_PASSWORD`. README and release checklist must use those exact names.
 
 Required follow-up:
-1. Correct the checklist to match the actual trigger and secret names (unless a deliberate workflow change is separately approved).
+1. Correct README/checklist to match the actual tag/manual-dispatch trigger and secret names (unless a deliberate workflow change is separately approved).
 2. For each voice-note PR, require exact-head Android CI and explicitly record whether the emulator workflow was run.
 3. Add tests for recorder lifecycle, permission denial, cancellation, interrupted writes, corrupted attachment data, restore policy and delete/Undo.
 4. Before release, install and test the exact signed APK, verify the production certificate fingerprint, and perform upgrade/migration checks.
@@ -128,7 +128,7 @@ Required follow-up:
 - [ ] Ensure an attachment is not committed as valid until its encrypted payload is complete and authenticated.
 - [ ] Add a durable attachment manifest or a documented reconciliation strategy.
 - [ ] Keep orphan cleanup disabled during note-store recovery.
-- [ ] Decide and communicate whether backups include voice audio; version any expanded format.
+- [x] Decide and communicate v1 backup scope: notes-only; voice audio is excluded. Any future audio backup requires a separately versioned portable archive.
 - [ ] Preserve legacy note backup and storage migration compatibility.
 - [ ] Correct release checklist trigger/secret discrepancies.
 - [ ] Pass exact-head CI and run emulator/device audio tests before production claims.

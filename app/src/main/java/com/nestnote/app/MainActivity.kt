@@ -179,8 +179,12 @@ private fun NestNoteApp(store: NoteStore) {
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // Reserve a collision-safe identity as soon as a new draft opens. Attachments can
+    // then be staged against the same identity before the note is first saved.
+    var editorDraftId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     var editorHasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
+    var discardVoiceChanges by remember { mutableStateOf<() -> Unit>({}) }
     var confirmSystemDiscard by remember { mutableStateOf(false) }
     // Resolve the selected note from persisted notes after recreation.
     val editorNote = notes.firstOrNull { it.id == editorNoteId }
@@ -226,6 +230,7 @@ private fun NestNoteApp(store: NoteStore) {
                 // The Undo window has expired and deletion remains persisted. Only now is it safe
                 // to remove the deleted note's encrypted audio; never clean up during recovery.
                 runCatching { VoiceAttachmentStore(context).deleteAll(note.id) }
+                runCatching { VoiceAttachmentManifest(context).removeNote(note.id) }
             }
         }
     }
@@ -347,7 +352,11 @@ private fun NestNoteApp(store: NoteStore) {
             floatingActionButton = {
                 if (selectedView !in listOf("Settings", "Categories", "More")) {
                     FloatingActionButton(
-                        onClick = { editorNoteId = null; editorVisible = true },
+                        onClick = {
+                            editorNoteId = null
+                            editorDraftId = NoteStore.allocateNoteId(notes)
+                            editorVisible = true
+                        },
                         shape = CircleShape,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -725,8 +734,26 @@ private fun NestNoteApp(store: NoteStore) {
         }
 
         if (editorVisible) {
-            val closeEditor = { editorHasUnsavedChanges = false; confirmSystemDiscard = false; editorVisible = false }
-            val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else closeEditor() }
+            val closeEditor = {
+                editorHasUnsavedChanges = false
+                confirmSystemDiscard = false
+                editorVisible = false
+                editorDraftId = null
+                discardVoiceChanges = {}
+            }
+            val discardEditor = {
+                discardVoiceChanges()
+                // New-note attachments are staged under the reserved draft ID. Discard
+                // removes both payloads and index entries; saved-note attachments are untouched.
+                if (editorNote == null) {
+                    editorDraftId?.let { draftId ->
+                        runCatching { VoiceAttachmentStore(context).deleteAll(draftId) }
+                        runCatching { VoiceAttachmentManifest(context).removeNote(draftId) }
+                    }
+                }
+                closeEditor()
+            }
+            val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else discardEditor() }
             val saveNote: (NestNote) -> Unit = { draft ->
                 val existing = editorNote
                 // Compare the editor's baseline against the latest collection, not the
@@ -741,7 +768,13 @@ private fun NestNoteApp(store: NoteStore) {
                         snackbarHostState.showSnackbar("This note changed elsewhere. Reopen it before saving to avoid overwriting newer content.")
                     }
                 } else {
-                    val updated = draft.copy(updated = System.currentTimeMillis())
+                    val savedId = existing?.id ?: editorDraftId ?: NoteStore.allocateNoteId(notes)
+                    // Recheck against the latest collection at commit time; another path
+                    // (for example restore) may have introduced the reserved ID meanwhile.
+                    val collisionSafeId = if (existing == null && notes.any { it.id == savedId }) {
+                        NoteStore.allocateNoteId(notes)
+                    } else savedId
+                    val updated = draft.copy(id = collisionSafeId, updated = System.currentTimeMillis())
                     val next = if (existing == null) notes + updated else notes.map {
                         if (it.id == existing.id) updated.copy(id = existing.id) else it
                     }
@@ -756,11 +789,11 @@ private fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = closeEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorMode.QUICK_DIALOG -> Dialog(
@@ -780,6 +813,7 @@ private fun NestNoteApp(store: NoteStore) {
                     ) {
                         NoteEditorContent(
                             original = editorNote,
+                            draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes),
                             defaultNoteCategory = defaultNoteCategory,
                             textSize = editorTextSize,
                             showCounts = showEditorCounts,
@@ -787,6 +821,7 @@ private fun NestNoteApp(store: NoteStore) {
                             onDismiss = dismissEditor,
                             onDelete = editorDeleteAction,
                             onUnsavedChangesChange = { editorHasUnsavedChanges = it },
+                            onRegisterVoiceDiscard = { discardVoiceChanges = it },
                             compactDialog = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -798,7 +833,7 @@ private fun NestNoteApp(store: NoteStore) {
                     onDismissRequest = { confirmSystemDiscard = false },
                     title = { Text("Discard changes?") },
                     text = { Text("Your unsaved changes will be lost.") },
-                    confirmButton = { TextButton(onClick = closeEditor) { Text("Discard") } },
+                    confirmButton = { TextButton(onClick = discardEditor) { Text("Discard") } },
                     dismissButton = { TextButton(onClick = { confirmSystemDiscard = false }) { Text("Keep editing") } }
                 )
             }
@@ -938,7 +973,7 @@ private fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "NESTNOTE does not sync to a cloud account. Back up your notes to a file you choose, and restore it any time. Restoring adds missing notes and keeps the most recently edited copy of notes that already exist; nothing is deleted.",
+                    "NESTNOTE does not sync to a cloud account. Backups contain note text and note settings only; voice recordings are excluded and will not return when you restore. Back up your notes to a file you choose, and restore it any time. Restoring adds missing notes and keeps the most recently edited copy of notes that already exist; nothing is deleted.",
                     style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1159,6 +1194,7 @@ private fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyl
 @Composable
 private fun NoteEditorContent(
     original: NestNote?,
+    draftNoteId: Long,
     defaultNoteCategory: String,
     textSize: EditorTextSize,
     showCounts: Boolean,
@@ -1166,6 +1202,7 @@ private fun NoteEditorContent(
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onUnsavedChangesChange: (Boolean) -> Unit = {},
+    onRegisterVoiceDiscard: (() -> Unit) -> Unit = {},
     fullScreen: Boolean = false,
     compactDialog: Boolean = false,
     modifier: Modifier = Modifier
@@ -1190,6 +1227,9 @@ private fun NoteEditorContent(
     var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
+    var voiceAttachmentCount by rememberSaveable(original?.id, draftNoteId) { mutableIntStateOf(0) }
+    var voiceChangesPending by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
+    val voiceNoteId = original?.id ?: draftNoteId
     val colors = MaterialTheme.colorScheme
     val darkEditor = colors.surface.red < 0.5f
     val ink = if (darkEditor) colors.onSurface else Color(0xFF292633)
@@ -1206,7 +1246,8 @@ private fun NoteEditorContent(
         colorIndex != (original?.color ?: 0) ||
         backgroundIndex != (original?.background ?: 0) ||
         pinned != (original?.pinned ?: false) ||
-        reminder != original?.reminder.orEmpty()
+        reminder != original?.reminder.orEmpty() ||
+        voiceChangesPending
 
     fun requestDismiss() {
         if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
@@ -1214,7 +1255,7 @@ private fun NoteEditorContent(
     fun buildNote(archived: Boolean = original?.archived ?: false): NestNote {
         val now = System.currentTimeMillis()
         return NestNote(
-            id = original?.id ?: now,
+            id = original?.id ?: draftNoteId,
             title = title.trim(),
             body = body.trim(),
             category = category,
@@ -1651,7 +1692,13 @@ private fun NoteEditorContent(
                     ) {
                         Text("H3", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
-                    if (showCounts) {
+                    VoiceNoteControls(
+                    noteId = voiceNoteId,
+                    onAttachmentCountChanged = { voiceAttachmentCount = it },
+                    onVoiceAttachmentAdded = { voiceChangesPending = true },
+                    onDiscardHandlerReady = onRegisterVoiceDiscard
+                )
+                if (showCounts) {
                         val words = NoteText.wordCount(body)
                         val minutes = NoteText.readingMinutes(words)
                         Text(
