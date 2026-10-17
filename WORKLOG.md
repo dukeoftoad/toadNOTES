@@ -730,3 +730,12 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Current published upstream release observed: `v1.2.4`. Do not use it as the F-Droid source revision if it predates the license file. Publish a new version tag after the licensing change is merged and validated.
 - Official F-Droid metadata submission is not complete. The metadata proposal must be transferred to the official `fdroiddata` repository and reviewed; this repository PR does not create an F-Droid listing or index.
 - Validation evidence: GitHub Android CI was observed in progress for the PR before the latest documentation commits. Exact-head CI must be checked again. No local F-Droid build, APK installation, reproducibility comparison, or device validation was performed in this session.
+
+## Voice notes — encrypted storage foundation (2026-10-17)
+- Tracking: [Issue #28](https://github.com/dukeoftoad/toadNOTES/issues/28); plan: [docs/VOICE_NOTES_PLAN.md](https://github.com/dukeoftoad/toadNOTES/blob/docs/voice-notes-delivery-plan/docs/VOICE_NOTES_PLAN.md).
+- Implementation branch: `feature/voice-notes-encrypted-storage`.
+- Added `VoiceAttachmentStore`: app-private per-note attachment files, dedicated Android Keystore AES-256-GCM key alias, fresh 96-bit IVs, versioned envelope, and AAD bound to app/purpose/note ID/attachment ID.
+- Encrypts input incrementally while writing a temporary ciphertext file, syncs before rename, and removes temporary output on failure. Authenticated reads only return plaintext after GCM tag verification; no decrypted file is staged on disk.
+- Added Robolectric tests for encrypted-at-rest round trip, ciphertext tampering, wrong key, bounded input, invalid/path-traversal IDs, duplicate writes, failure cleanup, listing and deletion.
+- Scope deliberately excludes recording/playback UI, manifest integration, backup/export, and device-level verification. This is the storage milestone only.
+- Validation: pending GitHub Actions for PR head; no physical-device tests have been run.
