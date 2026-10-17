@@ -746,3 +746,9 @@ Reference links: [PR #6](https://github.com/dukeoftoad/toadNOTES/pull/6), [PR #7
 - Orphan cleanup only considers numeric note-ID directories and must only run after note storage has loaded successfully; callers must not run it in recovery-required mode.
 - Added regression tests for deleting all attachments for one note, preserving another note's files, orphan cleanup, unrelated directories, and invalid IDs.
 - UI deletion/Undo integration and launch-time reconciliation remain gated until the lifecycle APIs are reviewed and tested; no recorder or playback UI is included in this milestone.
+
+
+## Voice notes — deletion and Undo integration (PR pending)
+- Added the next voice-notes safety step on `feature/voice-notes-delete-undo-integration`: keep encrypted attachments available throughout the existing Undo snackbar window, and delete a note's attachments only after the Undo window ends, the note remains deleted, and note storage is not in recovery-required mode.
+- Undo restores the note without touching its audio. A failed/blocked note save does not trigger attachment cleanup.
+- Validation: awaiting exact-head GitHub Actions CI. Device-level validation remains a separate production gate. Recorder/playback UI is not included in this milestone.

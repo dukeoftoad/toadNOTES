@@ -216,7 +216,16 @@ private fun NestNoteApp(store: NoteStore) {
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed && notes.none { it.id == note.id }) {
+                // Undo keeps the attachment directory intact. Restore the note before any cleanup.
                 persist(notes + note)
+            } else if (
+                result != SnackbarResult.ActionPerformed &&
+                !storageRecoveryRequired &&
+                notes.none { it.id == note.id }
+            ) {
+                // The Undo window has expired and deletion remains persisted. Only now is it safe
+                // to remove the deleted note's encrypted audio; never clean up during recovery.
+                runCatching { VoiceAttachmentStore(context).deleteAll(note.id) }
             }
         }
     }
