@@ -39,3 +39,8 @@ For a qualifying release, the workflow downloads `NESTNOTE-vX.Y.Z.apk`, verifies
 After a successful run, verify the index and APK URLs from a clean client/device. A successful GitHub Actions run alone does not prove the F-Droid client can add the repository or install/update the app.
 
 **Note:** This is a self-hosted F-Droid repository of upstream-signed release APKs, not an official F-Droid listing. Official F-Droid inclusion uses its own source-build and review process.
+
+
+## Branding assets
+
+The repository includes a reusable NESTNOTE icon at [`icon.svg`](icon.svg). The website uses shared SVG assets for its favicon, hero illustration, and social preview, plus a web app manifest. The F-Droid repository configuration references the matching SVG repository icon so the generated index can display the project branding without storing secrets or release credentials in the public tree.

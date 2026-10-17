@@ -12,6 +12,8 @@ Description: |
 
   Features include creating, editing, pinning, archiving, restoring, searching, sorting, and deleting notes; categories and note colours; light and dark themes; full-screen and quick editors; checklist and bullet tools; writing statistics; JSON backup and restore; and local-data recovery safeguards.
 
+  Project website and release downloads are available from the project repository and GitHub Releases.
+
   Notes are stored locally with encrypted payloads using AES-GCM and Android Keystore. NESTNOTE has no account or cloud sync. User-exported JSON backups are plaintext and should be stored securely.
 
 RepoType: git
