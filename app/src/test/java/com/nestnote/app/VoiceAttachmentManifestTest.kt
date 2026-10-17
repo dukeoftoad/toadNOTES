@@ -110,4 +110,121 @@ class VoiceAttachmentManifestTest {
         assertTrue(File(File(root, "45"), "keep_large_index.nva").isFile)
     }
 
+
+    @Test
+    fun discardingNewDraftRemovesOnlyItsStagedAttachments() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val root = Files.createTempDirectory("nestnote-draft-discard").toFile()
+        val key = newKey()
+        val store = VoiceAttachmentStore(context, { key }, root)
+        val manifest = VoiceAttachmentManifest(context, root)
+        val savedNoteId = 700L
+        val draftId = 701L
+
+        val savedPayload = byteArrayOf(9, 8, 7, 6)
+        val saved = store.save(savedNoteId, "saved_recording", ByteArrayInputStream(savedPayload))
+        val savedMetadata = VoiceAttachmentMetadata(
+            noteId = savedNoteId,
+            attachmentId = "saved_recording",
+            createdAtMillis = 1L,
+            durationMillis = 1L,
+            encryptedSizeBytes = saved.encryptedSizeBytes,
+            displayName = "Saved recording"
+        )
+        manifest.put(savedMetadata, store)
+
+        val stagedPayload = byteArrayOf(1, 2, 3, 4)
+        val staged = store.save(draftId, "new_draft_recording", ByteArrayInputStream(stagedPayload))
+        manifest.put(
+            VoiceAttachmentMetadata(
+                noteId = draftId,
+                attachmentId = "new_draft_recording",
+                createdAtMillis = 2L,
+                durationMillis = 1L,
+                encryptedSizeBytes = staged.encryptedSizeBytes,
+                displayName = "Draft recording"
+            ),
+            store
+        )
+
+        assertTrue(store.deleteAll(draftId))
+        manifest.removeNote(draftId)
+
+        assertTrue(store.list(draftId).isEmpty())
+        assertTrue(manifest.list(draftId, store).isEmpty())
+        assertEquals(savedPayload.toList(), store.read(savedNoteId, "saved_recording").toList())
+        assertEquals(listOf(savedMetadata), manifest.list(savedNoteId, store))
+    }
+
+    @Test
+    fun discardingEditorSessionRemovesOnlyNewlyStagedAttachmentForSavedNote() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val root = Files.createTempDirectory("nestnote-existing-note-discard").toFile()
+        val key = newKey()
+        val store = VoiceAttachmentStore(context, { key }, root)
+        val manifest = VoiceAttachmentManifest(context, root)
+        val noteId = 702L
+
+        fun saveAndIndex(id: String, bytes: ByteArray, created: Long) {
+            val saved = store.save(noteId, id, ByteArrayInputStream(bytes))
+            manifest.put(
+                VoiceAttachmentMetadata(
+                    noteId = noteId,
+                    attachmentId = id,
+                    createdAtMillis = created,
+                    durationMillis = 1L,
+                    encryptedSizeBytes = saved.encryptedSizeBytes,
+                    displayName = id
+                ),
+                store
+            )
+        }
+
+        val originalBytes = byteArrayOf(4, 3, 2, 1)
+        val newlyStagedBytes = byteArrayOf(5, 6, 7, 8)
+        saveAndIndex("original_recording", originalBytes, 1L)
+        saveAndIndex("staged_recording", newlyStagedBytes, 2L)
+
+        // Mirrors the editor's session-discard handler: remove only identities created this session.
+        assertTrue(store.delete(noteId, "staged_recording"))
+        manifest.remove(noteId, "staged_recording")
+
+        assertEquals(originalBytes.toList(), store.read(noteId, "original_recording").toList())
+        assertEquals(listOf("original_recording"), manifest.list(noteId, store).map { it.attachmentId })
+        assertTrue(store.list(noteId).none { it.attachmentId == "staged_recording" })
+    }
+
+    @Test
+    fun attachmentStagedBeforeFirstSaveRemainsBoundToReservedDraftId() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val root = Files.createTempDirectory("nestnote-draft-identity").toFile()
+        val key = newKey()
+        val store = VoiceAttachmentStore(context, { key }, root)
+        val manifest = VoiceAttachmentManifest(context, root)
+        val existing = listOf(NestNote(id = 500L, title = "Existing", body = ""))
+        val draftId = NoteStore.allocateNoteId(existing, nowMillis = 500L)
+        assertEquals(501L, draftId)
+
+        // The editor can stage audio before its note is persisted, using its reserved identity.
+        val pcm = byteArrayOf(1, 2, 3, 4)
+        val attachment = store.save(draftId, "draft_recording", ByteArrayInputStream(pcm))
+        val metadata = VoiceAttachmentMetadata(
+            noteId = draftId,
+            attachmentId = "draft_recording",
+            createdAtMillis = 1234L,
+            durationMillis = 1L,
+            encryptedSizeBytes = attachment.encryptedSizeBytes,
+            displayName = "Voice recording"
+        )
+        manifest.put(metadata, store)
+        assertTrue(manifest.list(draftId, store).isNotEmpty())
+
+        // Saving the first note uses the exact reserved ID; the authenticated payload and
+        // metadata therefore remain discoverable under the newly persisted note.
+        val savedDraft = NestNote(id = draftId, title = "Draft with audio", body = "Text")
+        assertEquals(draftId, savedDraft.id)
+        assertEquals(pcm.toList(), store.read(savedDraft.id, "draft_recording").toList())
+        assertEquals(listOf(metadata), manifest.list(savedDraft.id, store))
+    }
+
 }

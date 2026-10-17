@@ -5,7 +5,7 @@ package com.nestnote.app
  * STOPPED and DISCARDED are terminal; a late worker cannot revive either state.
  */
 internal class VoiceRecordingLifecycle {
-    internal enum class State { NEW, RECORDING, PAUSED, STOPPED, FAILED, DISCARDED }
+    internal enum class State { NEW, RECORDING, PAUSED, STOPPED, DISCARDED }
 
     private var current = State.NEW
 
@@ -32,15 +32,8 @@ internal class VoiceRecordingLifecycle {
 
     @Synchronized
     fun stop(): Boolean {
-        if (current == State.STOPPED || current == State.FAILED || current == State.DISCARDED) return false
+        if (current == State.STOPPED || current == State.DISCARDED) return false
         current = State.STOPPED
-        return true
-    }
-
-    @Synchronized
-    fun fail(): Boolean {
-        if (current == State.STOPPED || current == State.FAILED || current == State.DISCARDED) return false
-        current = State.FAILED
         return true
     }
 

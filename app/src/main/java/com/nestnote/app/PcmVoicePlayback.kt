@@ -22,7 +22,7 @@ internal class PcmVoicePlayback(
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
     @Volatile private var audioTrack: AudioTrack? = null
-    private var playbackThread: Thread? = null
+    @Volatile private var playbackThread: Thread? = null
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -30,11 +30,13 @@ internal class PcmVoicePlayback(
             var errorMessage: String? = null
             var track: AudioTrack? = null
             try {
-                // read() returns data only after GCM authentication succeeds.
+                // read() returns only after AES-GCM authentication succeeds. Do not construct,
+                // start, or write to AudioTrack until the entire payload has authenticated.
                 val pcm = store.read(attachment.noteId, attachment.attachmentId)
-                if (pcm.isEmpty()) throw IOException("This recording is empty.")
+                PcmPlaybackFormat.validateAuthenticatedPcm(pcm)
+
                 val minBuffer = AudioTrack.getMinBufferSize(
-                    SAMPLE_RATE,
+                    PcmPlaybackFormat.SAMPLE_RATE_HZ,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 )
@@ -48,24 +50,39 @@ internal class PcmVoicePlayback(
                     )
                     .setAudioFormat(
                         AudioFormat.Builder()
-                            .setSampleRate(SAMPLE_RATE)
+                            .setSampleRate(PcmPlaybackFormat.SAMPLE_RATE_HZ)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                             .build()
                     )
-                    .setBufferSizeInBytes(maxOf(minBuffer, 8192))
+                    .setBufferSizeInBytes(maxOf(minBuffer, PcmPlaybackFormat.WRITE_CHUNK_BYTES))
                     .setTransferMode(AudioTrack.MODE_STREAM)
                     .build()
                 if (track.state != AudioTrack.STATE_INITIALIZED) {
                     throw IOException("Could not initialize audio playback.")
                 }
                 audioTrack = track
-                track.play()
+                if (running.get()) track.play()
                 var offset = 0
+                var zeroWrites = 0
                 while (running.get() && offset < pcm.size) {
-                    val count = track.write(pcm, offset, minOf(8192, pcm.size - offset))
-                    if (count < 0) throw IOException("Audio playback failed ($count).")
-                    if (count == 0) Thread.yield() else offset += count
+                    val count = track.write(
+                        pcm, offset, minOf(PcmPlaybackFormat.WRITE_CHUNK_BYTES, pcm.size - offset)
+                    )
+                    when {
+                        count < 0 -> throw IOException("Audio playback failed ($count).")
+                        count == 0 -> {
+                            zeroWrites++
+                            if (zeroWrites >= MAX_CONSECUTIVE_ZERO_WRITES) {
+                                throw IOException("Audio playback stopped accepting audio data.")
+                            }
+                            Thread.yield()
+                        }
+                        else -> {
+                            offset += count
+                            zeroWrites = 0
+                        }
+                    }
                 }
             } catch (error: Exception) {
                 if (running.get()) errorMessage = error.message ?: "Couldn't play this recording."
@@ -76,7 +93,7 @@ internal class PcmVoicePlayback(
                     runCatching { track.pause() }
                     runCatching { track.flush() }
                     runCatching { track.stop() }
-                    track.release()
+                    runCatching { track.release() }
                 }
                 Handler(Looper.getMainLooper()).post { onFinished(errorMessage) }
             }
@@ -85,12 +102,15 @@ internal class PcmVoicePlayback(
 
     fun stop() {
         running.set(false)
-        runCatching { audioTrack?.pause() }
-        runCatching { audioTrack?.flush() }
-        runCatching { audioTrack?.stop() }
+        val active = audioTrack
+        if (active != null) {
+            runCatching { active.pause() }
+            runCatching { active.flush() }
+            runCatching { active.stop() }
+        }
     }
 
     companion object {
-        private const val SAMPLE_RATE = 16_000
+        private const val MAX_CONSECUTIVE_ZERO_WRITES = 100
     }
 }

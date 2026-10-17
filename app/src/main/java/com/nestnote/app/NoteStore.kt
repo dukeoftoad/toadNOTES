@@ -257,6 +257,52 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
             return candidate
         }
 
+        /**
+         * Keeps a reserved, unsaved editor draft ID available when restoring a backup.
+         * A restore can introduce that ID while the editor is open; remap only the incoming
+         * record so staged voice attachments remain owned by the draft's original identity.
+         * If the ID already belongs to a saved note, normal merge-by-ID semantics are retained.
+         */
+        fun remapDraftIdCollisionForRestore(
+            existing: List<NestNote>,
+            incoming: List<NestNote>,
+            reservedDraftId: Long?,
+            nowMillis: Long = System.currentTimeMillis()
+        ): List<NestNote> {
+            val draftId = reservedDraftId ?: return incoming
+            if (existing.any { it.id == draftId } || incoming.none { it.id == draftId }) return incoming
+
+            val usedIds = existing + incoming + NestNote(id = draftId, title = "", body = "")
+            val replacementId = allocateNoteId(usedIds, nowMillis)
+            return incoming.map { note -> if (note.id == draftId) note.copy(id = replacementId) else note }
+        }
+
+        /** Shared dirty-state policy for editor fields and staged voice changes. */
+        fun hasEditorChanges(
+            original: NestNote?,
+            title: String,
+            body: String,
+            category: String,
+            defaultCategory: String,
+            color: Int,
+            background: Int,
+            pinned: Boolean,
+            reminder: String,
+            voiceChangesPending: Boolean
+        ): Boolean =
+            title != original?.title.orEmpty() ||
+                body != original?.body.orEmpty() ||
+                category != (original?.category ?: defaultCategory) ||
+                color != (original?.color ?: 0) ||
+                background != (original?.background ?: 0) ||
+                pinned != (original?.pinned ?: false) ||
+                reminder != original?.reminder.orEmpty() ||
+                voiceChangesPending
+
+        /** True when a new draft's reserved ID is already owned by a persisted note. */
+        fun hasDraftIdCollision(notes: Collection<NestNote>, draftId: Long): Boolean =
+            notes.any { it.id == draftId }
+
         /** Prevents a draft based on an older saved version from replacing newer content. */
         fun isSameNoteVersion(expectedUpdated: Long, currentUpdated: Long): Boolean =
             expectedUpdated == currentUpdated

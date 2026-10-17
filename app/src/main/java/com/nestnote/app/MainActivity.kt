@@ -684,7 +684,8 @@ private fun NestNoteApp(store: NoteStore) {
         }
 
         pendingRestore?.let { incoming ->
-            val preview = NoteStore.merge(notes, incoming)
+            val restoreIncoming = NoteStore.remapDraftIdCollisionForRestore(notes, incoming, editorDraftId)
+            val preview = NoteStore.merge(notes, restoreIncoming)
             val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
             AlertDialog(
                 onDismissRequest = { pendingRestore = null },
@@ -754,7 +755,7 @@ private fun NestNoteApp(store: NoteStore) {
                 closeEditor()
             }
             val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else discardEditor() }
-            val saveNote: (NestNote) -> Unit = { draft ->
+            val saveNote: (NestNote) -> Unit = saveNote@{ draft ->
                 val existing = editorNote
                 // Compare the editor's baseline against the latest collection, not the
                 // editor's own snapshot, which naturally remains unchanged while typing.
@@ -769,12 +770,18 @@ private fun NestNoteApp(store: NoteStore) {
                     }
                 } else {
                     val savedId = existing?.id ?: editorDraftId ?: NoteStore.allocateNoteId(notes)
-                    // Recheck against the latest collection at commit time; another path
-                    // (for example restore) may have introduced the reserved ID meanwhile.
-                    val collisionSafeId = if (existing == null && notes.any { it.id == savedId }) {
-                        NoteStore.allocateNoteId(notes)
-                    } else savedId
-                    val updated = draft.copy(id = collisionSafeId, updated = System.currentTimeMillis())
+                    // Never silently change the identity of a draft at save time: staged
+                    // attachments are encrypted and indexed against this ID. If an unexpected
+                    // writer introduced a collision, keep the editor open and preserve its data.
+                    if (existing == null && NoteStore.hasDraftIdCollision(notes, savedId)) {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                "This draft ID is now in use. Your draft and recordings are preserved; close and reopen a new note to continue."
+                            )
+                        }
+                        return@saveNote
+                    }
+                    val updated = draft.copy(id = savedId, updated = System.currentTimeMillis())
                     val next = if (existing == null) notes + updated else notes.map {
                         if (it.id == existing.id) updated.copy(id = existing.id) else it
                     }
@@ -1240,14 +1247,18 @@ private fun NoteEditorContent(
     } else {
         colors.surface
     }
-    val hasUnsavedChanges = title != original?.title.orEmpty() ||
-        body != original?.body.orEmpty() ||
-        category != (original?.category ?: defaultNoteCategory) ||
-        colorIndex != (original?.color ?: 0) ||
-        backgroundIndex != (original?.background ?: 0) ||
-        pinned != (original?.pinned ?: false) ||
-        reminder != original?.reminder.orEmpty() ||
-        voiceChangesPending
+    val hasUnsavedChanges = NoteStore.hasEditorChanges(
+        original = original,
+        title = title,
+        body = body,
+        category = category,
+        defaultCategory = defaultNoteCategory,
+        color = colorIndex,
+        background = backgroundIndex,
+        pinned = pinned,
+        reminder = reminder,
+        voiceChangesPending = voiceChangesPending
+    )
 
     fun requestDismiss() {
         if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
