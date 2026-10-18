@@ -45,4 +45,21 @@ class VoicePermissionPolicyTest {
             resolveVoicePermissionResult(granted = false, requestPending = false)
         )
     }
+
+    @Test
+    fun recordActionIsBlockedWhileRecordingStartupPermissionOrPlaybackIsActive() {
+        assertEquals(true, canStartVoiceRecording(false, false, false, false))
+        assertEquals(false, canStartVoiceRecording(true, false, false, false))
+        assertEquals(false, canStartVoiceRecording(false, true, false, false))
+        assertEquals(false, canStartVoiceRecording(false, false, true, false))
+        assertEquals(false, canStartVoiceRecording(false, false, false, true))
+    }
+
+    @Test
+    fun durationFormatterHandlesUnknownShortAndMinuteLongRecordings() {
+        assertEquals("Duration unavailable", formatVoiceDuration(32L))
+        assertEquals("Duration unavailable", formatVoiceDuration(0L))
+        assertEquals("Duration 0:01", formatVoiceDuration(32L + 32_000L))
+        assertEquals("Duration 1:05", formatVoiceDuration(32L + 65L * 32_000L))
+    }
 }

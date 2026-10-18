@@ -51,6 +51,19 @@ class VoiceRecordingLifecycleTest {
     }
 
     @Test
+    fun captureFailureIsTerminalAndCannotBeResumed() {
+        val lifecycle = VoiceRecordingLifecycle()
+        assertTrue(lifecycle.start())
+        assertTrue(lifecycle.fail())
+        assertEquals(VoiceRecordingLifecycle.State.FAILED, lifecycle.state())
+        assertFalse(lifecycle.start())
+        assertFalse(lifecycle.pause())
+        assertFalse(lifecycle.resume())
+        assertFalse(lifecycle.stop())
+        assertFalse(lifecycle.fail())
+    }
+
+    @Test
     fun fakeCapturePumpsValidPcmChunksInOrder() {
         val output = ByteArrayOutputStream()
         val fake = FakePcmCapture(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4, 5)))

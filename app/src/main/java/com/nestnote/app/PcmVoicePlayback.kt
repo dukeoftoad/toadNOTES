@@ -17,6 +17,7 @@ internal class PcmVoicePlayback(
     context: Context,
     private val store: VoiceAttachmentStore,
     private val attachment: VoiceAttachment,
+    private val onProgress: (Long, Long) -> Unit = { _, _ -> },
     private val onFinished: (String?) -> Unit
 ) {
     private val appContext = context.applicationContext
@@ -65,6 +66,7 @@ internal class PcmVoicePlayback(
                 if (running.get()) track.play()
                 var offset = 0
                 var zeroWrites = 0
+                var lastProgressBytes = 0
                 while (running.get() && offset < pcm.size) {
                     val count = track.write(
                         pcm, offset, minOf(PcmPlaybackFormat.WRITE_CHUNK_BYTES, pcm.size - offset)
@@ -81,6 +83,12 @@ internal class PcmVoicePlayback(
                         else -> {
                             offset += count
                             zeroWrites = 0
+                            if (offset == pcm.size || offset - lastProgressBytes >= 32_000) {
+                                lastProgressBytes = offset
+                                val positionMs = offset * 1000L / (PcmPlaybackFormat.SAMPLE_RATE_HZ * PcmPlaybackFormat.BYTES_PER_SAMPLE)
+                                val durationMs = pcm.size * 1000L / (PcmPlaybackFormat.SAMPLE_RATE_HZ * PcmPlaybackFormat.BYTES_PER_SAMPLE)
+                                Handler(Looper.getMainLooper()).post { onProgress(positionMs, durationMs) }
+                            }
                         }
                     }
                 }

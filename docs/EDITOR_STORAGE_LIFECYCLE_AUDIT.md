@@ -136,3 +136,14 @@ Required follow-up:
 ## Out of scope / unverified
 
 This report is based on source inspection. It does not prove behavior under actual process death, device audio hardware, Android Keystore invalidation, permission dialogs, or production upgrade installation. Those require automated fault-injection tests where feasible and explicit emulator/device validation.
+
+## PR #37 follow-up: Phase 7 integration status (2026-10-17)
+
+This addendum records implementation changes made after the baseline audit above; it does not rewrite the historical observations.
+
+- The Phase 7 branch now uses the current `main` `NoteStore.kt` implementation, preserving restore collision remapping and draft-ID collision checks.
+- Restore preview remaps an incoming draft ID when it collides with an existing local note or the active editor draft. Saving refuses a draft ID that has become occupied rather than silently moving staged audio to another identity.
+- `VoiceRecordingLifecycle.State.FAILED` and the synchronized `fail()` transition were added. A failed capture cannot be restarted, paused, resumed, or stopped into a success state. The lifecycle regression suite includes a terminal-failure test while retaining the recovered fake-PCM and concurrency coverage.
+- `RELEASE_CHECKLIST.md` now distinguishes historical CI evidence from current-head validation and leaves current candidate gates unchecked.
+
+Validation boundary: these source changes have been pushed to PR #37, but the GitHub compare still reports the branch as diverged from `main`. Exact-head CI has not been verified, and no local build or device test is claimed. Do not merge until the complete diff is reconciled and current-head CI passes.

@@ -742,7 +742,7 @@ private fun NestNoteApp(store: NoteStore) {
                 editorDraftId = null
                 discardVoiceChanges = {}
             }
-            val discardEditor = {
+            val discardEditor: () -> Unit = {
                 discardVoiceChanges()
                 // New-note attachments are staged under the reserved draft ID. Discard
                 // removes both payloads and index entries; saved-note attachments are untouched.
@@ -753,8 +753,17 @@ private fun NestNoteApp(store: NoteStore) {
                     }
                 }
                 closeEditor()
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        if (editorNote == null) {
+                            "Draft discarded, including its unsaved voice recordings."
+                        } else {
+                            "Unsaved changes discarded. Previously saved voice recordings were kept."
+                        }
+                    )
+                }
             }
-            val dismissEditor = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else discardEditor() }
+            val dismissEditor: () -> Unit = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else discardEditor() }
             val saveNote: (NestNote) -> Unit = saveNote@{ draft ->
                 val existing = editorNote
                 // Compare the editor's baseline against the latest collection, not the
@@ -770,9 +779,9 @@ private fun NestNoteApp(store: NoteStore) {
                     }
                 } else {
                     val savedId = existing?.id ?: editorDraftId ?: NoteStore.allocateNoteId(notes)
-                    // Never silently change the identity of a draft at save time: staged
-                    // attachments are encrypted and indexed against this ID. If an unexpected
-                    // writer introduced a collision, keep the editor open and preserve its data.
+                    // Never silently change identity after audio is staged against this ID.
+                    // Restore remaps colliding incoming drafts; if another writer still creates
+                    // a collision, preserve this draft and ask the user to reopen safely.
                     if (existing == null && NoteStore.hasDraftIdCollision(notes, savedId)) {
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(
@@ -839,7 +848,15 @@ private fun NestNoteApp(store: NoteStore) {
                 AlertDialog(
                     onDismissRequest = { confirmSystemDiscard = false },
                     title = { Text("Discard changes?") },
-                    text = { Text("Your unsaved changes will be lost.") },
+                    text = {
+                        Text(
+                            if (editorNote == null) {
+                                "Your unsaved note and any voice recordings attached to this new draft will be discarded."
+                            } else {
+                                "Your unsaved changes and newly staged voice recordings will be discarded. Voice recordings already saved to this note will be kept."
+                            }
+                        )
+                    },
                     confirmButton = { TextButton(onClick = discardEditor) { Text("Discard") } },
                     dismissButton = { TextButton(onClick = { confirmSystemDiscard = false }) { Text("Keep editing") } }
                 )
@@ -1230,6 +1247,7 @@ private fun NoteEditorContent(
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
     var discardConfirmation by remember { mutableStateOf(false) }
+    var deleteConfirmation by remember { mutableStateOf(false) }
     var reminderMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
@@ -1247,18 +1265,14 @@ private fun NoteEditorContent(
     } else {
         colors.surface
     }
-    val hasUnsavedChanges = NoteStore.hasEditorChanges(
-        original = original,
-        title = title,
-        body = body,
-        category = category,
-        defaultCategory = defaultNoteCategory,
-        color = colorIndex,
-        background = backgroundIndex,
-        pinned = pinned,
-        reminder = reminder,
-        voiceChangesPending = voiceChangesPending
-    )
+    val hasUnsavedChanges = title != original?.title.orEmpty() ||
+        body != original?.body.orEmpty() ||
+        category != (original?.category ?: defaultNoteCategory) ||
+        colorIndex != (original?.color ?: 0) ||
+        backgroundIndex != (original?.background ?: 0) ||
+        pinned != (original?.pinned ?: false) ||
+        reminder != original?.reminder.orEmpty() ||
+        voiceChangesPending
 
     fun requestDismiss() {
         if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
@@ -1733,7 +1747,7 @@ private fun NoteEditorContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete") }
+                if (onDelete != null) TextButton(onClick = { deleteConfirmation = true }) { Text("Delete") }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { requestDismiss() }, colors = ButtonDefaults.textButtonColors(contentColor = accent)) { Text("Cancel") }
                 Button(
@@ -1786,6 +1800,25 @@ private fun NoteEditorContent(
                     .testTag("appearance_side_panel")
             )
         }
+    }
+
+    if (deleteConfirmation && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { deleteConfirmation = false },
+            title = { Text("Delete this note?") },
+            text = {
+                Text("The note will be removed. You can undo deletion during the brief Undo window. Voice recordings are removed only after that window expires.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteConfirmation = false
+                    onDelete()
+                }) { Text("Delete note") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteConfirmation = false }) { Text("Keep note") }
+            }
+        )
     }
 
     if (discardConfirmation) {
