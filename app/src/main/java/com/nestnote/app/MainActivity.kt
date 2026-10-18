@@ -262,7 +262,7 @@ private fun NestNoteApp(store: NoteStore) {
                 context.contentResolver.openOutputStream(uri)?.use { it.write(NoteStore.encodeBackup(notes).toByteArray(Charsets.UTF_8)) } != null
             }.getOrDefault(false)
             coroutineScope.launch {
-                snackbarHostState.showSnackbar(if (saved) "Backup saved (${notes.size} notes)" else "Couldn't save the backup")
+                snackbarHostState.showSnackbar(if (saved) "Notes backup saved (${notes.size} notes). Voice recordings are not included." else "Couldn't save the backup")
             }
         }
     }
@@ -693,7 +693,7 @@ private fun NestNoteApp(store: NoteStore) {
                 text = {
                     Text(
                         if (withinNoteLimit) {
-                            "This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Notes not present in the backup will not be deleted."
+                            "This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Voice recordings are not included. Notes not present in the backup will not be deleted."
                         } else {
                             "This restore would exceed NESTNOTE's ${NoteStore.MAX_NOTES}-note limit. Remove notes or choose a smaller backup before restoring."
                         }
