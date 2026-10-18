@@ -546,3 +546,11 @@ This section reconciles the implementation checklists above with the latest P0â€
 - Fixed the combined filter/sort instrumentation test's unsupported Compose assertion API after CI run [#38520909916](https://github.com/dukeoftoad/toadNOTES/actions/runs/38520909916) failed during instrumentation-test compilation. The run's unit tests and debug/minified release builds passed; test APK compilation did not.
 - Code audit identified a double-dispatch risk in Settings `SwitchRow`: both the parent row and nested Switch handled clicks. The row now owns the switch role/toggle semantics and the nested Switch has no independent change callback.
 - **Validation pending:** exact-head CI for commits `30b1a4104a6a43ed996f8e77cc5fca1821db3fa4` and `240adb7479a53f127bb2dc76df7f7b9d9dd53941` has not yet been confirmed. Keep P0/P1 gates open until CI passes and device/accessibility validation is actually performed.
+
+
+### Editor writing-space and toolbar layout correction â€” 2026-10-18
+- [x] Move voice recording controls out of the horizontally scrolling Markdown formatting toolbar; the recorder is now a separate full-width editor section instead of being clipped beside formatting actions.
+- [x] Reduce the default full-screen body field minimum from 10 to 4 lines so the writing canvas adapts better when the keyboard is visible.
+- [x] Reduce excess spacing above the formatting toolbar while preserving its horizontal scrolling and existing Markdown actions.
+- [ ] Verify create/edit, keyboard/insets, narrow/wide layouts, large text, TalkBack and light/dark themes on an emulator/device; no device verification is claimed by this source change.
+- Implementation commit: [4e68cac](https://github.com/dukeoftoad/toadNOTES/commit/4e68cac1cd003ddad9cc89954d0a986b3b98f250).
