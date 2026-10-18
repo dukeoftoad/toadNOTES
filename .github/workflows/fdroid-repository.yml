@@ -3,6 +3,12 @@ name: NESTNOTE F-Droid Repository
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing stable GitHub Release tag to publish (for example v1.2.5)"
+        required: true
+        type: string
 permissions:
   contents: write
 
@@ -12,13 +18,10 @@ concurrency:
 
 jobs:
   publish:
-    # Publish only stable major SemVer releases (vX.0.0).
+    # Publish every stable SemVer release automatically; manual dispatch can publish an existing release.
     if: >-
-      github.event_name == 'release' &&
-      github.event.action == 'published' &&
-      startsWith(github.event.release.tag_name, 'v') &&
-      endsWith(github.event.release.tag_name, '.0.0') &&
-      !contains(github.event.release.tag_name, '-')
+      (github.event_name == 'release' && github.event.action == 'published') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,7 +32,7 @@ jobs:
       - name: Validate release asset
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
