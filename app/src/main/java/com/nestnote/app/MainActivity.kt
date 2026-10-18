@@ -1894,7 +1894,7 @@ private fun AppearanceSidePanel(
                     Box(
                         Modifier.size(48.dp).clip(CircleShape)
                             .background(tint)
-                            .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.primary else colors.outlineVariant, CircleShape)
+                            .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F), CircleShape)
                             .clickable { onColorSelected(index) }
                             .semantics { contentDescription = "Note colour " + (index + 1) + (if (isSelected) ", selected" else ""); this.selected = isSelected }
                             .testTag("note_color_$index"),
@@ -1916,7 +1916,7 @@ private fun AppearanceSidePanel(
                         .clickable { onBackgroundSelected(index) }
                         .semantics { contentDescription = (if (index == 0) "Plain colour" else listOf("", "Botanical", "Sunset", "Waves", "Soft shapes", "Paper")[index]) + (if (isSelected) ", selected" else ""); this.selected = isSelected },
                     shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.primary else colors.outlineVariant),
+                    border = BorderStroke(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F)),
                     color = noteTints[colorIndex]
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 10.dp)) {
@@ -1928,9 +1928,9 @@ private fun AppearanceSidePanel(
                             if (index == 0) "Plain colour" else listOf("", "Botanical", "Sunset", "Waves", "Soft shapes", "Paper")[index],
                             modifier = Modifier.weight(1f).padding(start = 12.dp),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurface
+                            color = Color(0xFF292633)
                         )
-                        if (isSelected) Icon(Icons.Default.Check, contentDescription = "Selected background", tint = colors.primary)
+                        if (isSelected) Icon(Icons.Default.Check, contentDescription = "Selected background", tint = Color(0xFF383044))
                     }
                 }
             }
