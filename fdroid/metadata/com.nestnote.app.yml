@@ -19,3 +19,4 @@ Description: |
 RepoType: git
 Repo: https://github.com/dukeoftoad/toadNOTES
 Binaries: https://github.com/dukeoftoad/toadNOTES/releases/download/v%v/NESTNOTE-v%v.apk
+Changelog: https://raw.githubusercontent.com/dukeoftoad/toadNOTES/main/CHANGELOG.md
