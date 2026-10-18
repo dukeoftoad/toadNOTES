@@ -8,7 +8,7 @@ This is a working draft for an eventual merge request to the official `fdroiddat
 - **License:** `GPL-3.0-only`
 - **Source code:** https://github.com/dukeoftoad/toadNOTES
 - **Issue tracker:** https://github.com/dukeoftoad/toadNOTES/issues
-- **Current upstream release audited:** `v1.2.4` (published 2026-10-15)
+- **Current upstream release:** `v1.2.5` (published 2026-10-18; release notes: https://github.com/dukeoftoad/toadNOTES/releases/tag/v1.2.5)
 - **Build system:** Gradle / Android Gradle Plugin
 - **Build environment observed in CI:** Java 17, Gradle 8.13, Android SDK platform 36, build tools 36.0.0
 - **Minimum SDK:** 26
@@ -18,11 +18,11 @@ This is a working draft for an eventual merge request to the official `fdroiddat
 
 ## Candidate build recipe — validate before submission
 
-Use a **new upstream tag that includes the GPL license file and all final metadata-related fixes**, not the existing `v1.2.4` tag if it predates those changes.
+Use a pinned upstream tag that includes the GPL license file and all final metadata-related fixes. Confirm the selected tag contains those changes before submitting.
 
-The project Gradle configuration accepts `-PversionName` and `-PversionCode`. A candidate F-Droid build should use a monotonically increasing numeric version code that is stable for the release. For example, version code `10205` could represent version `1.2.5`, if that release is actually tagged and approved. Do not publish this example as fact.
+The project Gradle configuration accepts `-PversionName` and `-PversionCode`. A candidate F-Droid build should use a monotonically increasing numeric version code that is stable for the release. A candidate version code such as `10205` is only illustrative until confirmed against the selected source-build recipe; do not treat it as the upstream APK's actual version code.
 
-Candidate build commands in the existing CI toolchain:
+Candidate build commands in the existing CI toolchain (validate these for the exact tag before submission):
 
 ```sh
 gradle --no-daemon testDebugUnitTest -PversionName=1.2.5 -PversionCode=10205
