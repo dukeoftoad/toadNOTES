@@ -1,7 +1,7 @@
 repo_url: https://raw.githubusercontent.com/dukeoftoad/toadNOTES/gh-pages/fdroid/repo
 repo_name: NESTNOTE F-Droid Repo
 repo_description: F-Droid repository for NESTNOTE, a local-first Android notes app.
-repo_icon: icon.svg
+repo_icon: icon.png
 archive_older: 0
 keystore: keystore.p12
 repo_keyalias: ${FDROID_KEY_ALIAS}
