@@ -763,3 +763,12 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Updated [Issue #28](https://github.com/dukeoftoad/toadNOTES/issues/28) to check off the implemented storage/lifecycle items and leave outstanding requirements unchecked. Updated the [voice-notes delivery plan](https://github.com/dukeoftoad/toadNOTES/blob/docs/voice-notes-delivery-plan/docs/VOICE_NOTES_PLAN.md) with milestone status.
 - **Still pending:** durable attachment manifest and safe reconciliation wiring; recorder/player engine; editor permission/control UX; audio backup/import/export policy; broader error and lifecycle tests; accessibility and device/emulator verification; release APK/signing and staged production rollout.
 - **Validation boundary:** CI passed for the merged milestones. No physical-device or emulator audio recording/playback tests have been executed; do not treat test compilation as device validation.
+
+
+## 2026-10-18 — Editor layout correction on main
+- Applied directly to `main` in [commit 4e68cac](https://github.com/dukeoftoad/toadNOTES/commit/4e68cac1cd003ddad9cc89954d0a986b3b98f250).
+- Root cause from the supplied screenshots: `VoiceNoteControls` and word-count metadata were rendered as children of the horizontally scrolling formatting toolbar row. The full-width recording card was therefore laid out horizontally beside formatting actions and clipped by the viewport.
+- Moved voice recording controls into their own full-width section after the formatting toolbar, and placed writing statistics in a separate row. This keeps recorder controls visible and prevents the toolbar's horizontal scrolling container from clipping them.
+- Reduced the full-screen body field minimum height from 10 lines to 4 and reduced excess space above the toolbar to preserve more usable writing space with the keyboard open.
+- Preserved the existing editor state, encrypted recording lifecycle, note persistence, Markdown operations, and Save/Cancel flow.
+- Validation boundary: source-level edit and layout structure were inspected after commit. Android CI has not yet been confirmed for this exact commit; no emulator/device, keyboard/insets, TalkBack, large-font, or visual-regression validation is claimed.
