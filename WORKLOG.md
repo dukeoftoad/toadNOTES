@@ -772,3 +772,10 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Reduced the full-screen body field minimum height from 10 lines to 4 and reduced excess space above the toolbar to preserve more usable writing space with the keyboard open.
 - Preserved the existing editor state, encrypted recording lifecycle, note persistence, Markdown operations, and Save/Cancel flow.
 - Validation boundary: source-level edit and layout structure were inspected after commit. Android CI has not yet been confirmed for this exact commit; no emulator/device, keyboard/insets, TalkBack, large-font, or visual-regression validation is claimed.
+
+
+## 2026-10-18 — Appearance panel contrast fix
+- Applied directly to `main` in [commit 747b8e3](https://github.com/dukeoftoad/toadNOTES/commit/747b8e38e07650468cdcebb8ed1344f665d0b9d4).
+- Replaced theme-dependent light text on pastel background cards with a stable dark ink color (`#292633`) so labels remain readable in dark app themes.
+- Strengthened selected swatch/background outlines to 3 dp dark ink and darkened unselected outlines; selected checks now use a dark color for clear contrast on light tints.
+- Validation boundary: source update committed; CI and device visual/accessibility verification are not yet confirmed.
