@@ -1560,7 +1560,7 @@ private fun NoteEditorContent(
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = textSize.bodySp.sp, lineHeight = (textSize.bodySp * 1.45f).sp
                         ),
-                        minLines = if (fullScreen) 10 else if (compactDialog) 3 else 5,
+                        minLines = if (fullScreen) 4 else if (compactDialog) 3 else 4,
                         shape = RoundedCornerShape(0.dp),
                         colors = fieldColors,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
@@ -1622,7 +1622,7 @@ private fun NoteEditorContent(
                         color = muted
                     )
                 }
-                Spacer(Modifier.height(if (compactDialog) 8.dp else 24.dp))
+                Spacer(Modifier.height(if (compactDialog) 4.dp else 8.dp))
             }
 
             Surface(
@@ -1717,28 +1717,32 @@ private fun NoteEditorContent(
                     ) {
                         Text("H3", style = MaterialTheme.typography.labelLarge, color = accent)
                     }
-                    VoiceNoteControls(
-                    noteId = voiceNoteId,
-                    onAttachmentCountChanged = { voiceAttachmentCount = it },
-                    onVoiceAttachmentAdded = { voiceChangesPending = true },
-                    onDiscardHandlerReady = onRegisterVoiceDiscard
-                )
-                if (showCounts) {
-                        val words = NoteText.wordCount(body)
-                        val minutes = NoteText.readingMinutes(words)
-                        Text(
-                            buildString {
-                                append(if (words == 1) "1 word" else "$words words")
-                                append(" · ${body.length} characters")
-                                if (minutes > 0) append(" · $minutes min read")
-                            },
-                            modifier = Modifier.padding(end = 10.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = muted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                }
+            }
+            VoiceNoteControls(
+                noteId = voiceNoteId,
+                onAttachmentCountChanged = { voiceAttachmentCount = it },
+                onVoiceAttachmentAdded = { voiceChangesPending = true },
+                onDiscardHandlerReady = onRegisterVoiceDiscard
+            )
+            if (showCounts) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val words = NoteText.wordCount(body)
+                    val minutes = NoteText.readingMinutes(words)
+                    Text(
+                        buildString {
+                            append(if (words == 1) "1 word" else "$words words")
+                            append(" · ${body.length} characters")
+                            if (minutes > 0) append(" · $minutes min read")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.6f))
