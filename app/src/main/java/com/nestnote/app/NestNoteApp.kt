@@ -289,7 +289,7 @@ internal fun NestNoteApp(store: NoteStore) {
     // If the gesture is cancelled, the flow is cancelled and the current destination remains.
     PredictiveBackHandler(enabled = !editorVisible && selectedView != "Home") { progress ->
         progress.collect { /* Reserve the progress stream for future destination previews. */ }
-        selectedView = "Home"
+        selectedView = if (selectedView in moreSubViews) "More" else "Home"
         search = ""
         searchVisible = false
     }
@@ -313,7 +313,7 @@ internal fun NestNoteApp(store: NoteStore) {
                     title = {
                         Column {
                             Text(
-                                when (selectedView) { "Settings" -> "Settings"; "More" -> "More"; else -> "NestNote" },
+                                when (selectedView) { "Settings" -> "Settings"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.2.sp
                             )
@@ -324,58 +324,26 @@ internal fun NestNoteApp(store: NoteStore) {
                             )
                         }
                     },
-                    actions = {
-                        // Settings is already the active destination; don't show a
-                        // redundant settings shortcut inside the settings screen.
-                        if (selectedView != "Settings") {
-                            IconButton(
-                                onClick = { selectedView = "Settings" },
-                                modifier = Modifier.semantics { contentDescription = "Open settings" }
-                            ) {
-                                Icon(Icons.Default.Settings, contentDescription = null)
+                    navigationIcon = {
+                        if (selectedView in moreSubViews) {
+                            IconButton(onClick = { selectedView = "More" }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to More")
                             }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
                 )
             },
-            floatingActionButton = {
-                if (selectedView !in listOf("Settings", "Categories", "More")) {
-                    FloatingActionButton(
-                        onClick = {
-                            editorNoteId = null
-                            editorDraftId = NoteStore.allocateNoteId(notes)
-                            editorVisible = true
-                        },
-                        shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Create note", modifier = Modifier.size(28.dp))
-                    }
-                }
-            },
             bottomBar = {
-                NavigationBar {
-                    listOf("Home", "All notes", "Categories", "Reminders", "More", "Settings").forEach { item ->
-                        NavigationBarItem(
-                            selected = selectedView == item || (item == "All notes" && selectedView !in listOf("Home", "Categories", "Reminders", "More", "Settings") && categories.contains(selectedView)),
-                            onClick = { selectedView = item },
-                            icon = {
-                                Icon(when (item) {
-                                    "Home" -> Icons.Default.Home
-                                    "Settings" -> Icons.Default.Settings
-                                    "Categories" -> Icons.Default.GridView
-                                    "All notes" -> Icons.AutoMirrored.Filled.List
-                                    "More" -> Icons.Default.MoreVert
-                                    "Reminders" -> Icons.Default.NotificationsNone
-                                    else -> Icons.Default.Check
-                                }, contentDescription = null)
-                            },
-                            label = { Text(item, maxLines = 1, fontSize = 10.sp) }
-                        )
+                NestNoteNavBar(
+                    selectedView = selectedView,
+                    onSelect = { selectedView = it },
+                    onNewNote = {
+                        editorNoteId = null
+                        editorDraftId = NoteStore.allocateNoteId(notes)
+                        editorVisible = true
                     }
-                }
+                )
             }
         ) { padding ->
             Box(
@@ -428,63 +396,12 @@ internal fun NestNoteApp(store: NoteStore) {
                     }
                 }
                 if (selectedView == "More") {
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text("More", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Useful spaces for the features we add next.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurfaceVariant
-                        )
-                        listOf(
-                            Triple("Pinned notes", "${notes.count { it.pinned && !it.archived }} important notes at a glance", Icons.Default.PushPin),
-                            Triple("Archived notes", "${notes.count { it.archived }} notes kept out of your main lists", Icons.Default.Archive)
-                        ).forEach { (title, description, icon) ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    selectedView = if (title == "Pinned notes") "Pinned" else "Archived"
-                                },
-                                border = BorderStroke(1.dp, colors.outlineVariant),
-                                colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow)
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(18.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(14.dp),
-                                        color = colors.secondaryContainer,
-                                        contentColor = colors.onSecondaryContainer
-                                    ) {
-                                        Icon(icon, contentDescription = null, modifier = Modifier.padding(12.dp).size(24.dp))
-                                    }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                        Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                                    }
-                                    Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
-                                }
-                            }
-                        }
-                        HorizontalDivider(color = colors.outlineVariant)
-                        Text("Backup & preferences", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Manage your appearance, editor, and note backups in Settings.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurfaceVariant
-                        )
-                        OutlinedButton(
-                            onClick = { selectedView = "Settings" },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Open Settings")
-                        }
-                    }
+                    MoreScreen(
+                        pinnedCount = notes.count { it.pinned && !it.archived },
+                        archivedCount = notes.count { it.archived },
+                        categoryCount = categories.size,
+                        onOpen = { selectedView = it }
+                    )
                 } else if (selectedView == "Settings") {
                     SettingsScreen(
                         themeMode = themeMode,
