@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 # Serialize CI per ref. For PRs, a newer commit cancels the older debounce/run;
-# the surviving run checks out the latest PR merge ref after the 5-minute window.
+# the surviving run checks out the latest PR merge ref after the 2-minute window.
 concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -20,8 +20,8 @@ jobs:
       - name: Debounce pull request updates
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          echo "Waiting 5 minutes for a burst of pull request commits to settle."
-          sleep 300
+          echo "Waiting 2 minutes for a burst of pull request commits to settle."
+          sleep 120
       - uses: actions/checkout@v4
         with:
           # For PRs, use the current merge ref after debounce so tests include
