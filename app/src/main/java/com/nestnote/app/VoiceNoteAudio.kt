@@ -14,17 +14,25 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.CardDefaults
@@ -32,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +62,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.IOException
+import java.io.ByteArrayInputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.util.UUID
@@ -227,13 +237,21 @@ internal fun VoiceNoteControls(
     val attachmentStore = remember(context) { VoiceAttachmentStore(context) }
     val attachmentManifest = remember(context) { VoiceAttachmentManifest(context) }
     var attachments by remember(noteId) { mutableStateOf(runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var importingAudio by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
     var startingRecording by remember { mutableStateOf(false) }
     var recordingPaused by remember { mutableStateOf(false) }
+    var pendingReviewId by remember(noteId) { mutableStateOf<String?>(null) }
+    var pendingReviewName by remember(noteId) { mutableStateOf("Voice recording") }
+    var pendingReviewDurationMs by remember(noteId) { mutableIntStateOf(0) }
     var elapsedRecordingSeconds by remember { mutableIntStateOf(0) }
     var showPermissionSettings by remember { mutableStateOf(false) }
     var playingId by remember { mutableStateOf<String?>(null) }
     var playbackPositionMs by remember { mutableIntStateOf(0) }
+    var pendingSeekMs by remember { mutableIntStateOf(0) }
+    var seekingPlayback by remember { mutableStateOf(false) }
+    var playbackPaused by remember { mutableStateOf(false) }
     var playbackDurationMs by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf("") }
     var pendingPermission by remember { mutableStateOf(false) }
@@ -243,6 +261,34 @@ internal fun VoiceNoteControls(
     var audioFocusListener by remember { mutableStateOf<AudioManager.OnAudioFocusChangeListener?>(null) }
     val addedThisSession = remember(noteId) { mutableSetOf<String>() }
     val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val audioFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            importingAudio = true
+            status = "Importing audio securely…"
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val pcm = context.contentResolver.openInputStream(uri)?.use { decodePcmWav(it.readBytes()) }
+                            ?: throw IOException("Could not open the selected audio file.")
+                        if (pcm.isEmpty()) throw IOException("The selected audio file contains no audio.")
+                        if (pcm.size > VoiceAttachmentStore.MAX_AUDIO_BYTES) throw IOException("Audio exceeds the 25 MiB attachment limit.")
+                        val id = UUID.randomUUID().toString()
+                        val saved = attachmentStore.save(noteId, id, ByteArrayInputStream(pcm))
+                        val duration = pcm.size.toLong() * 1000L / (VOICE_SAMPLE_RATE * 2L)
+                        attachmentManifest.put(VoiceAttachmentMetadata(noteId, id, System.currentTimeMillis(), duration, saved.encryptedSizeBytes, "Imported audio"), attachmentStore)
+                        saved
+                    }
+                }
+                importingAudio = false
+                result.onSuccess {
+                    attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
+                    onAttachmentCountChanged(attachments.size)
+                    onVoiceAttachmentAdded()
+                    status = "Audio attached securely."
+                }.onFailure { status = it.message ?: "Could not attach this audio file." }
+            }
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         when (resolveVoicePermissionResult(granted, pendingPermission)) {
             VoicePermissionDecision.START_RECORDING -> {
@@ -250,7 +296,7 @@ internal fun VoiceNoteControls(
                 startingRecording = true
                 showPermissionSettings = false
                 startVoiceRecording(context, audioManager, attachmentStore, attachmentManifest, noteId, addedThisSession,
-                    { session, listener -> startingRecording = false; recordingSession = session; recording = true; recordingPaused = false; elapsedRecordingSeconds = 0; status = "Recording…"; requestedAudioFocus = true; audioFocusListener = listener; onVoiceAttachmentAdded() },
+                    { session, listener -> startingRecording = false; recordingSession = session; recording = true; recordingPaused = false; elapsedRecordingSeconds = 0; status = "Recording…"; requestedAudioFocus = true; audioFocusListener = listener },
                     { message ->
                         startingRecording = false
                         recordingSession = null
@@ -290,6 +336,9 @@ internal fun VoiceNoteControls(
         playingId = null
         playbackPositionMs = 0
         playbackDurationMs = 0
+        pendingSeekMs = 0
+        seekingPlayback = false
+        playbackPaused = false
         if (requestedAudioFocus) {
             audioManager.abandonAudioFocus(audioFocusListener)
             requestedAudioFocus = false
@@ -325,6 +374,7 @@ internal fun VoiceNoteControls(
                 playbackSession?.stop()
                 playbackSession = null
                 playingId = null
+                playbackPaused = false
                 status = "Recording/playback stopped when the app left the foreground."
             }
         }
@@ -338,15 +388,22 @@ internal fun VoiceNoteControls(
     }
 
     LaunchedEffect(status) {
-        if (status == "Recording saved securely." || status.startsWith("Recording encrypted, but its metadata")) {
+        if (status.startsWith("Recording ready for review:")) {
+            val id = status.substringAfter("Recording ready for review:").trim()
+            val payload = runCatching { attachmentStore.list(noteId).firstOrNull { it.attachmentId == id } }.getOrNull()
             recording = false
             recordingPaused = false
             recordingSession = null
             requestedAudioFocus = false
             audioFocusListener = null
-            attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-            onAttachmentCountChanged(attachments.size)
-            onVoiceAttachmentAdded()
+            if (payload != null) {
+                pendingReviewId = id
+                pendingReviewName = "Voice recording"
+                pendingReviewDurationMs = (((payload.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) / (VOICE_SAMPLE_RATE * 2L)).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                status = "Recording ready. Preview and attach it when you're satisfied."
+            } else {
+                status = "The recording could not be loaded for review."
+            }
         }
     }
 
@@ -387,6 +444,13 @@ internal fun VoiceNoteControls(
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Voice", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                OutlinedButton(
+                    enabled = !recording && !startingRecording && !pendingPermission && !importingAudio,
+                    onClick = { audioFileLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")) }
+                ) {
+                    Icon(Icons.Default.AttachFile, contentDescription = "Attach audio file")
+                    Text(if (importingAudio) "Importing…" else "Attach audio file")
+                }
                 Button(
                     modifier = Modifier.semantics {
                         contentDescription = "Record voice note"
@@ -398,15 +462,15 @@ internal fun VoiceNoteControls(
                             else -> "Ready"
                         }
                     },
-                    enabled = canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null),
+                    enabled = canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null || pendingReviewId != null),
                     onClick = {
                         keyboardController?.hide()
-                        if (!canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null)) return@Button
+                        if (!canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null || pendingReviewId != null)) return@Button
                         startingRecording = true
                         showPermissionSettings = false
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                             startVoiceRecording(context, audioManager, attachmentStore, attachmentManifest, noteId, addedThisSession,
-                                { session, listener -> startingRecording = false; recordingSession = session; recording = true; recordingPaused = false; elapsedRecordingSeconds = 0; status = "Recording…"; requestedAudioFocus = true; audioFocusListener = listener; onVoiceAttachmentAdded() },
+                                { session, listener -> startingRecording = false; recordingSession = session; recording = true; recordingPaused = false; elapsedRecordingSeconds = 0; status = "Recording…"; requestedAudioFocus = true; audioFocusListener = listener },
                                 { message ->
                                     startingRecording = false
                                     recordingSession = null
@@ -479,98 +543,209 @@ internal fun VoiceNoteControls(
             } else if (startingRecording || pendingPermission) {
                 Text("Preparing microphone…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (attachments.isEmpty()) {
-                Text("No recordings yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                attachments.forEachIndexed { index, attachment ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                if (attachment.attachmentId in addedThisSession) "Recording ${index + 1} · Not yet saved to note" else "Recording ${index + 1}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                formatVoiceDuration(attachment.encryptedSizeBytes),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (playingId == attachment.attachmentId && playbackDurationMs > 0) {
-                                val positionSeconds = playbackPositionMs / 1000
-                                val durationSeconds = playbackDurationMs / 1000
-                                Text(
-                                    "Playback %d:%02d / %d:%02d".format(
-                                        positionSeconds / 60, positionSeconds % 60,
-                                        durationSeconds / 60, durationSeconds % 60
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                        OutlinedButton(
-                            modifier = Modifier.semantics {
-                                contentDescription = if (playingId == attachment.attachmentId) {
-                                    "Stop playback of recording ${index + 1}"
-                                } else {
-                                    "Play recording ${index + 1}"
-                                }
-                                stateDescription = when {
-                                    playingId == attachment.attachmentId -> "Playing"
-                                    playingId != null -> "Unavailable while another recording plays"
-                                    recording -> "Unavailable while recording"
-                                    else -> "Playback stopped"
-                                }
-                            },
-                            enabled = !recording && (playingId == null || playingId == attachment.attachmentId),
-                            onClick = {
-                                if (playingId == attachment.attachmentId) {
-                                    stopPlayback()
-                                    status = "Playback stopped."
-                                } else {
-                                    stopPlayback()
-                                    val focus = requestVoiceAudioFocus(audioManager) {
+            if (pendingReviewId != null) {
+                val reviewId = pendingReviewId!!
+                val reviewAttachment = attachments.firstOrNull { it.attachmentId == reviewId }
+                    ?: runCatching { attachmentStore.list(noteId).firstOrNull { it.attachmentId == reviewId } }.getOrNull()
+                Card(
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Recording review" },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Review recording", style = MaterialTheme.typography.titleSmall)
+                        OutlinedTextField(value = pendingReviewName, onValueChange = { pendingReviewName = it.take(160) }, label = { Text("Recording name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text("Preview • ${formatPlaybackTime(pendingReviewDurationMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                enabled = reviewAttachment != null && !recording && (playingId == null || playingId == reviewId),
+                                onClick = {
+                                    if (playingId == reviewId) {
+                                        if (playbackPaused) { playbackSession?.resume(); playbackPaused = false; status = "Preview resumed." }
+                                        else { playbackSession?.pause(); playbackPaused = true; status = "Preview paused." }
+                                    } else if (reviewAttachment != null) {
                                         stopPlayback()
-                                        status = "Playback stopped because audio focus was interrupted."
-                                    }
-                                    if (focus == null) status = "Audio focus is unavailable. Try again."
-                                    else {
-                                        requestedAudioFocus = true
-                                        audioFocusListener = focus
-                                        playingId = attachment.attachmentId
-                                        playbackPositionMs = 0
-                                        playbackDurationMs = 0
-                                        status = "Playing recording ${index + 1}."
-                                        val player = PcmVoicePlayback(
-                                            context,
-                                            attachmentStore,
-                                            attachment,
-                                            onProgress = { positionMs, durationMs ->
+                                        val focus = requestVoiceAudioFocus(audioManager) { stopPlayback(); status = "Preview stopped because audio focus was interrupted." }
+                                        if (focus == null) status = "Audio focus is unavailable. Try again."
+                                        else {
+                                            requestedAudioFocus = true
+                                            audioFocusListener = focus
+                                            playingId = reviewId
+                                            playbackPaused = false
+                                            playbackPositionMs = 0
+                                            playbackDurationMs = 0
+                                            val player = PcmVoicePlayback(context, attachmentStore, reviewAttachment, onProgress = { positionMs, durationMs ->
                                                 playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                                                 playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                            }) { error ->
+                                                playingId = null; playbackSession = null; playbackPaused = false
+                                                audioManager.abandonAudioFocus(focus); audioFocusListener = null; requestedAudioFocus = false
+                                                status = error ?: "Preview finished."
                                             }
-                                        ) { error ->
-                                            playingId = null
-                                            playbackSession = null
-                                            audioManager.abandonAudioFocus(focus)
-                                            audioFocusListener = null
-                                            requestedAudioFocus = false
-                                            status = error ?: "Playback finished."
-                                        }
-                                        playbackSession = player
-                                        runCatching { player.start() }.onFailure { error ->
-                                            playbackSession = null
-                                            playingId = null
-                                            audioManager.abandonAudioFocus(focus)
-                                            audioFocusListener = null
-                                            requestedAudioFocus = false
-                                            status = error.message ?: "Couldn't start playback. Try again."
+                                            playbackSession = player
+                                            runCatching { player.start() }.onFailure { status = it.message ?: "Couldn't preview recording." }
                                         }
                                     }
                                 }
+                            ) { Icon(if (playingId == reviewId && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null); Text(if (playingId == reviewId && !playbackPaused) "Pause preview" else "Preview") }
+                            Button(enabled = pendingReviewName.isNotBlank() && reviewAttachment != null, onClick = {
+                                runCatching {
+                                    attachmentManifest.put(VoiceAttachmentMetadata(noteId, reviewId, System.currentTimeMillis(), pendingReviewDurationMs.toLong(), reviewAttachment!!.encryptedSizeBytes, pendingReviewName.trim()), attachmentStore)
+                                }.onSuccess {
+                                    pendingReviewId = null
+                                    attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
+                                    onAttachmentCountChanged(attachments.size)
+                                    onVoiceAttachmentAdded()
+                                    status = "Recording attached to this note."
+                                }.onFailure { status = it.message ?: "Couldn't attach reviewed recording." }
+                            }) { Text("Attach") }
+                            OutlinedButton(onClick = {
+                                if (playingId == reviewId) stopPlayback()
+                                addedThisSession.remove(reviewId)
+                                runCatching { attachmentStore.delete(noteId, reviewId) }
+                                runCatching { attachmentManifest.remove(noteId, reviewId) }
+                                pendingReviewId = null
+                                pendingReviewName = "Voice recording"
+                                pendingReviewDurationMs = 0
+                                attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
+                                onAttachmentCountChanged(attachments.size)
+                                status = "Reviewed recording discarded. Existing attachments were kept."
+                            }) { Text("Discard") }
+                        }
+                    }
+                }
+            }
+            val visibleAttachments = attachments.filter { it.attachmentId != pendingReviewId }
+            if (visibleAttachments.isEmpty() && pendingReviewId == null) {
+                Text("No audio attachments yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                visibleAttachments.forEachIndexed { index, attachment ->
+                    val active = playingId == attachment.attachmentId
+                    val shownDuration = if (active && playbackDurationMs > 0) playbackDurationMs else 0
+                    val shownPosition = if (active) playbackPositionMs else 0
+                    Card(
+                        modifier = Modifier.fillMaxWidth().semantics {
+                            contentDescription = "Audio attachment ${index + 1}"
+                        },
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                IconButton(
+                                    enabled = !recording && (playingId == null || active),
+                                    onClick = {
+                                        if (active) {
+                                            if (playbackPaused) {
+                                                playbackSession?.resume()
+                                                playbackPaused = false
+                                                status = "Playback resumed."
+                                            } else {
+                                                playbackSession?.pause()
+                                                playbackPaused = true
+                                                status = "Playback paused."
+                                            }
+                                        } else {
+                                            stopPlayback()
+                                            val focus = requestVoiceAudioFocus(audioManager) {
+                                                stopPlayback()
+                                                status = "Playback stopped because audio focus was interrupted."
+                                            }
+                                            if (focus == null) status = "Audio focus is unavailable. Try again."
+                                            else {
+                                                requestedAudioFocus = true
+                                                audioFocusListener = focus
+                                                playingId = attachment.attachmentId
+                                                playbackPaused = false
+                                                playbackPositionMs = 0
+                                                pendingSeekMs = 0
+                                                playbackDurationMs = 0
+                                                status = "Playing recording ${index + 1}."
+                                                val player = PcmVoicePlayback(
+                                                    context,
+                                                    attachmentStore,
+                                                    attachment,
+                                                    onProgress = { positionMs, durationMs ->
+                                                        playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                        playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                        if (!seekingPlayback) pendingSeekMs = playbackPositionMs
+                                                    }
+                                                ) { error ->
+                                                    playingId = null
+                                                    playbackSession = null
+                                                    playbackPaused = false
+                                                    audioManager.abandonAudioFocus(focus)
+                                                    audioFocusListener = null
+                                                    requestedAudioFocus = false
+                                                    status = error ?: "Playback finished."
+                                                }
+                                                playbackSession = player
+                                                runCatching { player.start() }.onFailure { error ->
+                                                    playbackSession = null
+                                                    playingId = null
+                                                    playbackPaused = false
+                                                    audioManager.abandonAudioFocus(focus)
+                                                    audioFocusListener = null
+                                                    requestedAudioFocus = false
+                                                    status = error.message ?: "Couldn't start playback. Try again."
+                                                }
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = if (active && !playbackPaused) "Pause recording ${index + 1}" else "Play recording ${index + 1}"
+                                    }
+                                ) {
+                                    Icon(
+                                        if (active && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = null
+                                    )
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        if (attachment.attachmentId in addedThisSession) "Recording ${index + 1} · Not yet saved to note" else "Recording ${index + 1}",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        if (shownDuration > 0) formatPlaybackTime(shownDuration) else formatVoiceDuration(attachment.encryptedSizeBytes),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
-                        ) {
-                            Icon(if (playingId == attachment.attachmentId) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = if (playingId == attachment.attachmentId) "Stop playback" else "Play recording ${index + 1}")
-                            Text(if (playingId == attachment.attachmentId) "Stop" else "Play")
+                            val estimatedDurationMs = (((attachment.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) / (VOICE_SAMPLE_RATE * 2L))
+                                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                            val sliderMax = maxOf(if (active && playbackDurationMs > 0) playbackDurationMs else estimatedDurationMs, 1)
+                            Slider(
+                                value = if (active) pendingSeekMs.coerceIn(0, sliderMax).toFloat() else 0f,
+                                onValueChange = { value ->
+                                    if (active && playbackDurationMs > 0) {
+                                        seekingPlayback = true
+                                        pendingSeekMs = value.toInt()
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    if (active && playbackDurationMs > 0) {
+                                        playbackPositionMs = pendingSeekMs
+                                        playbackSession?.seekTo(pendingSeekMs.toLong())
+                                    }
+                                    seekingPlayback = false
+                                },
+                                valueRange = 0f..sliderMax.toFloat(),
+                                enabled = active && playbackDurationMs > 0 && !recording,
+                                modifier = Modifier.fillMaxWidth().height(28.dp).semantics {
+                                    contentDescription = "Seek recording ${index + 1}"
+                                }
+                            )
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(formatPlaybackTime(if (active) shownPosition else 0), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    if (active && playbackDurationMs > 0) formatPlaybackTime(playbackDurationMs)
+                                    else formatPlaybackTime(estimatedDurationMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -589,6 +764,29 @@ internal fun VoiceNoteControls(
         }
     }
 }
+}
+
+/** Converts uncompressed 16-bit mono/stereo WAV to the inline player’s 16 kHz mono PCM format. */
+private fun decodePcmWav(bytes: ByteArray): ByteArray {
+    if (bytes.size < 44 || String(bytes, 0, 4, Charsets.US_ASCII) != "RIFF" || String(bytes, 8, 4, Charsets.US_ASCII) != "WAVE") throw IOException("Choose an uncompressed PCM WAV file (16-bit audio).")
+    var offset = 12; var format = -1; var channels = 0; var sampleRate = 0; var bits = 0; var dataOffset = -1; var dataLength = 0
+    while (offset + 8 <= bytes.size) {
+        val id = String(bytes, offset, 4, Charsets.US_ASCII)
+        val length = java.nio.ByteBuffer.wrap(bytes, offset + 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+        if (length < 0 || offset + 8L + length > bytes.size) throw IOException("The WAV file is malformed.")
+        if (id == "fmt " && length >= 16) { val b = java.nio.ByteBuffer.wrap(bytes, offset + 8, length).order(java.nio.ByteOrder.LITTLE_ENDIAN); format = b.short.toInt() and 0xffff; channels = b.short.toInt() and 0xffff; sampleRate = b.int; b.int; b.short; bits = b.short.toInt() and 0xffff }
+        if (id == "data") { dataOffset = offset + 8; dataLength = length }
+        offset += 8 + length + (length and 1)
+    }
+    if (format != 1 || channels !in 1..2 || bits != 16 || sampleRate <= 0 || dataOffset < 0 || dataLength < channels * 2) throw IOException("Unsupported WAV format. Use uncompressed 16-bit mono or stereo WAV.")
+    val frames = dataLength / (channels * 2); val outFrames = (frames.toLong() * VOICE_SAMPLE_RATE / sampleRate).coerceAtLeast(1L).coerceAtMost((Int.MAX_VALUE / 2).toLong()).toInt()
+    val input = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN); val output = java.nio.ByteBuffer.allocate(outFrames * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    repeat(outFrames) { i -> val frame = ((i.toLong() * sampleRate) / VOICE_SAMPLE_RATE).toInt().coerceAtMost(frames - 1); val left = input.getShort(dataOffset + frame * channels * 2).toInt(); val sample = if (channels == 2) (left + input.getShort(dataOffset + frame * 4 + 2).toInt()) / 2 else left; output.putShort(i * 2, sample.toShort()) }
+    return output.array()
+}
+private fun formatPlaybackTime(durationMs: Int): String {
+    val totalSeconds = (durationMs / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
 
 private fun startVoiceRecording(
@@ -622,26 +820,8 @@ private fun startVoiceRecording(
         }
         when {
             result.isSuccess -> {
-                val attachment = result.getOrThrow()
-                runCatching {
-                    val plaintextBytes = (attachment.encryptedSizeBytes - 32L).coerceAtLeast(0L)
-                    val durationMillis = plaintextBytes * 1000L / (VOICE_SAMPLE_RATE * 2L)
-                    manifest.put(
-                        VoiceAttachmentMetadata(
-                            noteId = noteId,
-                            attachmentId = id,
-                            createdAtMillis = System.currentTimeMillis(),
-                            durationMillis = durationMillis,
-                            encryptedSizeBytes = attachment.encryptedSizeBytes,
-                            displayName = "Voice recording"
-                        ),
-                        store
-                    )
-                }.onSuccess {
-                    onStatus("Recording saved securely.")
-                }.onFailure {
-                    onStatus("Recording encrypted, but its metadata could not be saved. Keep this note and try again.")
-                }
+                // Save encrypted bytes only. The manifest entry is created after explicit Attach.
+                onStatus("Recording ready for review: $id")
             }
             else -> onStatus(result.exceptionOrNull()?.message ?: "Couldn't save recording")
         }

@@ -73,6 +73,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
@@ -1310,6 +1311,9 @@ private fun NoteEditorContent(
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
     var appearanceVisible by remember { mutableStateOf(false) }
+    val appearanceRailState = rememberSlimRailState()
+    val formattingRailState = rememberSlimRailState()
+    var formattingVisible by remember { mutableStateOf(false) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
@@ -1514,6 +1518,11 @@ private fun NoteEditorContent(
                                     }
                                     DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
                                         DropdownMenuItem(
+                                            text = { Text("Formatting") },
+                                            onClick = { moreMenu = false; formattingVisible = true },
+                                            leadingIcon = { Icon(Icons.Default.FormatSize, null) }
+                                        )
+                                        DropdownMenuItem(
                                             text = { Text("Share note") },
                                             enabled = title.isNotBlank() || body.isNotBlank(),
                                             onClick = { moreMenu = false; shareNote() },
@@ -1570,36 +1579,6 @@ private fun NoteEditorContent(
                     exit = fadeOut() + slideOutVertically { it }
                 ) {
                 Column(Modifier.imePadding()) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = if (compactDialog) 8.dp else 14.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Insert checklist item" }) { Icon(Icons.Default.CheckBox, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Insert bullet point" }) { Icon(Icons.Default.FormatListBulleted, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Toggle numbered list" }) { Icon(Icons.Default.FormatListNumbered, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Toggle blockquote" }) { Icon(Icons.Default.FormatQuote, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyMarkdownLink() }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Insert Markdown link" }) { Icon(Icons.Default.Link, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyInlineEdit("**") }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Bold selected text" }) { Icon(Icons.Default.FormatBold, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyInlineEdit("_") }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Italic selected text" }) { Icon(Icons.Default.FormatItalic, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyInlineEdit("~~") }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Strikethrough selected text" }) { Icon(Icons.Default.FormatStrikethrough, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyInlineEdit("`") }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Inline code selected text" }) { Icon(Icons.Default.Code, contentDescription = null, tint = accent) }
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 1) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Toggle level one heading on current line" }) { Icon(Icons.Default.FormatSize, contentDescription = "H1", tint = accent) }
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 2) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Toggle level two heading on current line" }) { Icon(Icons.Default.TextFields, contentDescription = "H2", tint = accent) }
-                                    IconButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 3) } }, modifier = Modifier.size(40.dp).semantics { contentDescription = "Toggle level three heading on current line" }) { Icon(Icons.Default.Title, contentDescription = "H3", tint = accent) }
-                                }
-                            }
-                            VoiceNoteControls(
-                                noteId = voiceNoteId,
-                                onAttachmentCountChanged = { voiceAttachmentCount = it },
-                                onVoiceAttachmentAdded = { voiceChangesPending = true },
-                                onDiscardHandlerReady = onRegisterVoiceDiscard
-                            )
                             if (showCounts) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -1649,6 +1628,12 @@ private fun NoteEditorContent(
                         }
                     }
                 )
+                    VoiceNoteControls(
+                        noteId = voiceNoteId,
+                        onAttachmentCountChanged = { voiceAttachmentCount = it },
+                        onVoiceAttachmentAdded = { voiceChangesPending = true },
+                        onDiscardHandlerReady = onRegisterVoiceDiscard
+                    )
                     val checklistItems = NoteText.checklistItems(bodyValue.text)
                     if (checklistItems.isNotEmpty()) {
                         Surface(
@@ -1819,10 +1804,6 @@ private fun NoteEditorContent(
         }
         appearanceVisible = false
     }
-    PredictiveBackHandler(enabled = appearanceVisible) { progress ->
-        progress.collect { /* Keep the appearance panel until the system back gesture commits. */ }
-        dismissAppearance(discardDraft = true)
-    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Keep the writing canvas dominant on phones, while giving the appearance
         // controls a little more room on tablets and other wide editor windows.
@@ -1830,24 +1811,94 @@ private fun NoteEditorContent(
         AnimatedVisibility(visible = appearanceVisible, enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.fillMaxSize().background(colors.scrim.copy(alpha = 0.40f)).clickable { dismissAppearance(discardDraft = true) }.testTag("appearance_scrim"))
         }
-        AnimatedVisibility(
-            visible = appearanceVisible,
-            modifier = Modifier.align(Alignment.CenterEnd),
-            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
-            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+        LaunchedEffect(appearanceVisible) {
+            if (appearanceVisible) {
+                appearanceRailState.open()
+                snapshotFlow { appearanceRailState.targetValue }.collect { target ->
+                    if (target == RailValue.Closed && appearanceVisible) dismissAppearance(discardDraft = true)
+                }
+            } else {
+                appearanceRailState.close()
+            }
+        }
+        if (appearanceVisible) {
+            SlimRailPanel(
+                state = appearanceRailState,
+                panelWidth = appearancePanelMaxWidth,
+                contentDescription = "Note appearance",
+                modifier = Modifier.testTag("appearance_side_panel")
+            ) {
+                AppearanceSidePanel(
+                    colorIndex = colorIndex,
+                    backgroundIndex = backgroundIndex,
+                    onColorSelected = { colorIndex = it },
+                    onBackgroundSelected = { backgroundIndex = it },
+                    onDismiss = { dismissAppearance(discardDraft = true) },
+                    onApply = { dismissAppearance(discardDraft = false) },
+                    modifier = Modifier.fillMaxHeight().width(appearancePanelMaxWidth)
+                        .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(formattingVisible) {
+        if (formattingVisible) {
+            formattingRailState.open()
+            snapshotFlow { formattingRailState.targetValue }.collect { target ->
+                if (target == RailValue.Closed && formattingVisible) formattingVisible = false
+            }
+        } else {
+            formattingRailState.close()
+        }
+    }
+
+    if (formattingVisible) {
+        SlimRailPanel(
+            state = formattingRailState,
+            panelWidth = 304.dp,
+            contentDescription = "Text formatting",
+            modifier = Modifier.testTag("formatting_side_panel")
         ) {
-            AppearanceSidePanel(
-                colorIndex = colorIndex,
-                backgroundIndex = backgroundIndex,
-                onColorSelected = { colorIndex = it },
-                onBackgroundSelected = { backgroundIndex = it },
-                onDismiss = { dismissAppearance(discardDraft = true) },
-                onApply = { dismissAppearance(discardDraft = false) },
-                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.88f).widthIn(max = appearancePanelMaxWidth)
+            Column(
+                Modifier.fillMaxHeight().width(304.dp)
                     .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
                     .background(MaterialTheme.colorScheme.surface)
-                    .testTag("appearance_side_panel")
-            )
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding().navigationBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Formatting", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                        Text("Format the selected text or current line", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { formattingVisible = false }, modifier = Modifier.testTag("formatting_close")) {
+                        Icon(Icons.Default.Close, contentDescription = "Close formatting panel")
+                    }
+                }
+                Text("Paragraph", style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckBox, null); Spacer(Modifier.width(12.dp)); Text("Checklist") }
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatListBulleted, null); Spacer(Modifier.width(12.dp)); Text("Bullet list") }
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatListNumbered, null); Spacer(Modifier.width(12.dp)); Text("Numbered list") }
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatQuote, null); Spacer(Modifier.width(12.dp)); Text("Blockquote") }
+                HorizontalDivider()
+                Text("Text style", style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                TextButton(onClick = { applyInlineEdit("**") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatBold, null); Spacer(Modifier.width(12.dp)); Text("Bold") }
+                TextButton(onClick = { applyInlineEdit("_") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatItalic, null); Spacer(Modifier.width(12.dp)); Text("Italic") }
+                TextButton(onClick = { applyInlineEdit("~~") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatStrikethrough, null); Spacer(Modifier.width(12.dp)); Text("Strikethrough") }
+                TextButton(onClick = { applyInlineEdit("`") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Code, null); Spacer(Modifier.width(12.dp)); Text("Inline code") }
+                TextButton(onClick = { applyMarkdownLink() }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Link, null); Spacer(Modifier.width(12.dp)); Text("Insert link") }
+                HorizontalDivider()
+                Text("Headings", style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 1) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatSize, null); Spacer(Modifier.width(12.dp)); Text("Heading 1") }
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 2) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(12.dp)); Text("Heading 2") }
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 3) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Title, null); Spacer(Modifier.width(12.dp)); Text("Heading 3") }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(onClick = { formattingVisible = false }, modifier = Modifier.fillMaxWidth()) { Text("Done") }
+            }
         }
     }
 
@@ -1931,21 +1982,25 @@ private fun AppearanceSidePanel(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Colour palette", style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
             Text("Choose a soft tint", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-            // Keep each swatch comfortably tappable; allow horizontal scrolling on
-            // narrow phones rather than shrinking seven targets below 48 dp.
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                noteAccents.forEachIndexed { index, tint ->
-                    val isSelected = index == colorIndex
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .background(tint)
-                            .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F), CircleShape)
-                            .clickable { onColorSelected(index) }
-                            .semantics { contentDescription = "Note colour " + (index + 1) + (if (isSelected) ", selected" else ""); this.selected = isSelected }
-                            .testTag("note_color_$index"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF383044))
+            // Stack colour swatches into short rows to avoid horizontal scrolling.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                noteAccents.chunked(4).forEach { swatchRow ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        swatchRow.forEach { tint ->
+                            val index = noteAccents.indexOf(tint)
+                            val isSelected = index == colorIndex
+                            Box(
+                                Modifier.size(48.dp).clip(CircleShape)
+                                    .background(tint)
+                                    .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F), CircleShape)
+                                    .clickable { onColorSelected(index) }
+                                    .semantics { contentDescription = "Note colour " + (index + 1) + (if (isSelected) ", selected" else ""); this.selected = isSelected }
+                                    .testTag("note_color_$index"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF383044))
+                            }
+                        }
                     }
                 }
             }

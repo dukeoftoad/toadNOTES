@@ -24,6 +24,8 @@ internal class PcmVoicePlayback(
     private val running = AtomicBoolean(false)
     @Volatile private var audioTrack: AudioTrack? = null
     @Volatile private var playbackThread: Thread? = null
+    @Volatile private var paused = false
+    @Volatile private var requestedSeekMs: Long? = null
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -67,7 +69,28 @@ internal class PcmVoicePlayback(
                 var offset = 0
                 var zeroWrites = 0
                 var lastProgressBytes = 0
+                var lastReportedSeek: Long? = null
                 while (running.get() && offset < pcm.size) {
+                    if (paused) {
+                        Thread.sleep(40)
+                        continue
+                    }
+                    val seekMs = requestedSeekMs
+                    if (seekMs != null && seekMs != lastReportedSeek) {
+                        val frameBytes = PcmPlaybackFormat.BYTES_PER_SAMPLE
+                        offset = (((seekMs.coerceIn(0L, pcm.size * 1000L / (PcmPlaybackFormat.SAMPLE_RATE_HZ * frameBytes)) *
+                            PcmPlaybackFormat.SAMPLE_RATE_HZ * frameBytes) / 1000L).toInt() / frameBytes) * frameBytes
+                        runCatching { track.pause() }
+                        runCatching { track.flush() }
+                        if (running.get() && !paused) track.play()
+                        lastReportedSeek = seekMs
+                        requestedSeekMs = null
+                        lastProgressBytes = offset
+                        Handler(Looper.getMainLooper()).post {
+                            onProgress(offset * 1000L / (PcmPlaybackFormat.SAMPLE_RATE_HZ * frameBytes), pcm.size * 1000L / (PcmPlaybackFormat.SAMPLE_RATE_HZ * frameBytes))
+                        }
+                    }
+                    if (paused) continue
                     val count = track.write(
                         pcm, offset, minOf(PcmPlaybackFormat.WRITE_CHUNK_BYTES, pcm.size - offset)
                     )
@@ -106,6 +129,20 @@ internal class PcmVoicePlayback(
                 Handler(Looper.getMainLooper()).post { onFinished(errorMessage) }
             }
         }, "nestnote-voice-playback").apply { start() }
+    }
+
+    fun pause() {
+        paused = true
+        runCatching { audioTrack?.pause() }
+    }
+
+    fun resume() {
+        paused = false
+        runCatching { if (running.get()) audioTrack?.play() }
+    }
+
+    fun seekTo(positionMs: Long) {
+        requestedSeekMs = positionMs.coerceAtLeast(0L)
     }
 
     fun stop() {
