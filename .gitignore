@@ -8,3 +8,19 @@ fdroid/*.keystore
 # Redesign archives and bundles
 *.zip
 *.bundle
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+
+# Keystore files
+*.jks
+*.keystore
+
+# OS files
+.DS_Store
