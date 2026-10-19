@@ -6,15 +6,30 @@ WebSite: https://github.com/dukeoftoad/toadNOTES
 SourceCode: https://github.com/dukeoftoad/toadNOTES
 IssueTracker: https://github.com/dukeoftoad/toadNOTES/issues
 AutoName: NESTNOTE
-Summary: A local-first, encrypted note-taking app for Android.
+Summary: Local-first encrypted notes with Markdown and voice attachments.
 Description: |
-  NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, and Material 3.
+  NESTNOTE is a local-first Android note-taking app built with Kotlin,
+  Jetpack Compose, and Material 3.
 
-  Features include creating, editing, pinning, archiving, restoring, searching, sorting, and deleting notes; categories and note colours; light and dark themes; full-screen and quick editors; checklist and bullet tools; writing statistics; JSON backup and restore; and local-data recovery safeguards.
+  Organize notes with categories, colours, pinning, archiving, search, sorting,
+  checklists, bullet lists, writing statistics, and light or dark themes. Use
+  the focused note editor with Markdown formatting and preview.
 
-  Project website and release downloads are available from the project repository and GitHub Releases.
+  Record voice notes directly in the Note editor, review recordings before
+  attaching them, preview and rename clips, or discard them without changing
+  existing attachments. Import supported WAV audio files and keep multiple
+  audio attachments in a note as independent inline playback cards with
+  play/pause, seeking, progress, elapsed time, and duration. Playback stays
+  inside the note rather than opening a separate player or dialog.
 
-  Notes are stored locally with encrypted payloads using AES-GCM and Android Keystore. NESTNOTE has no account or cloud sync. User-exported JSON backups are plaintext and should be stored securely.
+  Notes are stored locally with encrypted payloads using AES-GCM and Android
+  Keystore. NESTNOTE has no account or cloud sync. JSON backup and restore are
+  available for note data; exported JSON backups contain plaintext note data
+  and should be stored securely. Audio attachments are currently not included
+  in the JSON backup/restore format.
+
+  Project website and release downloads are available from the project
+  repository and GitHub Releases.
 
 RepoType: git
 Repo: https://github.com/dukeoftoad/toadNOTES
