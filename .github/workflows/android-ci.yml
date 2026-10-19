@@ -40,6 +40,8 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Run Android lint
+        run: gradle --no-daemon lintDebug
       - name: Run unit tests
         run: gradle --no-daemon testDebugUnitTest
       - name: Build debug APK

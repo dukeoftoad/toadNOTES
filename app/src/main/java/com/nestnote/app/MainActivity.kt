@@ -48,12 +48,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.FormatSize
@@ -71,7 +71,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsNone
@@ -436,7 +436,7 @@ private fun NestNoteApp(store: NoteStore) {
                                     "Home" -> Icons.Default.Home
                                     "Settings" -> Icons.Default.Settings
                                     "Categories" -> Icons.Default.GridView
-                                    "All notes" -> Icons.Default.List
+                                    "All notes" -> Icons.AutoMirrored.Filled.List
                                     "More" -> Icons.Default.MoreVert
                                     "Reminders" -> Icons.Default.NotificationsNone
                                     else -> Icons.Default.Check
@@ -662,7 +662,7 @@ private fun NestNoteApp(store: NoteStore) {
                                 }
                             ) {
                                 Icon(
-                                    if (dashboardLayout == DashboardLayout.GRID) Icons.Default.List else Icons.Default.GridView,
+                                    if (dashboardLayout == DashboardLayout.GRID) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
                                     contentDescription = "Switch dashboard layout"
                                 )
                             }
@@ -1457,7 +1457,7 @@ private fun NoteEditorContent(
                     title = { Text(if (title.isBlank()) "New note" else title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         IconButton(onClick = { requestDismiss() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Close editor")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close editor")
                         }
                     },
                     actions = {
@@ -1881,7 +1881,7 @@ private fun NoteEditorContent(
                 }
                 Text("Paragraph", style = MaterialTheme.typography.labelLarge, color = colors.primary)
                 TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckBox, null); Spacer(Modifier.width(12.dp)); Text("Checklist") }
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatListBulleted, null); Spacer(Modifier.width(12.dp)); Text("Bullet list") }
+                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null); Spacer(Modifier.width(12.dp)); Text("Bullet list") }
                 TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatListNumbered, null); Spacer(Modifier.width(12.dp)); Text("Numbered list") }
                 TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatQuote, null); Spacer(Modifier.width(12.dp)); Text("Blockquote") }
                 HorizontalDivider()

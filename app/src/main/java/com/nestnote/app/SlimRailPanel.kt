@@ -3,13 +3,12 @@ package com.nestnote.app
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
@@ -67,8 +66,24 @@ class SlimRailState internal constructor(
     val targetValue: RailValue get() = draggableState.targetValue
     val isOpen: Boolean get() = currentValue == RailValue.Open
 
-    suspend fun open() { draggableState.settle(-Float.MAX_VALUE) }
-    suspend fun close() { draggableState.settle(Float.MAX_VALUE) }
+    suspend fun open() {
+        draggableState.animateTo(
+            RailValue.Open,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        )
+    }
+    suspend fun close() {
+        draggableState.animateTo(
+            RailValue.Closed,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        )
+    }
     suspend fun toggle() {
         if (targetValue == RailValue.Open) close() else open()
     }
@@ -78,20 +93,21 @@ class SlimRailState internal constructor(
 @Composable
 fun rememberSlimRailState(): SlimRailState {
     val density = LocalDensity.current
-    val decayAnimationSpec = rememberSplineBasedDecay<Float>()
-    val state = remember(density, decayAnimationSpec) {
-        SlimRailState(
-            AnchoredDraggableState(
-                initialValue = RailValue.Closed,
-                positionalThreshold = { distance -> distance * 0.5f },
-                velocityThreshold = { with(density) { 125.dp.toPx() } },
-                snapAnimationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
-                decayAnimationSpec = decayAnimationSpec
-            )
+    val state = remember(density) {
+        val draggableState = AnchoredDraggableState(
+            initialValue = RailValue.Closed
         )
+        // AnchoredDraggable may read its offset before the first measure pass.
+        // Seed valid default anchors up front; slimRailLayout replaces these
+        // with the actual measured anchors as soon as layout runs.
+        val initialClosedOffset = with(density) { (304.dp - 24.dp).toPx() }
+        draggableState.updateAnchors(
+            DraggableAnchors {
+                RailValue.Closed at initialClosedOffset
+                RailValue.Open at 0f
+            }
+        )
+        SlimRailState(draggableState)
     }
     return state
 }
@@ -113,7 +129,14 @@ private fun Modifier.slimRailLayout(
             RailValue.Open at 0f
         }
     )
-    val currentOffset = state.draggableState.offset
+    // Anchors are seeded before composition, but retain a defensive fallback
+    // for unusual state restoration or future changes to anchor initialization.
+    val measuredOffset = try {
+        state.draggableState.offset
+    } catch (_: IllegalStateException) {
+        Float.NaN
+    }
+    val currentOffset = measuredOffset
         .takeIf { it.isFinite() }
         ?.roundToInt() ?: closedOffset.roundToInt()
     layout(placeable.width, placeable.height) {
@@ -141,6 +164,14 @@ fun SlimRailPanel(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val panelWidthPx = with(density) { panelWidth.toPx() }
+    val railFlingBehavior = androidx.compose.foundation.gestures.AnchoredDraggableDefaults.flingBehavior(
+        state = state.draggableState,
+        positionalThreshold = { distance -> distance * 0.5f },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        )
+    )
     // Keep the visible rail inside the measured panel even if callers customize widths.
     val effectiveRailWidthPx = with(density) { railWidth.toPx() }.coerceIn(0f, panelWidthPx)
 
@@ -171,7 +202,7 @@ fun SlimRailPanel(
                 .anchoredDraggable(
                     state = state.draggableState,
                     orientation = Orientation.Horizontal,
-                    flingBehavior = AnchoredDraggableDefaults.flingBehavior(state = state.draggableState)
+                    flingBehavior = railFlingBehavior
                 )
                 .slimRailLayout(state, effectiveRailWidthPx)
                 .windowInsetsPadding(WindowInsets.safeDrawing),

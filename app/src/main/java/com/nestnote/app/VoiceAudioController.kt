@@ -26,7 +26,7 @@ class VoiceAudioController(context: Context, private val store: VoiceAttachmentS
         stopPlayback()
         check(state != State.RECORDING && state != State.PAUSED) { "Recording already active" }
         val file = File(appContext.cacheDir, "voice-" + UUID.randomUUID() + ".tmp")
-        val next = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(appContext) else MediaRecorder()
+        val next = createMediaRecorder(appContext)
         try {
             next.setAudioSource(MediaRecorder.AudioSource.MIC)
             next.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -43,6 +43,14 @@ class VoiceAudioController(context: Context, private val store: VoiceAttachmentS
             throw IOException("Could not start voice recording", error)
         }
     }
+
+    /**
+     * MediaRecorder(Context) is available from API 31. Keep the legacy constructor only
+     * for API 26–30, which remain supported by this app.
+     */
+    @Suppress("DEPRECATION")
+    private fun createMediaRecorder(context: Context): MediaRecorder =
+        if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
 
     @Synchronized fun pauseRecording() {
         if (state != State.RECORDING) return

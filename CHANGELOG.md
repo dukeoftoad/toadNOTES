@@ -2,7 +2,12 @@
 
 ## v1.2.8 — Upcoming
 
-Release notes will be added here as v1.2.8 changes are finalized.
+### Fixed
+- Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
+
+### Testing
+- Added Compose instrumentation regression coverage for initial closed rendering, repeated open/close transitions, and custom panel/rail widths.
+- Android CI passes unit tests, debug APK build, minified release APK build, and instrumentation-test compilation. Device-only gesture interruption, predictive-back cancellation, and editor integration checks remain pending.
 
 ## v1.2.7
 
