@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.nestnote.app.NoteTextGreetingTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-19T19:01:08" hostname="codespaces-e44e2b" time="0.021">
+  <properties/>
+  <testcase name="greetingFollowsPrototypeBoundaries" classname="com.nestnote.app.NoteTextGreetingTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

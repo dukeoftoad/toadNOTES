@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.nestnote.app.VoiceAttachmentStoreTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-19T19:01:09" hostname="codespaces-e44e2b" time="0.528">
+  <properties/>
+  <testcase name="deleteAllRemovesOnlySelectedNoteAttachments" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.035"/>
+  <testcase name="failedInputDoesNotPublishFileOrLeaveTemporaryCiphertext" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.04"/>
+  <testcase name="oversizedInputIsRejectedWithoutPublishingFile" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.149"/>
+  <testcase name="attachmentIdentityIsAuthenticated" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.049"/>
+  <testcase name="wrongKeyCannotReadAttachment" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.032"/>
+  <testcase name="tamperedCiphertextFailsClosed" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.034"/>
+  <testcase name="rejectsInvalidIdentitiesAndDuplicateWrites" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.038"/>
+  <testcase name="orphanCleanupOnlyRemovesNumericDirectoriesNotInLiveSet" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.044"/>
+  <testcase name="encryptedFileRoundTripsAndDoesNotContainPlaintext" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.053"/>
+  <testcase name="orphanCleanupRejectsInvalidLiveIds" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.024"/>
+  <testcase name="deleteIsIdempotentAndOnlyRemovesSelectedAttachment" classname="com.nestnote.app.VoiceAttachmentStoreTest" time="0.025"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

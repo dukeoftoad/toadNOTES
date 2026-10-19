@@ -205,7 +205,6 @@ object NoteText {
         return (new.substring(0, cursor) + nextPrefix + new.substring(cursor)) to (cursor + nextPrefix.length)
     }
 
-
     /**
      * Keeps a selected range anchored to the same text when a line-prefix action
      * inserts or removes characters before it. A collapsed selection uses newCursor.
@@ -309,5 +308,110 @@ object NoteText {
         val ahead = (Calendar.MONDAY - get(Calendar.DAY_OF_WEEK) + 7) % 7
         add(Calendar.DAY_OF_YEAR, if (ahead == 0) 7 else ahead)
         set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }
+
+    // --- Voice attachment markers ---
+    //
+    // Voice notes are anchored in the body as markers of the form
+    //   [[voice:<attachmentId>]]
+    // Each marker must sit on its own line so the renderer can lay out inline
+    // player cards between text blocks without disturbing surrounding markdown.
+    // The id itself is a UUID and never contains ']' or newlines; the regex
+    // excludes both so a malformed marker cannot swallow the rest of the note.
+
+    private val VoiceMarkerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
+
+    /** Position of a voice marker in the body. [range] is the marker's character span, end-exclusive. */
+    data class VoiceMarker(val attachmentId: String, val range: IntRange)
+
+    /** A body segment, alternating between plain text and a single voice attachment. */
+    data class VoiceSegment(val text: String, val attachmentId: String?)
+
+    /** All voice markers in [body], in document order. */
+    fun voiceMarkers(body: String): List<VoiceMarker> =
+        VoiceMarkerRegex.findAll(body).map { VoiceMarker(it.groupValues[1], it.range) }.toList()
+
+    /** True when [body] already references [attachmentId]. */
+    fun hasVoiceMarker(body: String, attachmentId: String): Boolean =
+        voiceMarkers(body).any { it.attachmentId == attachmentId }
+
+    /**
+     * Splits [body] into alternating text and voice segments.
+     * Text segments preserve their original whitespace, including newlines.
+     * An empty body yields one empty text segment.
+     */
+    fun voiceSegments(body: String): List<VoiceSegment> {
+        val out = mutableListOf<VoiceSegment>()
+        var cursor = 0
+        VoiceMarkerRegex.findAll(body).forEach { match ->
+            if (match.range.first > cursor) {
+                out += VoiceSegment(body.substring(cursor, match.range.first), null)
+            }
+            out += VoiceSegment("", match.groupValues[1])
+            cursor = match.range.last + 1
+        }
+        if (cursor < body.length) out += VoiceSegment(body.substring(cursor), null)
+        if (out.isEmpty()) out += VoiceSegment(body, null)
+        return out
+    }
+
+    /**
+     * Inserts a marker for [attachmentId] at [cursor], padding with single newlines
+     * so the marker always sits on its own line. Returns the updated body and the
+     * cursor position immediately after the inserted marker line.
+     */
+    fun insertVoiceMarker(body: String, cursor: Int, attachmentId: String): Pair<String, Int> {
+        val marker = "[[voice:$attachmentId]]"
+        val c = cursor.coerceIn(0, body.length)
+        val needsLeadingNewline = c > 0 && body[c - 1] != '\n'
+        val needsTrailingNewline = c < body.length && body[c] != '\n'
+        val insertion = buildString {
+            if (needsLeadingNewline) append('\n')
+            append(marker)
+            if (needsTrailingNewline) append('\n')
+        }
+        val updated = body.substring(0, c) + insertion + body.substring(c)
+        return updated to (c + insertion.length)
+    }
+
+    /**
+     * Removes every marker for [attachmentId]. When a marker is sandwiched between
+     * newlines on both sides, one of those newlines is also removed so the result
+     * does not contain a dangling blank line.
+     */
+    fun removeVoiceMarker(body: String, attachmentId: String): String {
+    val markers = voiceMarkers(body).filter { it.attachmentId == attachmentId }
+    if (markers.isEmpty()) return body
+    var result = body
+    markers.reversed().forEach { marker ->
+        val start = marker.range.first
+        val end = marker.range.last + 1
+        val hasLeading = start > 0 && result[start - 1] == '\n'
+        val hasTrailing = end < result.length && result[end] == '\n'
+        // Remove the marker plus exactly one adjacent newline so the two
+        // surrounding lines merge with a single separator instead of two.
+        val trimmedStart = if (hasLeading) start - 1 else start
+        val trimmedEnd = if (!hasLeading && hasTrailing) end + 1 else end
+        result = result.removeRange(trimmedStart, trimmedEnd)
+    }
+    return result
+}
+
+    /**
+     * One-time migration: appends a marker for every id in [existingIds] that is not
+     * already anchored in [body]. Preserves the order of [existingIds]. Returns the
+     * original instance unchanged when there is nothing to migrate.
+     */
+    fun migrateOrphanAttachments(body: String, existingIds: List<String>): String {
+        if (existingIds.isEmpty()) return body
+        val anchored = voiceMarkers(body).map { it.attachmentId }.toSet()
+        val orphans = existingIds.filter { it !in anchored }
+        if (orphans.isEmpty()) return body
+        val sb = StringBuilder(body)
+        if (sb.isNotEmpty() && sb.last() != '\n') sb.append('\n')
+        orphans.forEach { id ->
+            sb.append("[[voice:").append(id).append("]]\n")
+        }
+        return sb.toString()
     }
 }

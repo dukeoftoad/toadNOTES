@@ -31,6 +31,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -127,6 +129,30 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 // Settings screen and its reusable setting controls.
 
+/**
+ * Keys for every item in the settings LazyColumn, in display order.
+ * Declaring them in one place keeps programmatic scrolling stable when sections
+ * are added, removed, or reordered.
+ */
+private val SettingsItemKeys = listOf(
+    "settings_header",
+    "settings_appearance",
+    "settings_layout",
+    "settings_behavior",
+    "settings_editor",
+    "settings_backup",
+    "settings_reset"
+)
+
+private const val BackupSectionKey = "settings_backup"
+
+/** Sort choices are immutable and never change, so keep them off the composition. */
+private val SortOptions: List<Pair<String, String>> = listOf(
+    "RECENT" to "Edited",
+    "CREATED" to "Created",
+    "TITLE" to "Title"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(
@@ -161,40 +187,58 @@ internal fun SettingsScreen(
     archivedNotes: Int,
     onExportNotes: () -> Unit,
     onImportNotes: () -> Unit,
-    onResetDefaults: () -> Unit
+    onResetDefaults: () -> Unit,
+    modifier: Modifier = Modifier,
+    // Allows the caller to clear the "jump to backup" event after it is handled,
+    // so returning to a preserved screen does not scroll again.
+    onBackupFocusHandled: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
-    var confirmReset by remember { mutableStateOf(false) }
-    val sortOptions = listOf("RECENT" to "Edited", "CREATED" to "Created", "TITLE" to "Title")
-    // LazyColumn item order: 0 header, 1 Appearance, 2 Layout, 3 Note behavior,
-    // 4 Note editor, 5 Backup & privacy, 6 Reset. Keep in sync with the items below.
-    val backupSectionIndex = 5
+    var confirmReset by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    LaunchedEffect(focusBackup) {
-        // More > Backup & restore lands here directly; instant jump keeps it deterministic.
-        if (focusBackup) listState.scrollToItem(backupSectionIndex)
+
+    val currentOnBackupFocusHandled by rememberUpdatedState(onBackupFocusHandled)
+    LaunchedEffect(focusBackup, listState) {
+        if (focusBackup) {
+            listState.scrollToItem(SettingsItemKeys.indexOf(BackupSectionKey))
+            currentOnBackupFocusHandled()
+        }
     }
+
+    // Resolve gracefully if a persisted sort key is no longer valid.
+    val selectedSort = SortOptions.firstOrNull { it.first == sortKey } ?: SortOptions.first()
+
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().testTag("settings_scroll"),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("settings_scroll"),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
+        item(key = SettingsItemKeys[0]) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Make NESTNOTE feel like yours.", color = colors.onSurfaceVariant)
         }
-        item {
+        item(key = SettingsItemKeys[1]) {
             SettingsSection(title = "Appearance", subtitle = "Colors that fit your device") {
                 SettingLabel("Theme")
-                SegmentedChoice(ThemeMode.values().toList(), themeMode, { it.label }, onThemeChange)
+                SegmentedChoice(ThemeMode.entries, themeMode, { it.label }, onThemeChange)
                 if (themeMode == ThemeMode.SYSTEM) {
-                    Text("Follows your Android light/dark setting", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    Text(
+                        "Follows your Android light/dark setting",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
+                    )
                 }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 SwitchRow(
                     title = "Wallpaper colors",
-                    summary = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use Android dynamic colors from your wallpaper" else "Requires Android 12 or newer; older devices use the app palette",
+                    summary = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        "Use Android dynamic colors from your wallpaper"
+                    } else {
+                        "Requires Android 12 or newer; older devices use the app palette"
+                    },
                     checked = dynamicColors,
                     onChange = onDynamicColorsChange
                 )
@@ -206,26 +250,38 @@ internal fun SettingsScreen(
                 )
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 SettingLabel("Note card colors")
-                NoteColorStyle.values().forEach { style ->
-                    ChoiceCard(style.label, style.description, noteColorStyle == style) { onNoteColorStyleChange(style) }
+                Column(Modifier.selectableGroup()) {
+                    NoteColorStyle.entries.forEach { style ->
+                        ChoiceCard(
+                            title = style.label,
+                            description = style.description,
+                            selected = noteColorStyle == style,
+                            onClick = { onNoteColorStyleChange(style) }
+                        )
+                    }
                 }
             }
         }
-        item {
+        item(key = SettingsItemKeys[2]) {
             SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
                 SettingLabel("Dashboard view")
-                SegmentedChoice(DashboardLayout.values().toList(), dashboardLayout, { it.label }, onLayoutChange)
+                SegmentedChoice(DashboardLayout.entries, dashboardLayout, { it.label }, onLayoutChange)
                 Text(
-                    if (dashboardLayout == DashboardLayout.GRID) "Compact cards, side by side" else "Full-width notes with more preview space",
-                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
+                    if (dashboardLayout == DashboardLayout.GRID) {
+                        "Compact cards, side by side"
+                    } else {
+                        "Full-width notes with more preview space"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant
                 )
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 SettingLabel("Dashboard density")
-                SegmentedChoice(DashboardDensity.values().toList(), dashboardDensity, { it.label }, onDensityChange)
+                SegmentedChoice(DashboardDensity.entries, dashboardDensity, { it.label }, onDensityChange)
                 Text(dashboardDensity.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
-        item {
+        item(key = SettingsItemKeys[3]) {
             SettingsSection(title = "Note behavior", subtitle = "Defaults for new and existing notes") {
                 SettingLabel("Default category for new notes")
                 Row(
@@ -242,23 +298,44 @@ internal fun SettingsScreen(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 SettingLabel("Sort notes by")
-                SegmentedChoice(sortOptions, sortOptions.first { it.first == sortKey }, { it.second }, { onSortChange(it.first) })
+                SegmentedChoice(SortOptions, selectedSort, { it.second }, { onSortChange(it.first) })
                 Text("Pinned notes always stay on top.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                SwitchRow("Show note previews", "Display the first lines of each note on its card", showNotePreviews, onShowNotePreviewsChange)
-                SwitchRow("Show dates and reminders", "Display the edit date or reminder on each card", showNoteTimestamps, onShowNoteTimestampsChange)
+                SwitchRow(
+                    title = "Show note previews",
+                    summary = "Display the first lines of each note on its card",
+                    checked = showNotePreviews,
+                    onChange = onShowNotePreviewsChange
+                )
+                SwitchRow(
+                    title = "Show dates and reminders",
+                    summary = "Display the edit date or reminder on each card",
+                    checked = showNoteTimestamps,
+                    onChange = onShowNoteTimestampsChange
+                )
             }
         }
-        item {
+        item(key = SettingsItemKeys[4]) {
             SettingsSection(title = "Note editor", subtitle = "Choose how writing feels") {
                 SettingLabel("Open editor as")
-                EditorPresentationMode.values().forEach { mode ->
-                    ChoiceCard(mode.label, mode.description, editorMode == mode) { onEditorModeChange(mode) }
+                Column(Modifier.selectableGroup()) {
+                    EditorPresentationMode.entries.forEach { mode ->
+                        ChoiceCard(
+                            title = mode.label,
+                            description = mode.description,
+                            selected = editorMode == mode,
+                            onClick = { onEditorModeChange(mode) }
+                        )
+                    }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 SettingLabel("Text size")
-                SegmentedChoice(EditorTextSize.values().toList(), editorTextSize, { it.label }, onEditorTextSizeChange)
-                Surface(shape = RoundedCornerShape(14.dp), color = colors.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+                SegmentedChoice(EditorTextSize.entries, editorTextSize, { it.label }, onEditorTextSizeChange)
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = colors.surfaceContainerHighest,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         "Your notes will look like this.",
                         modifier = Modifier.padding(14.dp),
@@ -267,45 +344,81 @@ internal fun SettingsScreen(
                     )
                 }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                SwitchRow("Word count and reading time", "Show a live count under the note while you write", showEditorCounts, onShowEditorCountsChange)
+                SwitchRow(
+                    title = "Word count and reading time",
+                    summary = "Show a live count under the note while you write",
+                    checked = showEditorCounts,
+                    onChange = onShowEditorCountsChange
+                )
             }
         }
-        item {
+        item(key = SettingsItemKeys[5]) {
             SettingsSection(title = "Backup & privacy", subtitle = "Your notes stay on this device") {
                 Text(
                     "$totalNotes notes stored on this device ($archivedNotes archived).",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "NESTNOTE does not sync to a cloud account. Backups contain note text and note settings only; voice recordings are excluded and will not return when you restore. Back up your notes to a file you choose, and restore it any time. Restoring adds missing notes and keeps the most recently edited copy of notes that already exist; nothing is deleted.",
-                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
+                    "NESTNOTE does not sync to a cloud account. Backups contain note text and note settings only; " +
+                        "voice recordings are excluded and will not return when you restore. Back up your notes to a " +
+                        "file you choose, and restore it any time. Restoring adds missing notes and keeps the most " +
+                        "recently edited copy of notes that already exist; nothing is deleted.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(onClick = onExportNotes, modifier = Modifier.weight(1f)) { Text("Back up notes") }
-                    OutlinedButton(onClick = onImportNotes, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                    FilledTonalButton(
+                        onClick = onExportNotes,
+                        modifier = Modifier.weight(1f).testTag("settings_backup")
+                    ) {
+                        Text("Back up notes")
+                    }
+                    OutlinedButton(
+                        onClick = onImportNotes,
+                        modifier = Modifier.weight(1f).testTag("settings_restore")
+                    ) {
+                        Text("Restore backup")
+                    }
                 }
             }
         }
-        item {
-            OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) {
+        item(key = SettingsItemKeys[6]) {
+            OutlinedButton(
+                onClick = { confirmReset = true },
+                modifier = Modifier.fillMaxWidth().testTag("settings_reset"),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.error)
+            ) {
                 Text("Reset settings to defaults")
             }
         }
     }
+
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
             title = { Text("Reset settings?") },
             text = { Text("Theme, layout, editor and note defaults go back to their original values. Your notes are not changed.") },
-            confirmButton = { TextButton(onClick = { confirmReset = false; onResetDefaults() }) { Text("Reset") } },
-            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } }
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmReset = false
+                    onResetDefaults()
+                }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) { Text("Cancel") }
+            }
         )
     }
 }
 
 @Composable
-internal fun SettingLabel(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+internal fun SettingLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -314,25 +427,38 @@ internal fun <T> SegmentedChoice(
     options: List<T>,
     selected: T,
     label: (T) -> String,
-    onSelect: (T) -> Unit
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
         options.forEachIndexed { index, option ->
             SegmentedButton(
                 selected = option == selected,
                 onClick = { onSelect(option) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
             ) {
-                Text(label(option), maxLines = 1)
+                Text(
+                    text = label(option),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
 }
 
 @Composable
-internal fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(
+    title: String,
+    summary: String?,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        Modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
             .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -340,7 +466,11 @@ internal fun SwitchRow(title: String, summary: String?, checked: Boolean, onChan
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title)
             if (summary != null) {
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         // The row owns the toggle semantics so tapping the switch itself cannot
@@ -349,39 +479,66 @@ internal fun SwitchRow(title: String, summary: String?, checked: Boolean, onChan
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ChoiceCard(title: String, description: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChoiceCard(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            // Radio-button semantics: screen readers announce selected state once,
+            // and the card joins the surrounding selectableGroup().
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = if (selected) colors.secondaryContainer else colors.surface,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.outlineVariant)
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) colors.primary else colors.outlineVariant
+        )
     ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
             if (selected) {
-                Icon(Icons.Default.Check, contentDescription = "Selected", tint = colors.primary)
+                // Decorative: the selectable modifier already exposes selection state.
+                Icon(Icons.Default.Check, contentDescription = null, tint = colors.primary)
             }
         }
     }
 }
 
 @Composable
-internal fun SettingsSection(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsSection(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             content()
         }
     }

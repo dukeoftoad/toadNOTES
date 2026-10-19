@@ -4,97 +4,96 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
+import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.net.Uri
-import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import java.io.IOException
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import javax.crypto.Cipher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val VOICE_SAMPLE_RATE = 16_000
-private const val VOICE_CHANNEL_IN = android.media.AudioFormat.CHANNEL_IN_MONO
-private const val VOICE_ENCODING = android.media.AudioFormat.ENCODING_PCM_16BIT
+private const val VOICE_CHANNEL_IN = AudioFormat.CHANNEL_IN_MONO
+private const val VOICE_ENCODING = AudioFormat.ENCODING_PCM_16BIT
 
 /**
  * Records mono PCM and pipes it directly into VoiceAttachmentStore's encrypting stream.
@@ -254,11 +253,25 @@ private class EncryptedPcmRecording(
     }
 }
 
+/**
+ * Recording UI only. Playback and deletion of finished recordings live in
+ * [InlineVoicePlayer], rendered inline in the note preview at each marker.
+ *
+ * Contract:
+ *  - [cursorAtRecordStart] returns the body cursor captured the moment the user taps
+ *    Record or Attach WAV. The parent uses it to insert a marker at that position.
+ *  - [onRecordingAttached] fires once per completed attachment, passing the id and
+ *    the cursor at record-start. The parent should insert `[[voice:id]]` at that cursor.
+ *  - [onDiscardHandlerReady] receives a callback the parent invokes when the user
+ *    discards the whole editor session. All attachments created during this session
+ *    are removed, any in-flight recording is discarded, and any pending review is
+ *    deleted. Pre-existing attachments are never touched.
+ */
 @Composable
 internal fun VoiceNoteControls(
     noteId: Long,
-    onAttachmentCountChanged: (Int) -> Unit,
-    onVoiceAttachmentAdded: () -> Unit,
+    cursorAtRecordStart: () -> Int,
+    onRecordingAttached: (attachmentId: String, cursorAtRecordStart: Int) -> Unit,
     onDiscardHandlerReady: (() -> Unit) -> Unit
 ) {
     val context = LocalContext.current
@@ -266,68 +279,118 @@ internal fun VoiceNoteControls(
     val lifecycleOwner = LocalLifecycleOwner.current
     val attachmentStore = remember(context) { VoiceAttachmentStore(context) }
     val attachmentManifest = remember(context) { VoiceAttachmentManifest(context) }
-    var attachments by remember(noteId) { mutableStateOf(runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())) }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var importingAudio by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+
+    // Recording state
     var recording by remember { mutableStateOf(false) }
     var startingRecording by remember { mutableStateOf(false) }
     var recordingPaused by remember { mutableStateOf(false) }
+    var elapsedRecordingSeconds by remember { mutableIntStateOf(0) }
+    var recordingSession by remember { mutableStateOf<EncryptedPcmRecording?>(null) }
+
+    // Review state (finished recording, not yet attached)
     var pendingReviewId by remember(noteId) { mutableStateOf<String?>(null) }
     var pendingReviewName by remember(noteId) { mutableStateOf("Voice recording") }
     var pendingReviewDurationMs by remember(noteId) { mutableIntStateOf(0) }
-    var elapsedRecordingSeconds by remember { mutableIntStateOf(0) }
-    var showPermissionSettings by remember { mutableStateOf(false) }
-    var playingId by remember { mutableStateOf<String?>(null) }
-    var playbackPositionMs by remember { mutableIntStateOf(0) }
-    var pendingSeekMs by remember { mutableIntStateOf(0) }
-    var seekingPlayback by remember { mutableStateOf(false) }
-    var playbackPaused by remember { mutableStateOf(false) }
-    var playbackDurationMs by remember { mutableIntStateOf(0) }
-    var status by remember { mutableStateOf("") }
+    var pendingReviewCursor by remember(noteId) { mutableIntStateOf(0) }
+    var confirmDiscardReview by remember { mutableStateOf(false) }
+
+    // Review playback state
+    var previewingReview by remember { mutableStateOf(false) }
+    var reviewPlaying by remember { mutableStateOf(false) }
+    var reviewPaused by remember { mutableStateOf(false) }
+    var reviewPositionMs by remember { mutableIntStateOf(0) }
+    var reviewDurationMs by remember { mutableIntStateOf(0) }
+    var reviewSession by remember { mutableStateOf<PcmVoicePlayback?>(null) }
+
+    // Import state
+    var importingAudio by remember { mutableStateOf(false) }
+
+    // Permission state
     var pendingPermission by remember { mutableStateOf(false) }
-    var recordingSession by remember { mutableStateOf<EncryptedPcmRecording?>(null) }
-    var playbackSession by remember { mutableStateOf<PcmVoicePlayback?>(null) }
+    var showPermissionSettings by remember { mutableStateOf(false) }
+
+    // Audio focus
     var requestedAudioFocus by remember { mutableStateOf(false) }
-    var audioFocusListener by remember { mutableStateOf<AudioManager.OnAudioFocusChangeListener?>(null) }
+    var audioFocusListener by remember {
+        mutableStateOf<AudioManager.OnAudioFocusChangeListener?>(null)
+    }
+
+    // Attachments created during this editing session. Removed from disk on discard.
     val addedThisSession = remember(noteId) { mutableSetOf<String>() }
-    val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    val audioFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            importingAudio = true
-            status = "Importing audio securely…"
-            scope.launch {
-                val result = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val pcm = context.contentResolver.openInputStream(uri)?.use { decodePcmWav(it.readBytes()) }
-                            ?: throw IOException("Could not open the selected audio file.")
-                        if (pcm.isEmpty()) throw IOException("The selected audio file contains no audio.")
-                        if (pcm.size > VoiceAttachmentStore.MAX_AUDIO_BYTES) throw IOException("Audio exceeds the 25 MiB attachment limit.")
-                        val id = UUID.randomUUID().toString()
-                        val saved = attachmentStore.save(noteId, id, ByteArrayInputStream(pcm))
-                        val duration = pcm.size.toLong() * 1000L / (VOICE_SAMPLE_RATE * 2L)
-                        attachmentManifest.put(VoiceAttachmentMetadata(noteId, id, System.currentTimeMillis(), duration, saved.encryptedSizeBytes, "Imported audio"), attachmentStore)
-                        saved
+
+    var status by remember { mutableStateOf("") }
+
+    // --- WAV import ---
+    val audioFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val cursor = cursorAtRecordStart()
+        importingAudio = true
+        status = "Importing audio securely…"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val pcm = context.contentResolver.openInputStream(uri)
+                        ?.use { decodePcmWav(it.readBytes()) }
+                        ?: throw IOException("Could not open the selected audio file.")
+                    if (pcm.isEmpty()) throw IOException("The selected audio file contains no audio.")
+                    if (pcm.size > VoiceAttachmentStore.MAX_AUDIO_BYTES) {
+                        throw IOException("Audio exceeds the 25 MiB attachment limit.")
                     }
+                    val id = UUID.randomUUID().toString()
+                    val saved = attachmentStore.save(noteId, id, ByteArrayInputStream(pcm))
+                    val duration = pcm.size.toLong() * 1000L / (VOICE_SAMPLE_RATE * 2L)
+                    attachmentManifest.put(
+                        VoiceAttachmentMetadata(
+                            noteId, id, System.currentTimeMillis(), duration,
+                            saved.encryptedSizeBytes, "Imported audio"
+                        ),
+                        attachmentStore
+                    )
+                    id
                 }
-                importingAudio = false
-                result.onSuccess {
-                    attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-                    onAttachmentCountChanged(attachments.size)
-                    onVoiceAttachmentAdded()
-                    status = "Audio attached securely."
-                }.onFailure { status = it.message ?: "Could not attach this audio file." }
+            }
+            importingAudio = false
+            result.onSuccess { id ->
+                addedThisSession.add(id)
+                onRecordingAttached(id, cursor)
+                status = "Audio attached at cursor position."
+            }.onFailure {
+                status = it.message ?: "Could not attach this audio file."
             }
         }
     }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+
+    // --- Microphone permission ---
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
         when (resolveVoicePermissionResult(granted, pendingPermission)) {
             VoicePermissionDecision.START_RECORDING -> {
                 pendingPermission = false
                 startingRecording = true
                 showPermissionSettings = false
-                startVoiceRecording(context, audioManager, attachmentStore, attachmentManifest, noteId, addedThisSession,
-                    { session, listener -> startingRecording = false; recordingSession = session; recording = true; recordingPaused = false; elapsedRecordingSeconds = 0; status = "Recording…"; requestedAudioFocus = true; audioFocusListener = listener },
-                    { message ->
+                val cursor = cursorAtRecordStart()
+                startVoiceRecording(
+                    context, audioManager, attachmentStore, attachmentManifest,
+                    noteId, addedThisSession,
+                    onStarted = { session, listener ->
+                        startingRecording = false
+                        recordingSession = session
+                        recording = true
+                        recordingPaused = false
+                        elapsedRecordingSeconds = 0
+                        status = "Recording…"
+                        requestedAudioFocus = true
+                        audioFocusListener = listener
+                        pendingReviewCursor = cursor
+                    },
+                    onStatus = { msg ->
                         startingRecording = false
                         recordingSession = null
                         recording = false
@@ -335,9 +398,20 @@ internal fun VoiceNoteControls(
                         if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
                         requestedAudioFocus = false
                         audioFocusListener = null
-                        status = message
+                        status = msg
                     },
-                    { startingRecording = false; recordingSession?.stop(); recordingSession = null; recording = false; recordingPaused = false; if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener); requestedAudioFocus = false; audioFocusListener = null; status = "Recording stopped because audio focus was interrupted. Tap Record to try again." })
+                    onInterrupted = {
+                        startingRecording = false
+                        recordingSession?.stop()
+                        recordingSession = null
+                        recording = false
+                        recordingPaused = false
+                        if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
+                        requestedAudioFocus = false
+                        audioFocusListener = null
+                        status = "Recording stopped because audio focus was interrupted."
+                    }
+                )
             }
             VoicePermissionDecision.SHOW_PERMISSION_GUIDANCE -> {
                 pendingPermission = false
@@ -346,6 +420,58 @@ internal fun VoiceNoteControls(
                 status = "Microphone permission was denied. Allow it in app settings to record voice notes."
             }
             VoicePermissionDecision.IGNORE_STALE_RESULT -> Unit
+        }
+    }
+
+    fun beginRecordingFlow() {
+        if (recording || startingRecording || pendingPermission) return
+        if (pendingReviewId != null || importingAudio) return
+        keyboardController?.hide()
+        startingRecording = true
+        showPermissionSettings = false
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            val cursor = cursorAtRecordStart()
+            startVoiceRecording(
+                context, audioManager, attachmentStore, attachmentManifest,
+                noteId, addedThisSession,
+                onStarted = { session, listener ->
+                    startingRecording = false
+                    recordingSession = session
+                    recording = true
+                    recordingPaused = false
+                    elapsedRecordingSeconds = 0
+                    status = "Recording…"
+                    requestedAudioFocus = true
+                    audioFocusListener = listener
+                    pendingReviewCursor = cursor
+                },
+                onStatus = { msg ->
+                    startingRecording = false
+                    recordingSession = null
+                    recording = false
+                    recordingPaused = false
+                    if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
+                    requestedAudioFocus = false
+                    audioFocusListener = null
+                    status = msg
+                },
+                onInterrupted = {
+                    startingRecording = false
+                    recordingSession?.stop()
+                    recordingSession = null
+                    recording = false
+                    recordingPaused = false
+                    if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
+                    requestedAudioFocus = false
+                    audioFocusListener = null
+                    status = "Recording stopped because audio focus was interrupted."
+                }
+            )
+        } else {
+            pendingPermission = true
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -360,67 +486,38 @@ internal fun VoiceNoteControls(
         }
         status = "Finishing encrypted recording…"
     }
-    fun stopPlayback() {
-        playbackSession?.stop()
-        playbackSession = null
-        playingId = null
-        playbackPositionMs = 0
-        playbackDurationMs = 0
-        pendingSeekMs = 0
-        seekingPlayback = false
-        playbackPaused = false
+
+    fun stopReviewPlayback() {
+        reviewSession?.stop()
+        reviewSession = null
+        previewingReview = false
+        reviewPlaying = false
+        reviewPaused = false
+        reviewPositionMs = 0
+        reviewDurationMs = 0
         if (requestedAudioFocus) {
             abandonVoiceAudioFocus(audioManager, audioFocusListener)
             requestedAudioFocus = false
         }
     }
+
+    // Recording timer
     LaunchedEffect(recording, recordingPaused) {
         if (recording && !recordingPaused) {
             while (recording && !recordingPaused) {
-                kotlinx.coroutines.delay(1_000)
+                delay(1_000)
                 if (recording && !recordingPaused) elapsedRecordingSeconds += 1
             }
         }
     }
 
-    LaunchedEffect(noteId) {
-        attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-        onAttachmentCountChanged(attachments.size)
-    }
-    DisposableEffect(lifecycleOwner, noteId) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                // A permission sheet or asynchronous microphone startup may still be in
-                // flight when the editor backgrounds. Invalidate both states so a stale
-                // permission result cannot leave Record permanently disabled.
-                pendingPermission = false
-                startingRecording = false
-                recordingSession?.stop()
-                recording = false
-                recordingPaused = false
-                if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
-                requestedAudioFocus = false
-                audioFocusListener = null
-                playbackSession?.stop()
-                playbackSession = null
-                playingId = null
-                playbackPaused = false
-                status = "Recording/playback stopped when the app left the foreground."
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            recordingSession?.stop()
-            playbackSession?.stop()
-            if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
-        }
-    }
-
+    // Handle recorder completion -> transition to review
     LaunchedEffect(status) {
         if (status.startsWith("Recording ready for review:")) {
             val id = status.substringAfter("Recording ready for review:").trim()
-            val payload = runCatching { attachmentStore.list(noteId).firstOrNull { it.attachmentId == id } }.getOrNull()
+            val payload = runCatching {
+                attachmentStore.list(noteId).firstOrNull { it.attachmentId == id }
+            }.getOrNull()
             recording = false
             recordingPaused = false
             recordingSession = null
@@ -429,50 +526,106 @@ internal fun VoiceNoteControls(
             if (payload != null) {
                 pendingReviewId = id
                 pendingReviewName = "Voice recording"
-                pendingReviewDurationMs = (((payload.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) / (VOICE_SAMPLE_RATE * 2L)).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                status = "Recording ready. Preview and attach it when you're satisfied."
+                pendingReviewDurationMs = (
+                    ((payload.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) /
+                        (VOICE_SAMPLE_RATE * 2L)
+                ).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                status = "Recording ready. Preview and attach, or discard."
             } else {
                 status = "The recording could not be loaded for review."
             }
         }
     }
 
-    androidx.compose.runtime.SideEffect {
-        onDiscardHandlerReady {
-            recordingSession?.let { session ->
-                recordingSession = null
-                // Remove identities first: completion callbacks already queued on the main
-                // thread will observe the discard and cannot recreate manifest entries.
-                addedThisSession.toList().forEach { id ->
-                    runCatching { attachmentStore.delete(noteId, id) }
-                    runCatching { attachmentManifest.remove(noteId, id) }
+    // Background / dispose safety net
+    DisposableEffect(lifecycleOwner, noteId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                pendingPermission = false
+                startingRecording = false
+                recordingSession?.stop()
+                recording = false
+                recordingPaused = false
+                if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
+                requestedAudioFocus = false
+                audioFocusListener = null
+                reviewSession?.stop()
+                reviewSession = null
+                previewingReview = false
+                reviewPlaying = false
+                reviewPaused = false
+                if (status.startsWith("Recording…") || status.startsWith("Recording paused")) {
+                    status = "Recording stopped when the app left the foreground."
                 }
-                addedThisSession.clear()
-                session.discardAndWait()
             }
-            recordingSession = null
-            recording = false
-            recordingPaused = false
-            addedThisSession.toList().forEach { id ->
-                runCatching { attachmentStore.delete(noteId, id) }
-                runCatching { attachmentManifest.remove(noteId, id) }
-            }
-            addedThisSession.clear()
-            attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-            onAttachmentCountChanged(attachments.size)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            recordingSession?.stop()
+            reviewSession?.stop()
+            if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
         }
     }
 
-    // In-place voice UX: while recording, a compact encrypted-pill shows elapsed time,
-    // pause/resume and stop. Recordings render as player cards in the note flow — play,
-    // pause and seek happen right here, not in a panel docked on top of the page.
-    val reducedMotion = rememberSystemReducedMotion()
-    val metadataByName = remember(attachments) {
-        runCatching { attachmentManifest.list(noteId, attachmentStore) }
-            .getOrDefault(emptyList())
-            .associateBy { it.attachmentId }
+    // Register the discard handler with the parent (whole-editor discard).
+    SideEffect {
+        onDiscardHandlerReady {
+            // Snapshot before clearing so files can be deleted after the recording
+            // session has fully drained its worker threads.
+            val idsToClean = addedThisSession.toList()
+            addedThisSession.clear()
+
+            // 1. Stop any review playback.
+            reviewSession?.stop()
+            reviewSession = null
+            previewingReview = false
+            reviewPlaying = false
+            reviewPaused = false
+            reviewPositionMs = 0
+            reviewDurationMs = 0
+
+            // 2. Clear review UI state. The pending-review file (if any) is in
+            //    idsToClean and will be deleted below.
+            pendingReviewId = null
+            pendingReviewName = "Voice recording"
+            pendingReviewDurationMs = 0
+            pendingReviewCursor = 0
+            confirmDiscardReview = false
+
+            // 3. Discard any in-flight recording session. discardAndWait() blocks
+            //    until the recorder and storage threads exit; queued completion
+            //    callbacks become no-ops because addedThisSession is already empty.
+            val session = recordingSession
+            recordingSession = null
+            session?.discardAndWait()
+
+            // 4. Delete every attachment created during this editing session.
+            //    Pre-existing attachments (opened from the original note) are never
+            //    in idsToClean and remain on disk.
+            idsToClean.forEach { id ->
+                runCatching { attachmentStore.delete(noteId, id) }
+                runCatching { attachmentManifest.remove(noteId, id) }
+            }
+
+            // 5. Reset recording UI.
+            startingRecording = false
+            recording = false
+            recordingPaused = false
+            elapsedRecordingSeconds = 0
+            importingAudio = false
+
+            // 6. Release audio focus.
+            if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
+            requestedAudioFocus = false
+            audioFocusListener = null
+        }
     }
+
+    val reducedMotion = rememberSystemReducedMotion()
+
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // ---------- Recording pill (in progress) ----------
         if (recording || startingRecording || pendingPermission) {
             val minutes = elapsedRecordingSeconds / 60
             val seconds = elapsedRecordingSeconds % 60
@@ -499,7 +652,7 @@ internal fun VoiceNoteControls(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            "Encrypted on this device",
+                            "Encrypted on this device · will attach at cursor",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
                         )
@@ -509,14 +662,6 @@ internal fun VoiceNoteControls(
                             containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             contentColor = MaterialTheme.colorScheme.primaryContainer
                         ),
-                        modifier = Modifier.semantics {
-                            contentDescription = if (recordingPaused) "Resume voice recording" else "Pause voice recording"
-                            stateDescription = when {
-                                !recording -> "Unavailable when not recording"
-                                recordingPaused -> "Recording paused"
-                                else -> "Recording in progress"
-                            }
-                        },
                         enabled = recording,
                         onClick = {
                             if (recordingPaused) {
@@ -528,11 +673,19 @@ internal fun VoiceNoteControls(
                                 recordingPaused = true
                                 status = "Recording paused."
                             }
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (recordingPaused) "Resume voice recording" else "Pause voice recording"
+                            stateDescription = when {
+                                !recording -> "Unavailable when not recording"
+                                recordingPaused -> "Recording paused"
+                                else -> "Recording in progress"
+                            }
                         }
                     ) {
                         Icon(
                             if (recordingPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                            contentDescription = if (recordingPaused) "Resume recording" else "Pause recording"
+                            contentDescription = null
                         )
                     }
                     FilledIconButton(
@@ -540,80 +693,78 @@ internal fun VoiceNoteControls(
                             containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             contentColor = MaterialTheme.colorScheme.primaryContainer
                         ),
+                        enabled = recording,
+                        onClick = { stopRecording() },
                         modifier = Modifier.semantics {
                             contentDescription = "Stop voice recording"
                             stateDescription = if (recording) "Available" else "Unavailable when not recording"
-                        },
-                        enabled = recording,
-                        onClick = { stopRecording() }
-                    ) {
-                        Icon(Icons.Default.Stop, contentDescription = "Stop recording")
-                    }
+                        }
+                    ) { Icon(Icons.Default.Stop, contentDescription = null) }
                 }
             }
-        } else {
-            // Idle actions: compact icon-led buttons instead of the old four-wide button row.
+        } else if (pendingReviewId == null) {
+            // ---------- Idle: Record here / Attach WAV ----------
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    enabled = canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null || pendingReviewId != null),
-                    onClick = {
-                        keyboardController?.hide()
-                        if (!canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null || pendingReviewId != null)) return@Button
-                        startingRecording = true
-                        showPermissionSettings = false
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            startVoiceRecording(context, audioManager, attachmentStore, attachmentManifest, noteId, addedThisSession,
-                                { session, listener -> startingRecording = false; recordingSession = session; recording = true; recordingPaused = false; elapsedRecordingSeconds = 0; status = "Recording…"; requestedAudioFocus = true; audioFocusListener = listener },
-                                { message ->
-                                    startingRecording = false
-                                    recordingSession = null
-                                    recording = false
-                                    recordingPaused = false
-                                    if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
-                                    requestedAudioFocus = false
-                                    audioFocusListener = null
-                                    status = message
-                                },
-                                { startingRecording = false; recordingSession?.stop(); recordingSession = null; recording = false; requestedAudioFocus = false; audioFocusListener = null; status = "Recording stopped because audio focus was interrupted." })
-                        } else {
-                            pendingPermission = true
-                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    },
+                    enabled = !importingAudio,
+                    onClick = { beginRecordingFlow() },
                     modifier = Modifier.semantics {
-                        contentDescription = "Record voice note"
-                        stateDescription = if (playingId != null || pendingReviewId != null) "Unavailable while playback is active" else "Ready"
+                        contentDescription = "Record voice note at cursor position"
                     }
                 ) {
-                    Icon(Icons.Default.Mic, contentDescription = "Record voice note", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Record")
+                    Text("Record here")
                 }
                 OutlinedButton(
-                    enabled = !recording && !startingRecording && !pendingPermission && !importingAudio,
-                    onClick = { audioFileLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")) },
-                    modifier = Modifier.semantics { contentDescription = "Attach audio file" }
+                    enabled = !importingAudio,
+                    onClick = {
+                        keyboardController?.hide()
+                        audioFileLauncher.launch(
+                            arrayOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")
+                        )
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Attach WAV audio file at cursor position"
+                    }
                 ) {
-                    Icon(Icons.Default.AttachFile, contentDescription = "Attach audio file", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(if (importingAudio) "Importing…" else "Attach audio")
+                    Text(if (importingAudio) "Importing…" else "Attach WAV")
                 }
             }
         }
+
+        // ---------- Review card ----------
         if (pendingReviewId != null) {
             val reviewId = pendingReviewId!!
-            val reviewAttachment = attachments.firstOrNull { it.attachmentId == reviewId }
-                ?: runCatching { attachmentStore.list(noteId).firstOrNull { it.attachmentId == reviewId } }.getOrNull()
+            val reviewAttachment = remember(reviewId) {
+                runCatching {
+                    attachmentStore.list(noteId).firstOrNull { it.attachmentId == reviewId }
+                }.getOrNull()
+            }
+            val shownDuration = if (reviewDurationMs > 0) reviewDurationMs else pendingReviewDurationMs
+            val progress = if (shownDuration > 0) {
+                (reviewPositionMs.toFloat() / shownDuration).coerceIn(0f, 1f)
+            } else 0f
+
             Card(
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Recording review" },
+                modifier = Modifier.fillMaxWidth().semantics {
+                    contentDescription = "Recording review"
+                },
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
             ) {
-                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "Review recording",
@@ -622,253 +773,196 @@ internal fun VoiceNoteControls(
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            formatPlaybackTime(pendingReviewDurationMs),
+                            if (previewingReview) {
+                                "${formatPlaybackTime(reviewPositionMs)} / ${formatPlaybackTime(shownDuration)}"
+                            } else {
+                                formatPlaybackTime(pendingReviewDurationMs)
+                            },
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
                         )
                     }
-                    OutlinedTextField(value = pendingReviewName, onValueChange = { pendingReviewName = it.take(160) }, label = { Text("Recording name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = pendingReviewName,
+                        onValueChange = { pendingReviewName = it.take(160) },
+                        label = { Text("Recording name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (previewingReview || reviewPositionMs > 0) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         FilledIconButton(
-                            enabled = reviewAttachment != null && !recording && (playingId == null || playingId == reviewId),
+                            enabled = reviewAttachment != null,
                             onClick = {
-                                if (playingId == reviewId) {
-                                    if (playbackPaused) { playbackSession?.resume(); playbackPaused = false; status = "Preview resumed." }
-                                    else { playbackSession?.pause(); playbackPaused = true; status = "Preview paused." }
-                                } else if (reviewAttachment != null) {
-                                    stopPlayback()
-                                    val focus = requestVoiceAudioFocus(audioManager) { stopPlayback(); status = "Preview stopped because audio focus was interrupted." }
-                                    if (focus == null) status = "Audio focus is unavailable. Try again."
-                                    else {
-                                        requestedAudioFocus = true
-                                        audioFocusListener = focus
-                                        playingId = reviewId
-                                        playbackPaused = false
-                                        playbackPositionMs = 0
-                                        playbackDurationMs = 0
-                                        val player = PcmVoicePlayback(context, attachmentStore, reviewAttachment, onProgress = { positionMs, durationMs ->
-                                            playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                            playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                        }) { error ->
-                                            playingId = null; playbackSession = null; playbackPaused = false
-                                            abandonVoiceAudioFocus(audioManager, focus); audioFocusListener = null; requestedAudioFocus = false
-                                            status = error ?: "Preview finished."
+                                if (previewingReview) {
+                                    if (reviewPaused) {
+                                        reviewSession?.resume()
+                                        reviewPaused = false
+                                        status = "Preview resumed."
+                                    } else {
+                                        reviewSession?.pause()
+                                        reviewPaused = true
+                                        status = "Preview paused."
+                                    }
+                                } else {
+                                    if (reviewAttachment != null) {
+                                        stopReviewPlayback()
+                                        val focus = requestVoiceAudioFocus(audioManager) {
+                                            stopReviewPlayback()
+                                            status = "Preview stopped because audio focus was interrupted."
                                         }
-                                        playbackSession = player
-                                        runCatching { player.start() }.onFailure { status = it.message ?: "Couldn't preview recording." }
+                                        if (focus == null) {
+                                            status = "Audio focus is unavailable. Try again."
+                                        } else {
+                                            requestedAudioFocus = true
+                                            audioFocusListener = focus
+                                            previewingReview = true
+                                            reviewPlaying = true
+                                            reviewPaused = false
+                                            reviewPositionMs = 0
+                                            reviewDurationMs = 0
+                                            val player = PcmVoicePlayback(
+                                                context, attachmentStore, reviewAttachment,
+                                                onProgress = { positionMs, durationMs ->
+                                                    reviewPositionMs = positionMs
+                                                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                    reviewDurationMs = durationMs
+                                                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                }
+                                            ) { error ->
+                                                reviewSession = null
+                                                previewingReview = false
+                                                reviewPlaying = false
+                                                reviewPaused = false
+                                                abandonVoiceAudioFocus(audioManager, focus)
+                                                audioFocusListener = null
+                                                requestedAudioFocus = false
+                                                status = error ?: "Preview finished."
+                                            }
+                                            reviewSession = player
+                                            runCatching { player.start() }.onFailure {
+                                                status = it.message ?: "Couldn't preview recording."
+                                                stopReviewPlayback()
+                                            }
+                                        }
                                     }
                                 }
                             },
                             modifier = Modifier.semantics {
-                                contentDescription = if (playingId == reviewId && !playbackPaused) "Pause preview recording" else "Preview recording"
+                                contentDescription =
+                                    if (previewingReview && !reviewPaused) "Pause preview recording"
+                                    else "Preview recording"
                             }
                         ) {
-                            Icon(if (playingId == reviewId && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)
+                            Icon(
+                                if (previewingReview && !reviewPaused) Icons.Default.Pause
+                                else Icons.Default.PlayArrow,
+                                contentDescription = null
+                            )
                         }
                         Button(
                             enabled = pendingReviewName.isNotBlank() && reviewAttachment != null,
                             onClick = {
                                 runCatching {
-                                    attachmentManifest.put(VoiceAttachmentMetadata(noteId, reviewId, System.currentTimeMillis(), pendingReviewDurationMs.toLong(), reviewAttachment!!.encryptedSizeBytes, pendingReviewName.trim()), attachmentStore)
+                                    attachmentManifest.put(
+                                        VoiceAttachmentMetadata(
+                                            noteId, reviewId, System.currentTimeMillis(),
+                                            pendingReviewDurationMs.toLong(),
+                                            reviewAttachment!!.encryptedSizeBytes,
+                                            pendingReviewName.trim()
+                                        ),
+                                        attachmentStore
+                                    )
                                 }.onSuccess {
+                                    stopReviewPlayback()
                                     pendingReviewId = null
-                                    attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-                                    onAttachmentCountChanged(attachments.size)
-                                    onVoiceAttachmentAdded()
-                                    status = "Recording attached to this note."
-                                }.onFailure { status = it.message ?: "Couldn't attach reviewed recording." }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Attach") }
-                        OutlinedButton(onClick = {
-                            if (playingId == reviewId) stopPlayback()
-                            addedThisSession.remove(reviewId)
-                            runCatching { attachmentStore.delete(noteId, reviewId) }
-                            runCatching { attachmentManifest.remove(noteId, reviewId) }
-                            pendingReviewId = null
-                            pendingReviewName = "Voice recording"
-                            pendingReviewDurationMs = 0
-                            attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-                            onAttachmentCountChanged(attachments.size)
-                            status = "Reviewed recording discarded. Existing attachments were kept."
-                        }) { Text("Discard") }
-                    }
-                }
-            }
-        }
-        val visibleAttachments = attachments.filter { it.attachmentId != pendingReviewId }
-        if (visibleAttachments.isEmpty() && pendingReviewId == null) {
-            Text("No recordings yet — tap Record or attach a WAV file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        visibleAttachments.forEachIndexed { index, attachment ->
-            val active = playingId == attachment.attachmentId
-            val shownPosition = if (active) playbackPositionMs else 0
-            val metadata = metadataByName[attachment.attachmentId]
-            val estimatedDurationMs = (((attachment.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) / (VOICE_SAMPLE_RATE * 2L))
-                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            val fallbackDurationMs = metadata?.durationMillis?.takeIf { it > 0L }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: estimatedDurationMs
-            Card(
-                modifier = Modifier.fillMaxWidth().semantics {
-                    contentDescription = "Audio attachment ${index + 1}"
-                },
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-            ) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        FilledIconButton(
-                            enabled = !recording && (playingId == null || active),
-                            onClick = {
-                                if (active) {
-                                    if (playbackPaused) {
-                                        playbackSession?.resume()
-                                        playbackPaused = false
-                                        status = "Playback resumed."
-                                    } else {
-                                        playbackSession?.pause()
-                                        playbackPaused = true
-                                        status = "Playback paused."
-                                    }
-                                } else {
-                                    stopPlayback()
-                                    val focus = requestVoiceAudioFocus(audioManager) {
-                                        stopPlayback()
-                                        status = "Playback stopped because audio focus was interrupted."
-                                    }
-                                    if (focus == null) status = "Audio focus is unavailable. Try again."
-                                    else {
-                                        requestedAudioFocus = true
-                                        audioFocusListener = focus
-                                        playingId = attachment.attachmentId
-                                        playbackPaused = false
-                                        playbackPositionMs = 0
-                                        pendingSeekMs = 0
-                                        playbackDurationMs = 0
-                                        status = "Playing recording ${index + 1}."
-                                        val player = PcmVoicePlayback(
-                                            context,
-                                            attachmentStore,
-                                            attachment,
-                                            onProgress = { positionMs, durationMs ->
-                                                playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                                playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                                if (!seekingPlayback) pendingSeekMs = playbackPositionMs
-                                            }
-                                        ) { error ->
-                                            playingId = null
-                                            playbackSession = null
-                                            playbackPaused = false
-                                            abandonVoiceAudioFocus(audioManager, focus)
-                                            audioFocusListener = null
-                                            requestedAudioFocus = false
-                                            status = error ?: "Playback finished."
-                                        }
-                                        playbackSession = player
-                                        runCatching { player.start() }.onFailure { error ->
-                                            playbackSession = null
-                                            playingId = null
-                                            playbackPaused = false
-                                            abandonVoiceAudioFocus(audioManager, focus)
-                                            audioFocusListener = null
-                                            requestedAudioFocus = false
-                                            status = error.message ?: "Couldn't start playback. Try again."
-                                        }
-                                    }
+                                    addedThisSession.add(reviewId)
+                                    onRecordingAttached(reviewId, pendingReviewCursor)
+                                    status = "Recording attached at cursor position."
+                                }.onFailure {
+                                    status = it.message ?: "Couldn't attach reviewed recording."
                                 }
                             },
-                            modifier = Modifier.size(46.dp).semantics {
-                                contentDescription = if (active && !playbackPaused) "Pause recording ${index + 1}" else "Play recording ${index + 1}"
-                            }
-                        ) {
-                            Icon(if (active && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Attach at cursor") }
+                        OutlinedButton(onClick = { confirmDiscardReview = true }) {
+                            Text("Discard")
                         }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                            Text(
-                                metadata?.displayName?.takeIf { it.isNotBlank() } ?: "Recording ${index + 1}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                if (active) {
-                                    formatPlaybackTime(shownPosition) + " / " + formatPlaybackTime(if (playbackDurationMs > 0) playbackDurationMs else fallbackDurationMs)
-                                } else {
-                                    formatPlaybackTime(fallbackDurationMs) + if (attachment.attachmentId in addedThisSession) " · Not yet saved" else ""
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (active) PlayingEqualizer(reducedMotion)
                     }
-                    val sliderMax = maxOf(if (active && playbackDurationMs > 0) playbackDurationMs else fallbackDurationMs, 1)
-                    Slider(
-                        value = if (active) pendingSeekMs.coerceIn(0, sliderMax).toFloat() else 0f,
-                        onValueChange = { value ->
-                            if (active && playbackDurationMs > 0) {
-                                seekingPlayback = true
-                                pendingSeekMs = value.toInt()
-                            }
-                        },
-                        onValueChangeFinished = {
-                            if (active && playbackDurationMs > 0) {
-                                playbackPositionMs = pendingSeekMs
-                                playbackSession?.seekTo(pendingSeekMs.toLong())
-                            }
-                            seekingPlayback = false
-                        },
-                        valueRange = 0f..sliderMax.toFloat(),
-                        enabled = active && playbackDurationMs > 0 && !recording,
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier.fillMaxWidth().height(28.dp).semantics {
-                            contentDescription = "Seek recording ${index + 1}"
-                        }
-                    )
                 }
             }
         }
-        if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        // ---------- Status ----------
+        if (status.isNotBlank()) {
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (showPermissionSettings) {
             OutlinedButton(onClick = {
                 showPermissionSettings = false
                 runCatching {
-                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                }.onFailure { status = "Open Android Settings and allow microphone access for NESTNOTE." }
-            }) {
-                Text("Open app settings")
-            }
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                    )
+                }.onFailure {
+                    status = "Open Android Settings and allow microphone access for NESTNOTE."
+                }
+            }) { Text("Open app settings") }
         }
     }
-}
 
-/** Converts uncompressed 16-bit mono/stereo WAV to the inline player’s 16 kHz mono PCM format. */
-private fun decodePcmWav(bytes: ByteArray): ByteArray {
-    if (bytes.size < 44 || String(bytes, 0, 4, Charsets.US_ASCII) != "RIFF" || String(bytes, 8, 4, Charsets.US_ASCII) != "WAVE") throw IOException("Choose an uncompressed PCM WAV file (16-bit audio).")
-    var offset = 12; var format = -1; var channels = 0; var sampleRate = 0; var bits = 0; var dataOffset = -1; var dataLength = 0
-    while (offset + 8 <= bytes.size) {
-        val id = String(bytes, offset, 4, Charsets.US_ASCII)
-        val length = java.nio.ByteBuffer.wrap(bytes, offset + 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
-        if (length < 0 || offset + 8L + length > bytes.size) throw IOException("The WAV file is malformed.")
-        if (id == "fmt " && length >= 16) { val b = java.nio.ByteBuffer.wrap(bytes, offset + 8, length).order(java.nio.ByteOrder.LITTLE_ENDIAN); format = b.short.toInt() and 0xffff; channels = b.short.toInt() and 0xffff; sampleRate = b.int; b.int; b.short; bits = b.short.toInt() and 0xffff }
-        if (id == "data") { dataOffset = offset + 8; dataLength = length }
-        offset += 8 + length + (length and 1)
+    // ---------- Review discard confirmation ----------
+    if (confirmDiscardReview && pendingReviewId != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardReview = false },
+            title = { Text("Discard this recording?") },
+            text = { Text("The recording will be permanently deleted and cannot be recovered.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscardReview = false
+                    val id = pendingReviewId
+                    stopReviewPlayback()
+                    if (id != null) {
+                        addedThisSession.remove(id)
+                        runCatching { attachmentStore.delete(noteId, id) }
+                        runCatching { attachmentManifest.remove(noteId, id) }
+                    }
+                    pendingReviewId = null
+                    pendingReviewName = "Voice recording"
+                    pendingReviewDurationMs = 0
+                    pendingReviewCursor = 0
+                    status = "Recording discarded. You can record again at any time."
+                }) { Text("Discard") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscardReview = false }) { Text("Keep recording") }
+            }
+        )
     }
-    if (format != 1 || channels !in 1..2 || bits != 16 || sampleRate <= 0 || dataOffset < 0 || dataLength < channels * 2) throw IOException("Unsupported WAV format. Use uncompressed 16-bit mono or stereo WAV.")
-    val frames = dataLength / (channels * 2); val outFrames = (frames.toLong() * VOICE_SAMPLE_RATE / sampleRate).coerceAtLeast(1L).coerceAtMost((Int.MAX_VALUE / 2).toLong()).toInt()
-    val input = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN); val output = java.nio.ByteBuffer.allocate(outFrames * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-    repeat(outFrames) { i -> val frame = ((i.toLong() * sampleRate) / VOICE_SAMPLE_RATE).toInt().coerceAtMost(frames - 1); val left = input.getShort(dataOffset + frame * channels * 2).toInt(); val sample = if (channels == 2) (left + input.getShort(dataOffset + frame * 4 + 2).toInt()) / 2 else left; output.putShort(i * 2, sample.toShort()) }
-    return output.array()
-}
-private fun formatPlaybackTime(durationMs: Int): String {
-    val totalSeconds = (durationMs / 1000).coerceAtLeast(0)
-    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
 
+/**
+ * Starts a voice recording session and calls [onStarted] with the live session and the
+ * audio-focus listener that must be released when playback or recording ends.
+ *
+ * The attachment id is registered in [addedIds] before background IO starts so a
+ * discard triggered mid-recording can find and clean up the file once the session drains.
+ */
 private fun startVoiceRecording(
     context: Context,
     audioManager: AudioManager,
@@ -886,13 +980,11 @@ private fun startVoiceRecording(
         return
     }
     val id = UUID.randomUUID().toString()
-    // Register the reserved attachment identity before background IO starts, so a discard can
-    // wait for finalization and remove a file even if its UI callback has not run yet.
     addedIds.add(id)
     val session = EncryptedPcmRecording(context, store, noteId, id) { result ->
         abandonVoiceAudioFocus(audioManager, focusListener)
-        // Discard can finish before this main-thread callback is dispatched. Never let a
-        // late successful worker callback recreate the manifest entry for discarded audio.
+        // Discard can finish before this main-thread callback is dispatched. Never let
+        // a late successful worker callback recreate the manifest entry for discarded audio.
         if (id !in addedIds) {
             runCatching { store.delete(noteId, id) }
             runCatching { manifest.remove(noteId, id) }
@@ -900,7 +992,7 @@ private fun startVoiceRecording(
         }
         when {
             result.isSuccess -> {
-                // Save encrypted bytes only. The manifest entry is created after explicit Attach.
+                // Save encrypted bytes only. Manifest entry is created after explicit Attach.
                 onStatus("Recording ready for review: $id")
             }
             else -> onStatus(result.exceptionOrNull()?.message ?: "Couldn't save recording")
@@ -929,7 +1021,7 @@ private val voiceAudioFocusRequests =
         java.util.WeakHashMap<AudioManager.OnAudioFocusChangeListener, AudioFocusRequest>()
     )
 
-private fun requestVoiceAudioFocus(
+internal fun requestVoiceAudioFocus(
     audioManager: AudioManager,
     onInterrupted: () -> Unit
 ): AudioManager.OnAudioFocusChangeListener? {
@@ -952,7 +1044,7 @@ private fun requestVoiceAudioFocus(
     return listener
 }
 
-private fun abandonVoiceAudioFocus(
+internal fun abandonVoiceAudioFocus(
     audioManager: AudioManager,
     listener: AudioManager.OnAudioFocusChangeListener?
 ) {
@@ -961,6 +1053,65 @@ private fun abandonVoiceAudioFocus(
     audioManager.abandonAudioFocusRequest(request)
 }
 
+/** Converts uncompressed 16-bit mono/stereo WAV to the inline player’s 16 kHz mono PCM format. */
+private fun decodePcmWav(bytes: ByteArray): ByteArray {
+    if (bytes.size < 44 || String(bytes, 0, 4, Charsets.US_ASCII) != "RIFF" ||
+        String(bytes, 8, 4, Charsets.US_ASCII) != "WAVE"
+    ) {
+        throw IOException("Choose an uncompressed PCM WAV file (16-bit audio).")
+    }
+    var offset = 12
+    var format = -1
+    var channels = 0
+    var sampleRate = 0
+    var bits = 0
+    var dataOffset = -1
+    var dataLength = 0
+    while (offset + 8 <= bytes.size) {
+        val id = String(bytes, offset, 4, Charsets.US_ASCII)
+        val length = java.nio.ByteBuffer.wrap(bytes, offset + 4, 4)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+        if (length < 0 || offset + 8L + length > bytes.size) {
+            throw IOException("The WAV file is malformed.")
+        }
+        if (id == "fmt " && length >= 16) {
+            val b = java.nio.ByteBuffer.wrap(bytes, offset + 8, length)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            format = b.short.toInt() and 0xffff
+            channels = b.short.toInt() and 0xffff
+            sampleRate = b.int; b.int; b.short
+            bits = b.short.toInt() and 0xffff
+        }
+        if (id == "data") { dataOffset = offset + 8; dataLength = length }
+        offset += 8 + length + (length and 1)
+    }
+    if (format != 1 || channels !in 1..2 || bits != 16 || sampleRate <= 0 ||
+        dataOffset < 0 || dataLength < channels * 2
+    ) {
+        throw IOException("Unsupported WAV format. Use uncompressed 16-bit mono or stereo WAV.")
+    }
+    val frames = dataLength / (channels * 2)
+    val outFrames = (frames.toLong() * VOICE_SAMPLE_RATE / sampleRate)
+        .coerceAtLeast(1L)
+        .coerceAtMost((Int.MAX_VALUE / 2).toLong())
+        .toInt()
+    val input = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    val output = java.nio.ByteBuffer.allocate(outFrames * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    repeat(outFrames) { i ->
+        val frame = ((i.toLong() * sampleRate) / VOICE_SAMPLE_RATE).toInt().coerceAtMost(frames - 1)
+        val left = input.getShort(dataOffset + frame * channels * 2).toInt()
+        val sample = if (channels == 2) {
+            (left + input.getShort(dataOffset + frame * 4 + 2).toInt()) / 2
+        } else left
+        output.putShort(i * 2, sample.toShort())
+    }
+    return output.array()
+}
+
+private fun formatPlaybackTime(durationMs: Int): String {
+    val totalSeconds = (durationMs / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}
 
 /** Small pulsing dot shown while a voice recording is active. Decorative. */
 @Composable
@@ -983,35 +1134,4 @@ private fun RecordingDot(active: Boolean, reducedMotion: Boolean) {
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.error.copy(alpha = alpha))
     )
-}
-
-/** Three tiny bars marking the audio card that is currently playing. Decorative. */
-@Composable
-private fun PlayingEqualizer(reducedMotion: Boolean) {
-    val alpha = if (reducedMotion) {
-        0.9f
-    } else {
-        val transition = rememberInfiniteTransition(label = "voice-equalizer")
-        val pulsing by transition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
-            label = "voice-equalizer-alpha"
-        )
-        pulsing
-    }
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        listOf(12.dp, 18.dp, 8.dp).forEach { barHeight ->
-            Box(
-                Modifier
-                    .width(3.dp)
-                    .height(barHeight)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
-            )
-        }
-    }
 }

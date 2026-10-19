@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.nestnote.app.NoteFiltersTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-19T19:01:06" hostname="codespaces-e44e2b" time="0.026">
+  <properties/>
+  <testcase name="homeShowsAllNonArchivedNotes" classname="com.nestnote.app.NoteFiltersTest" time="0.01"/>
+  <testcase name="searchFiltersTitleBodyAndCategoryCaseInsensitively" classname="com.nestnote.app.NoteFiltersTest" time="0.005"/>
+  <testcase name="defaultSortPinsFirstThenMostRecentlyEdited" classname="com.nestnote.app.NoteFiltersTest" time="0.0"/>
+  <testcase name="createdSortPinsFirstThenMostRecentlyCreated" classname="com.nestnote.app.NoteFiltersTest" time="0.001"/>
+  <testcase name="searchAppliesWithinTheSelectedView" classname="com.nestnote.app.NoteFiltersTest" time="0.001"/>
+  <testcase name="pinnedViewShowsOnlyPinnedActiveNotes" classname="com.nestnote.app.NoteFiltersTest" time="0.0"/>
+  <testcase name="categoryViewFiltersByCategoryAndHidesArchived" classname="com.nestnote.app.NoteFiltersTest" time="0.0"/>
+  <testcase name="remindersViewRequiresReminderMetadata" classname="com.nestnote.app.NoteFiltersTest" time="0.001"/>
+  <testcase name="archivedViewShowsOnlyArchivedNotes" classname="com.nestnote.app.NoteFiltersTest" time="0.0"/>
+  <testcase name="titleSortPinsFirstThenAlphabetical" classname="com.nestnote.app.NoteFiltersTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

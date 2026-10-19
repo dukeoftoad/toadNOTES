@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.nestnote.app-debug-49:/font_fraunces_variable.ttf.flat",
+        "source": "com.nestnote.app-main-51:/font/fraunces_variable.ttf"
+    },
+    {
+        "merged": "com.nestnote.app-debug-49:/drawable-nodpi_nestnote_launcher.xml.flat",
+        "source": "com.nestnote.app-main-51:/drawable-nodpi/nestnote_launcher.xml"
+    }
+]
