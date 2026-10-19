@@ -779,3 +779,11 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Replaced theme-dependent light text on pastel background cards with a stable dark ink color (`#292633`) so labels remain readable in dark app themes.
 - Strengthened selected swatch/background outlines to 3 dp dark ink and darkened unselected outlines; selected checks now use a dark color for clear contrast on light tints.
 - Validation boundary: source update committed; CI and device visual/accessibility verification are not yet confirmed.
+
+
+## 2026-10-19 — Redesign prototype parity and editor crash follow-up
+- Imported the supplied UI redesign history through commit `bcc8b04`, then fixed the missing Compose `Font` import in commit `e84756d` and clamped animated `CollapsibleSlot` heights in commit `4874c7b` after the Android log reported `Size(958 x -2) is out of range`.
+- Added regression coverage for negative spring overshoot in `NoteEditorTest.kt`; the focused test and `gradle --no-configuration-cache assembleDebug` passed.
+- Compared the supplied `NestNote redesign prototype.html` with the native Compose implementation and recorded incomplete work, owning files, and acceptance criteria in [docs/PROTOTYPE_PARITY_AUDIT.md](docs/PROTOTYPE_PARITY_AUDIT.md).
+- Confirmed source-level parity for the floating navigation, More hub, editor menu, slim right-side tool rail, appearance draft flow, markdown preview, and voice-note entry point. The remaining gaps are primarily device validation, accessibility, performance profiling, and small dashboard/More parity decisions.
+- **Validation boundary:** no Android device or emulator was connected for this audit. A live system trace, keyboard/insets review, TalkBack review, large-font review, and visual comparison remain pending. Generated build directories and supplied prototype/archive artifacts remain untracked.

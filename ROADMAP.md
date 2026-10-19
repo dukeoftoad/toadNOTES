@@ -1,6 +1,6 @@
 # NESTNOTE Product Roadmap
 
-Last updated: 2026-10-12
+Last updated: 2026-10-19
 
 ## Product direction
 Build a calm, compact, personal note-taking experience using native Android, Jetpack Compose, and Material 3. Keep common actions fast, preserve local user data, and deliver in small, testable increments.
@@ -13,6 +13,10 @@ Build a calm, compact, personal note-taking experience using native Android, Jet
 - Compact grid by default, with a list/grid preference.
 - Preserve existing local note storage; avoid unnecessary schema migrations.
 - Do not mark a phase complete until its relevant checks pass.
+
+### Current redesign follow-up — 2026-10-19
+
+The supplied HTML redesign is implemented as a native Compose adaptation. The remaining work is tracked in [docs/PROTOTYPE_PARITY_AUDIT.md](docs/PROTOTYPE_PARITY_AUDIT.md): device validation of the editor and rail, accessibility and keyboard/inset checks, cold-start and editor performance profiling, focused interaction coverage, and resolution of the small dashboard/More parity decisions. The prototype is a reference artifact, not production code.
 
 ## Phase 1 — Modernize the home screen
 **Status: Merged** — [PR #1](https://github.com/dukeoftoad/toadNOTES/pull/1)
