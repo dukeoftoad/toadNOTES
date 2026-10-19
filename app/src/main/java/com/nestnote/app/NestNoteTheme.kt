@@ -30,6 +30,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -208,6 +210,17 @@ internal fun ColorScheme.asAmoled(): ColorScheme = copy(
 internal object NestMotion {
     fun <T> spatial() = spring<T>(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
     fun <T> fast() = spring<T>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+
+    /**
+     * Reduced-motion variants settle instantly. Use them wherever the system "Remove
+     * animations" accessibility preference is active (see [rememberSystemReducedMotion]);
+     * layout and behavior are unchanged, only the transition duration collapses to zero.
+     */
+    fun <T> spatial(reducedMotion: Boolean): FiniteAnimationSpec<T> =
+        if (reducedMotion) snap() else spatial()
+
+    fun <T> fast(reducedMotion: Boolean): FiniteAnimationSpec<T> =
+        if (reducedMotion) snap() else fast()
 }
 
 // Distinct, slightly richer swatches remain soft while being easy to tell apart.

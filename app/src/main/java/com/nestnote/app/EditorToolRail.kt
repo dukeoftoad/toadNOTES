@@ -96,6 +96,7 @@ internal fun EditorToolRail(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val reducedMotion = rememberSystemReducedMotion()
     BackHandler(enabled = visible, onBack = onCancel)
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Outside tap cancels appearance drafts. Format keeps the text field reachable instead.
@@ -109,8 +110,8 @@ internal fun EditorToolRail(
         AnimatedVisibility(
             visible = visible,
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
-            enter = slideInHorizontally(NestMotion.spatial()) { it + 48 } + fadeIn(NestMotion.fast()),
-            exit = slideOutHorizontally(NestMotion.fast()) { it + 48 } + fadeOut(NestMotion.fast())
+            enter = slideInHorizontally(NestMotion.spatial(reducedMotion)) { it + 48 } + fadeIn(NestMotion.fast(reducedMotion)),
+            exit = slideOutHorizontally(NestMotion.fast(reducedMotion)) { it + 48 } + fadeOut(NestMotion.fast(reducedMotion))
         ) {
             Surface(
                 modifier = Modifier.width(58.dp).heightIn(max = maxHeight * 0.86f).testTag("tool_rail"),

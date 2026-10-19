@@ -43,7 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /** Destinations that live under the More tab; back from these returns to More. */
-internal val moreSubViews = listOf("Settings", "Pinned", "Archived", "Categories")
+internal val moreSubViews = listOf("Settings", "Backup", "Pinned", "Archived", "Categories", "About")
 
 /**
  * Floating four-tab bar with a centred New note button: Home, Notes, [New], Reminders, More.
@@ -57,6 +57,7 @@ internal fun NestNoteNavBar(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val reducedMotion = rememberSystemReducedMotion()
     val current = when {
         selectedView == "Home" -> "Home"
         selectedView == "Reminders" -> "Reminders"
@@ -80,8 +81,8 @@ internal fun NestNoteNavBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            NavItem("Home", Icons.Default.Home, current == "Home") { onSelect("Home") }
-            NavItem("Notes", Icons.AutoMirrored.Filled.List, current == "All notes") { onSelect("All notes") }
+            NavItem("Home", Icons.Default.Home, current == "Home", reducedMotion) { onSelect("Home") }
+            NavItem("Notes", Icons.AutoMirrored.Filled.List, current == "All notes", reducedMotion) { onSelect("All notes") }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Surface(
                     onClick = onNewNote,
@@ -96,20 +97,20 @@ internal fun NestNoteNavBar(
                     }
                 }
             }
-            NavItem("Reminders", Icons.Default.NotificationsNone, current == "Reminders") { onSelect("Reminders") }
-            NavItem("More", Icons.Default.MoreHoriz, current == "More") { onSelect("More") }
+            NavItem("Reminders", Icons.Default.NotificationsNone, current == "Reminders", reducedMotion) { onSelect("Reminders") }
+            NavItem("More", Icons.Default.MoreHoriz, current == "More", reducedMotion) { onSelect("More") }
         }
     }
 }
 
 @Composable
-private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean, reducedMotion: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val tint by animateColorAsState(
-        if (selected) colors.primary else colors.onSurfaceVariant, NestMotion.fast(), label = "nav-tint"
+        if (selected) colors.primary else colors.onSurfaceVariant, NestMotion.fast(reducedMotion), label = "nav-tint"
     )
     val pill by animateColorAsState(
-        if (selected) colors.primary.copy(alpha = 0.14f) else Color.Transparent, NestMotion.fast(), label = "nav-pill"
+        if (selected) colors.primary.copy(alpha = 0.14f) else Color.Transparent, NestMotion.fast(reducedMotion), label = "nav-pill"
     )
     Column(
         modifier = Modifier

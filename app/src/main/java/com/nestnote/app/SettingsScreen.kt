@@ -38,6 +38,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -129,6 +130,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(
+    focusBackup: Boolean,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
     dynamicColors: Boolean,
@@ -164,7 +166,16 @@ internal fun SettingsScreen(
     val colors = MaterialTheme.colorScheme
     var confirmReset by remember { mutableStateOf(false) }
     val sortOptions = listOf("RECENT" to "Edited", "CREATED" to "Created", "TITLE" to "Title")
+    // LazyColumn item order: 0 header, 1 Appearance, 2 Layout, 3 Note behavior,
+    // 4 Note editor, 5 Backup & privacy, 6 Reset. Keep in sync with the items below.
+    val backupSectionIndex = 5
+    val listState = rememberLazyListState()
+    LaunchedEffect(focusBackup) {
+        // More > Backup & restore lands here directly; instant jump keeps it deterministic.
+        if (focusBackup) listState.scrollToItem(backupSectionIndex)
+    }
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().testTag("settings_scroll"),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /** The More tab: library, data and preferences in three calm groups. */
@@ -39,6 +41,7 @@ internal fun MoreScreen(
     pinnedCount: Int,
     archivedCount: Int,
     categoryCount: Int,
+    versionLabel: String,
     onOpen: (String) -> Unit
 ) {
     Column(
@@ -51,16 +54,31 @@ internal fun MoreScreen(
             MoreRow(Icons.Default.Category, "Categories", "$categoryCount categories", true) { onOpen("Categories") }
         }
         MoreGroup("Data") {
-            MoreRow(Icons.Default.Backup, "Backup & restore", "Save a JSON backup or merge-restore one", false) { onOpen("Settings") }
+            // Opens the backup section of Settings directly; the Preferences group keeps general Settings.
+            MoreRow(Icons.Default.Backup, "Backup & restore", "Save a JSON backup or merge-restore one", false) { onOpen("Backup") }
         }
         MoreGroup("Preferences") {
             MoreRow(Icons.Default.Settings, "Settings", "Appearance, layout, editor and note behaviour", false) { onOpen("Settings") }
+            // Prototype parity: the Preferences group ends with About & help
+            // ("Version, licence, F-Droid"), which opens the dedicated About tab.
+            MoreRow(Icons.Default.Info, "About & help", "Version, licence, F-Droid", false) { onOpen("About") }
+        }
+        if (versionLabel.isNotEmpty()) {
+            Text(
+                versionLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)
+            )
         }
     }
 }
 
+// Internal (not private) so the About & help screen reuses the exact same
+// group card and row visuals — one design system, no duplicated components.
 @Composable
-private fun MoreGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+internal fun MoreGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     val colors = MaterialTheme.colorScheme
     Text(
         title.uppercase(),
@@ -77,7 +95,7 @@ private fun MoreGroup(title: String, content: @Composable ColumnScope.() -> Unit
 }
 
 @Composable
-private fun MoreRow(icon: ImageVector, title: String, subtitle: String, divider: Boolean, onClick: () -> Unit) {
+internal fun MoreRow(icon: ImageVector, title: String, subtitle: String, divider: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     if (divider) HorizontalDivider(color = colors.outlineVariant)
     Row(

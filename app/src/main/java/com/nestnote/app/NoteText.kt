@@ -17,6 +17,16 @@ object NoteText {
     fun wordCount(text: String): Int =
         text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
 
+    /**
+     * Time-of-day dashboard greeting. [hourOfDay] is a 24-hour Calendar.HOUR_OF_DAY value;
+     * boundaries match the design reference (before noon, afternoon until 17:59, evening otherwise).
+     */
+    fun greetingFor(hourOfDay: Int): String = when (hourOfDay) {
+        in 5..11 -> "Good morning"
+        in 12..17 -> "Good afternoon"
+        else -> "Good evening"
+    }
+
     /** Rough reading time at ~200 words per minute; 0 for empty text. */
     fun readingMinutes(words: Int): Int = if (words <= 0) 0 else maxOf(1, (words + 199) / 200)
 

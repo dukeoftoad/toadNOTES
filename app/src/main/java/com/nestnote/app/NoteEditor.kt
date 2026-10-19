@@ -2,6 +2,7 @@ package com.nestnote.app
 
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
@@ -185,6 +186,7 @@ internal fun NoteEditorContent(
     var voiceChangesPending by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
     val voiceNoteId = original?.id ?: draftNoteId
     val colors = MaterialTheme.colorScheme
+    val reducedMotion = rememberSystemReducedMotion()
     val darkEditor = colors.surface.red < 0.5f
     val ink = if (darkEditor) colors.onSurface else Color(0xFF292633)
     val muted = if (darkEditor) colors.onSurfaceVariant else Color(0xFF66616D)
@@ -431,7 +433,15 @@ internal fun NoteEditorContent(
                                 }
                             }
                         }
-                        AnimatedContent(targetState = editorMode, transitionSpec = { (fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it / 4 }) togetherWith (fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideOutVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { -it / 4 }) }, label = "editor-save-done") { mode ->
+                        AnimatedContent(targetState = editorMode, transitionSpec = {
+                            // Honors the system "Remove animations" preference.
+                            if (reducedMotion) {
+                                (fadeIn(snap()) + slideInVertically(snap()) { it / 4 }) togetherWith
+                                    (fadeOut(snap()) + slideOutVertically(snap()) { -it / 4 })
+                            } else {
+                                (fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it / 4 }) togetherWith (fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideOutVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { -it / 4 })
+                            }
+                        }, label = "editor-save-done") { mode ->
                             TextButton(
                                 onClick = {
                                     if (mode == EditorMode.Editing) {
@@ -449,8 +459,8 @@ internal fun NoteEditorContent(
             bottomBar = {
                 AnimatedVisibility(
                     visible = editorMode == EditorMode.Editing,
-                    enter = fadeIn() + slideInVertically { it },
-                    exit = fadeOut() + slideOutVertically { it }
+                    enter = if (reducedMotion) fadeIn(snap()) + slideInVertically(snap()) { it } else fadeIn() + slideInVertically { it },
+                    exit = if (reducedMotion) fadeOut(snap()) + slideOutVertically(snap()) { it } else fadeOut() + slideOutVertically { it }
                 ) {
                 Column(Modifier.imePadding()) {
                             if (showCounts) {
@@ -458,7 +468,7 @@ internal fun NoteEditorContent(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val words = NoteText.wordCount(body)
+                                    val words = remember(body) { NoteText.wordCount(body) }
                                     val minutes = NoteText.readingMinutes(words)
                                     Text(
                                         buildString {
@@ -502,16 +512,6 @@ internal fun NoteEditorContent(
                         }
                     }
                 )
-                    // Stays composed (so recordings, playback and discard handling keep working) but
-                    // collapses to nothing until the user opens it from More or the note has recordings.
-                    CollapsibleSlot(visible = showVoiceControls || voiceAttachmentCount > 0) {
-                        VoiceNoteControls(
-                            noteId = voiceNoteId,
-                            onAttachmentCountChanged = { voiceAttachmentCount = it },
-                            onVoiceAttachmentAdded = { voiceChangesPending = true },
-                            onDiscardHandlerReady = onRegisterVoiceDiscard
-                        )
-                    }
                     if (pinned) {
                         AssistChip(
                             onClick = { if (editorMode == EditorMode.Editing) pinned = false },
@@ -520,7 +520,9 @@ internal fun NoteEditorContent(
                             modifier = Modifier.padding(top = 4.dp).semantics { contentDescription = "Pinned. Tap to unpin" }
                         )
                     }
-                    val checklistItems = NoteText.checklistItems(bodyValue.text)
+                    // Derived once per body change instead of on every editor recomposition
+                    // (rail interactions, appearance drafts, theme flips re-compose this column).
+                    val checklistItems = remember(bodyValue.text) { NoteText.checklistItems(bodyValue.text) }
                     if (checklistItems.isNotEmpty()) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -570,6 +572,9 @@ internal fun NoteEditorContent(
                         }
                     }
                     if (previewVisible) {
+                        // Parse once per (body, text size, ink) change instead of inside every
+                        // AndroidView update pass; the TextView still reuses the cached result.
+                        val previewSpanned = remember(body, markdownBodySize, ink) { MarkdownPreview.toSpanned(body) }
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
                             shape = RoundedCornerShape(12.dp),
@@ -589,7 +594,7 @@ internal fun NoteEditorContent(
                                 update = { textView ->
                                     textView.setTextColor(ink.toArgb())
                                     textView.textSize = markdownBodySize
-                                    textView.text = MarkdownPreview.toSpanned(body)
+                                    textView.text = previewSpanned
                                 }
                             )
                         }
@@ -620,6 +625,19 @@ internal fun NoteEditorContent(
                     )
                     }
     
+                    // Voice lives in the note flow: recordings sit under the body and play in
+                    // place — play, pause and seek happen right on the writing surface, not in
+                    // a panel docked on top of the page. Stays composed (recordings, playback
+                    // and discard handling keep working) but collapses until opened from More
+                    // or the note already has recordings.
+                    CollapsibleSlot(visible = showVoiceControls || voiceAttachmentCount > 0) {
+                        VoiceNoteControls(
+                            noteId = voiceNoteId,
+                            onAttachmentCountChanged = { voiceAttachmentCount = it },
+                            onVoiceAttachmentAdded = { voiceChangesPending = true },
+                            onDiscardHandlerReady = onRegisterVoiceDiscard
+                        )
+                    }
                     Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
                     Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         AssistChip(
@@ -755,7 +773,7 @@ internal fun NoteEditorContent(
 /** Keeps [content] composed but animates it to zero height (and hides it from accessibility) when not [visible]. */
 @Composable
 private fun CollapsibleSlot(visible: Boolean, content: @Composable () -> Unit) {
-    val fraction by animateFloatAsState(if (visible) 1f else 0f, NestMotion.spatial(), label = "collapsible-slot")
+    val fraction by animateFloatAsState(if (visible) 1f else 0f, NestMotion.spatial(rememberSystemReducedMotion()), label = "collapsible-slot")
     Box(
         Modifier
             .layout { measurable, constraints ->

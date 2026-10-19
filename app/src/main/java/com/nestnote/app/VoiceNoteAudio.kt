@@ -41,8 +41,27 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -444,35 +463,102 @@ internal fun VoiceNoteControls(
         }
     }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
-        ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Voice", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                OutlinedButton(
-                    enabled = !recording && !startingRecording && !pendingPermission && !importingAudio,
-                    onClick = { audioFileLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")) }
+    // In-place voice UX: while recording, a compact encrypted-pill shows elapsed time,
+    // pause/resume and stop. Recordings render as player cards in the note flow — play,
+    // pause and seek happen right here, not in a panel docked on top of the page.
+    val reducedMotion = rememberSystemReducedMotion()
+    val metadataByName = remember(attachments) {
+        runCatching { attachmentManifest.list(noteId, attachmentStore) }
+            .getOrDefault(emptyList())
+            .associateBy { it.attachmentId }
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (recording || startingRecording || pendingPermission) {
+            val minutes = elapsedRecordingSeconds / 60
+            val seconds = elapsedRecordingSeconds % 60
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.AttachFile, contentDescription = "Attach audio file")
-                    Text(if (importingAudio) "Importing…" else "Attach audio file")
-                }
-                Button(
-                    modifier = Modifier.semantics {
-                        contentDescription = "Record voice note"
-                        stateDescription = when {
-                            recording -> "Recording in progress"
-                            startingRecording -> "Preparing microphone"
-                            pendingPermission -> "Waiting for microphone permission"
-                            playingId != null -> "Unavailable while playback is active"
-                            else -> "Ready"
+                    RecordingDot(active = recording && !recordingPaused, reducedMotion = reducedMotion)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            when {
+                                startingRecording || pendingPermission -> "Preparing microphone…"
+                                recordingPaused -> "Paused · %02d:%02d".format(minutes, seconds)
+                                else -> "Recording · %02d:%02d".format(minutes, seconds)
+                            },
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "Encrypted on this device",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                        )
+                    }
+                    FilledIconButton(
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            contentColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier.semantics {
+                            contentDescription = if (recordingPaused) "Resume voice recording" else "Pause voice recording"
+                            stateDescription = when {
+                                !recording -> "Unavailable when not recording"
+                                recordingPaused -> "Recording paused"
+                                else -> "Recording in progress"
+                            }
+                        },
+                        enabled = recording,
+                        onClick = {
+                            if (recordingPaused) {
+                                runCatching { recordingSession?.resume() }
+                                    .onSuccess { recordingPaused = false; status = "Recording…" }
+                                    .onFailure { stopRecording(); status = it.message ?: "Couldn't resume recording" }
+                            } else {
+                                recordingSession?.pause()
+                                recordingPaused = true
+                                status = "Recording paused."
+                            }
                         }
-                    },
+                    ) {
+                        Icon(
+                            if (recordingPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = if (recordingPaused) "Resume recording" else "Pause recording"
+                        )
+                    }
+                    FilledIconButton(
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            contentColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier.semantics {
+                            contentDescription = "Stop voice recording"
+                            stateDescription = if (recording) "Available" else "Unavailable when not recording"
+                        },
+                        enabled = recording,
+                        onClick = { stopRecording() }
+                    ) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop recording")
+                    }
+                }
+            }
+        } else {
+            // Idle actions: compact icon-led buttons instead of the old four-wide button row.
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
                     enabled = canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null || pendingReviewId != null),
                     onClick = {
                         keyboardController?.hide()
@@ -497,108 +583,91 @@ internal fun VoiceNoteControls(
                             pendingPermission = true
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Record voice note"
+                        stateDescription = if (playingId != null || pendingReviewId != null) "Unavailable while playback is active" else "Ready"
                     }
                 ) {
-                    Icon(Icons.Default.Mic, contentDescription = "Record voice note")
-                    Text(if (startingRecording || pendingPermission) "Starting…" else "Record")
+                    Icon(Icons.Default.Mic, contentDescription = "Record voice note", modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Record")
                 }
                 OutlinedButton(
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)),
-                    modifier = Modifier.semantics {
-                        contentDescription = if (recordingPaused) "Resume voice recording" else "Pause voice recording"
-                        stateDescription = when {
-                            !recording -> "Unavailable when not recording"
-                            recordingPaused -> "Recording paused"
-                            else -> "Recording in progress"
-                        }
-                    },
-                    enabled = recording,
-                    onClick = {
-                        if (recordingPaused) {
-                            runCatching { recordingSession?.resume() }
-                                .onSuccess { recordingPaused = false; status = "Recording…" }
-                                .onFailure { stopRecording(); status = it.message ?: "Couldn't resume recording" }
-                        } else {
-                            recordingSession?.pause()
-                            recordingPaused = true
-                            status = "Recording paused."
-                        }
-                    }
+                    enabled = !recording && !startingRecording && !pendingPermission && !importingAudio,
+                    onClick = { audioFileLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")) },
+                    modifier = Modifier.semantics { contentDescription = "Attach audio file" }
                 ) {
-                    Icon(if (recordingPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = if (recordingPaused) "Resume recording" else "Pause recording")
-                    Text(if (recordingPaused) "Resume" else "Pause")
+                    Icon(Icons.Default.AttachFile, contentDescription = "Attach audio file", modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (importingAudio) "Importing…" else "Attach audio")
                 }
-                OutlinedButton(
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)),
-                    modifier = Modifier.semantics {
-                        contentDescription = "Stop voice recording"
-                        stateDescription = if (recording) "Available" else "Unavailable when not recording"
-                    },
-                    enabled = recording,
-                    onClick = { stopRecording() }
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop recording")
-                    Text("Stop")
-                }
-                }
-                }
-            if (recording) {
-                val minutes = elapsedRecordingSeconds / 60
-                val seconds = elapsedRecordingSeconds % 60
-                Text(
-                    if (recordingPaused) "Recording paused • %02d:%02d".format(minutes, seconds)
-                    else "Recording • %02d:%02d".format(minutes, seconds),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else if (startingRecording || pendingPermission) {
-                Text("Preparing microphone…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (pendingReviewId != null) {
-                val reviewId = pendingReviewId!!
-                val reviewAttachment = attachments.firstOrNull { it.attachmentId == reviewId }
-                    ?: runCatching { attachmentStore.list(noteId).firstOrNull { it.attachmentId == reviewId } }.getOrNull()
-                Card(
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Recording review" },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Review recording", style = MaterialTheme.typography.titleSmall)
-                        OutlinedTextField(value = pendingReviewName, onValueChange = { pendingReviewName = it.take(160) }, label = { Text("Recording name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        Text("Preview • ${formatPlaybackTime(pendingReviewDurationMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                enabled = reviewAttachment != null && !recording && (playingId == null || playingId == reviewId),
-                                onClick = {
-                                    if (playingId == reviewId) {
-                                        if (playbackPaused) { playbackSession?.resume(); playbackPaused = false; status = "Preview resumed." }
-                                        else { playbackSession?.pause(); playbackPaused = true; status = "Preview paused." }
-                                    } else if (reviewAttachment != null) {
-                                        stopPlayback()
-                                        val focus = requestVoiceAudioFocus(audioManager) { stopPlayback(); status = "Preview stopped because audio focus was interrupted." }
-                                        if (focus == null) status = "Audio focus is unavailable. Try again."
-                                        else {
-                                            requestedAudioFocus = true
-                                            audioFocusListener = focus
-                                            playingId = reviewId
-                                            playbackPaused = false
-                                            playbackPositionMs = 0
-                                            playbackDurationMs = 0
-                                            val player = PcmVoicePlayback(context, attachmentStore, reviewAttachment, onProgress = { positionMs, durationMs ->
-                                                playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                                playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                            }) { error ->
-                                                playingId = null; playbackSession = null; playbackPaused = false
-                                                abandonVoiceAudioFocus(audioManager, focus); audioFocusListener = null; requestedAudioFocus = false
-                                                status = error ?: "Preview finished."
-                                            }
-                                            playbackSession = player
-                                            runCatching { player.start() }.onFailure { status = it.message ?: "Couldn't preview recording." }
+        }
+        if (pendingReviewId != null) {
+            val reviewId = pendingReviewId!!
+            val reviewAttachment = attachments.firstOrNull { it.attachmentId == reviewId }
+                ?: runCatching { attachmentStore.list(noteId).firstOrNull { it.attachmentId == reviewId } }.getOrNull()
+            Card(
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Recording review" },
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Review recording",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            formatPlaybackTime(pendingReviewDurationMs),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
+                        )
+                    }
+                    OutlinedTextField(value = pendingReviewName, onValueChange = { pendingReviewName = it.take(160) }, label = { Text("Recording name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledIconButton(
+                            enabled = reviewAttachment != null && !recording && (playingId == null || playingId == reviewId),
+                            onClick = {
+                                if (playingId == reviewId) {
+                                    if (playbackPaused) { playbackSession?.resume(); playbackPaused = false; status = "Preview resumed." }
+                                    else { playbackSession?.pause(); playbackPaused = true; status = "Preview paused." }
+                                } else if (reviewAttachment != null) {
+                                    stopPlayback()
+                                    val focus = requestVoiceAudioFocus(audioManager) { stopPlayback(); status = "Preview stopped because audio focus was interrupted." }
+                                    if (focus == null) status = "Audio focus is unavailable. Try again."
+                                    else {
+                                        requestedAudioFocus = true
+                                        audioFocusListener = focus
+                                        playingId = reviewId
+                                        playbackPaused = false
+                                        playbackPositionMs = 0
+                                        playbackDurationMs = 0
+                                        val player = PcmVoicePlayback(context, attachmentStore, reviewAttachment, onProgress = { positionMs, durationMs ->
+                                            playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                            playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                        }) { error ->
+                                            playingId = null; playbackSession = null; playbackPaused = false
+                                            abandonVoiceAudioFocus(audioManager, focus); audioFocusListener = null; requestedAudioFocus = false
+                                            status = error ?: "Preview finished."
                                         }
+                                        playbackSession = player
+                                        runCatching { player.start() }.onFailure { status = it.message ?: "Couldn't preview recording." }
                                     }
                                 }
-                            ) { Icon(if (playingId == reviewId && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null); Text(if (playingId == reviewId && !playbackPaused) "Pause preview" else "Preview") }
-                            Button(enabled = pendingReviewName.isNotBlank() && reviewAttachment != null, onClick = {
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = if (playingId == reviewId && !playbackPaused) "Pause preview recording" else "Preview recording"
+                            }
+                        ) {
+                            Icon(if (playingId == reviewId && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)
+                        }
+                        Button(
+                            enabled = pendingReviewName.isNotBlank() && reviewAttachment != null,
+                            onClick = {
                                 runCatching {
                                     attachmentManifest.put(VoiceAttachmentMetadata(noteId, reviewId, System.currentTimeMillis(), pendingReviewDurationMs.toLong(), reviewAttachment!!.encryptedSizeBytes, pendingReviewName.trim()), attachmentStore)
                                 }.onSuccess {
@@ -608,173 +677,173 @@ internal fun VoiceNoteControls(
                                     onVoiceAttachmentAdded()
                                     status = "Recording attached to this note."
                                 }.onFailure { status = it.message ?: "Couldn't attach reviewed recording." }
-                            }) { Text("Attach") }
-                            OutlinedButton(onClick = {
-                                if (playingId == reviewId) stopPlayback()
-                                addedThisSession.remove(reviewId)
-                                runCatching { attachmentStore.delete(noteId, reviewId) }
-                                runCatching { attachmentManifest.remove(noteId, reviewId) }
-                                pendingReviewId = null
-                                pendingReviewName = "Voice recording"
-                                pendingReviewDurationMs = 0
-                                attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
-                                onAttachmentCountChanged(attachments.size)
-                                status = "Reviewed recording discarded. Existing attachments were kept."
-                            }) { Text("Discard") }
-                        }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Attach") }
+                        OutlinedButton(onClick = {
+                            if (playingId == reviewId) stopPlayback()
+                            addedThisSession.remove(reviewId)
+                            runCatching { attachmentStore.delete(noteId, reviewId) }
+                            runCatching { attachmentManifest.remove(noteId, reviewId) }
+                            pendingReviewId = null
+                            pendingReviewName = "Voice recording"
+                            pendingReviewDurationMs = 0
+                            attachments = runCatching { attachmentStore.list(noteId) }.getOrDefault(emptyList())
+                            onAttachmentCountChanged(attachments.size)
+                            status = "Reviewed recording discarded. Existing attachments were kept."
+                        }) { Text("Discard") }
                     }
-                }
-            }
-            val visibleAttachments = attachments.filter { it.attachmentId != pendingReviewId }
-            if (visibleAttachments.isEmpty() && pendingReviewId == null) {
-                Text("No audio attachments yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                visibleAttachments.forEachIndexed { index, attachment ->
-                    val active = playingId == attachment.attachmentId
-                    val shownDuration = if (active && playbackDurationMs > 0) playbackDurationMs else 0
-                    val shownPosition = if (active) playbackPositionMs else 0
-                    Card(
-                        modifier = Modifier.fillMaxWidth().semantics {
-                            contentDescription = "Audio attachment ${index + 1}"
-                        },
-                        colors = androidx.compose.material3.CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                IconButton(
-                                    enabled = !recording && (playingId == null || active),
-                                    onClick = {
-                                        if (active) {
-                                            if (playbackPaused) {
-                                                playbackSession?.resume()
-                                                playbackPaused = false
-                                                status = "Playback resumed."
-                                            } else {
-                                                playbackSession?.pause()
-                                                playbackPaused = true
-                                                status = "Playback paused."
-                                            }
-                                        } else {
-                                            stopPlayback()
-                                            val focus = requestVoiceAudioFocus(audioManager) {
-                                                stopPlayback()
-                                                status = "Playback stopped because audio focus was interrupted."
-                                            }
-                                            if (focus == null) status = "Audio focus is unavailable. Try again."
-                                            else {
-                                                requestedAudioFocus = true
-                                                audioFocusListener = focus
-                                                playingId = attachment.attachmentId
-                                                playbackPaused = false
-                                                playbackPositionMs = 0
-                                                pendingSeekMs = 0
-                                                playbackDurationMs = 0
-                                                status = "Playing recording ${index + 1}."
-                                                val player = PcmVoicePlayback(
-                                                    context,
-                                                    attachmentStore,
-                                                    attachment,
-                                                    onProgress = { positionMs, durationMs ->
-                                                        playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                                        playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                                                        if (!seekingPlayback) pendingSeekMs = playbackPositionMs
-                                                    }
-                                                ) { error ->
-                                                    playingId = null
-                                                    playbackSession = null
-                                                    playbackPaused = false
-                                                    abandonVoiceAudioFocus(audioManager, focus)
-                                                    audioFocusListener = null
-                                                    requestedAudioFocus = false
-                                                    status = error ?: "Playback finished."
-                                                }
-                                                playbackSession = player
-                                                runCatching { player.start() }.onFailure { error ->
-                                                    playbackSession = null
-                                                    playingId = null
-                                                    playbackPaused = false
-                                                    abandonVoiceAudioFocus(audioManager, focus)
-                                                    audioFocusListener = null
-                                                    requestedAudioFocus = false
-                                                    status = error.message ?: "Couldn't start playback. Try again."
-                                                }
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.semantics {
-                                        contentDescription = if (active && !playbackPaused) "Pause recording ${index + 1}" else "Play recording ${index + 1}"
-                                    }
-                                ) {
-                                    Icon(
-                                        if (active && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = null
-                                    )
-                                }
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        if (attachment.attachmentId in addedThisSession) "Recording ${index + 1} · Not yet saved to note" else "Recording ${index + 1}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                    Text(
-                                        if (shownDuration > 0) formatPlaybackTime(shownDuration) else formatVoiceDuration(attachment.encryptedSizeBytes),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            val estimatedDurationMs = (((attachment.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) / (VOICE_SAMPLE_RATE * 2L))
-                                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                            val sliderMax = maxOf(if (active && playbackDurationMs > 0) playbackDurationMs else estimatedDurationMs, 1)
-                            Slider(
-                                value = if (active) pendingSeekMs.coerceIn(0, sliderMax).toFloat() else 0f,
-                                onValueChange = { value ->
-                                    if (active && playbackDurationMs > 0) {
-                                        seekingPlayback = true
-                                        pendingSeekMs = value.toInt()
-                                    }
-                                },
-                                onValueChangeFinished = {
-                                    if (active && playbackDurationMs > 0) {
-                                        playbackPositionMs = pendingSeekMs
-                                        playbackSession?.seekTo(pendingSeekMs.toLong())
-                                    }
-                                    seekingPlayback = false
-                                },
-                                valueRange = 0f..sliderMax.toFloat(),
-                                enabled = active && playbackDurationMs > 0 && !recording,
-                                modifier = Modifier.fillMaxWidth().height(28.dp).semantics {
-                                    contentDescription = "Seek recording ${index + 1}"
-                                }
-                            )
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(formatPlaybackTime(if (active) shownPosition else 0), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    if (active && playbackDurationMs > 0) formatPlaybackTime(playbackDurationMs)
-                                    else formatPlaybackTime(estimatedDurationMs),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (showPermissionSettings) {
-                OutlinedButton(onClick = {
-                    showPermissionSettings = false
-                    runCatching {
-                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                    }.onFailure { status = "Open Android Settings and allow microphone access for NESTNOTE." }
-                }) {
-                    Text("Open app settings")
                 }
             }
         }
+        val visibleAttachments = attachments.filter { it.attachmentId != pendingReviewId }
+        if (visibleAttachments.isEmpty() && pendingReviewId == null) {
+            Text("No recordings yet — tap Record or attach a WAV file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        visibleAttachments.forEachIndexed { index, attachment ->
+            val active = playingId == attachment.attachmentId
+            val shownPosition = if (active) playbackPositionMs else 0
+            val metadata = metadataByName[attachment.attachmentId]
+            val estimatedDurationMs = (((attachment.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) / (VOICE_SAMPLE_RATE * 2L))
+                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            val fallbackDurationMs = metadata?.durationMillis?.takeIf { it > 0L }?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: estimatedDurationMs
+            Card(
+                modifier = Modifier.fillMaxWidth().semantics {
+                    contentDescription = "Audio attachment ${index + 1}"
+                },
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FilledIconButton(
+                            enabled = !recording && (playingId == null || active),
+                            onClick = {
+                                if (active) {
+                                    if (playbackPaused) {
+                                        playbackSession?.resume()
+                                        playbackPaused = false
+                                        status = "Playback resumed."
+                                    } else {
+                                        playbackSession?.pause()
+                                        playbackPaused = true
+                                        status = "Playback paused."
+                                    }
+                                } else {
+                                    stopPlayback()
+                                    val focus = requestVoiceAudioFocus(audioManager) {
+                                        stopPlayback()
+                                        status = "Playback stopped because audio focus was interrupted."
+                                    }
+                                    if (focus == null) status = "Audio focus is unavailable. Try again."
+                                    else {
+                                        requestedAudioFocus = true
+                                        audioFocusListener = focus
+                                        playingId = attachment.attachmentId
+                                        playbackPaused = false
+                                        playbackPositionMs = 0
+                                        pendingSeekMs = 0
+                                        playbackDurationMs = 0
+                                        status = "Playing recording ${index + 1}."
+                                        val player = PcmVoicePlayback(
+                                            context,
+                                            attachmentStore,
+                                            attachment,
+                                            onProgress = { positionMs, durationMs ->
+                                                playbackPositionMs = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                playbackDurationMs = durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                if (!seekingPlayback) pendingSeekMs = playbackPositionMs
+                                            }
+                                        ) { error ->
+                                            playingId = null
+                                            playbackSession = null
+                                            playbackPaused = false
+                                            abandonVoiceAudioFocus(audioManager, focus)
+                                            audioFocusListener = null
+                                            requestedAudioFocus = false
+                                            status = error ?: "Playback finished."
+                                        }
+                                        playbackSession = player
+                                        runCatching { player.start() }.onFailure { error ->
+                                            playbackSession = null
+                                            playingId = null
+                                            playbackPaused = false
+                                            abandonVoiceAudioFocus(audioManager, focus)
+                                            audioFocusListener = null
+                                            requestedAudioFocus = false
+                                            status = error.message ?: "Couldn't start playback. Try again."
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(46.dp).semantics {
+                                contentDescription = if (active && !playbackPaused) "Pause recording ${index + 1}" else "Play recording ${index + 1}"
+                            }
+                        ) {
+                            Icon(if (active && !playbackPaused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                metadata?.displayName?.takeIf { it.isNotBlank() } ?: "Recording ${index + 1}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                if (active) {
+                                    formatPlaybackTime(shownPosition) + " / " + formatPlaybackTime(if (playbackDurationMs > 0) playbackDurationMs else fallbackDurationMs)
+                                } else {
+                                    formatPlaybackTime(fallbackDurationMs) + if (attachment.attachmentId in addedThisSession) " · Not yet saved" else ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (active) PlayingEqualizer(reducedMotion)
+                    }
+                    val sliderMax = maxOf(if (active && playbackDurationMs > 0) playbackDurationMs else fallbackDurationMs, 1)
+                    Slider(
+                        value = if (active) pendingSeekMs.coerceIn(0, sliderMax).toFloat() else 0f,
+                        onValueChange = { value ->
+                            if (active && playbackDurationMs > 0) {
+                                seekingPlayback = true
+                                pendingSeekMs = value.toInt()
+                            }
+                        },
+                        onValueChangeFinished = {
+                            if (active && playbackDurationMs > 0) {
+                                playbackPositionMs = pendingSeekMs
+                                playbackSession?.seekTo(pendingSeekMs.toLong())
+                            }
+                            seekingPlayback = false
+                        },
+                        valueRange = 0f..sliderMax.toFloat(),
+                        enabled = active && playbackDurationMs > 0 && !recording,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(28.dp).semantics {
+                            contentDescription = "Seek recording ${index + 1}"
+                        }
+                    )
+                }
+            }
+        }
+        if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (showPermissionSettings) {
+            OutlinedButton(onClick = {
+                showPermissionSettings = false
+                runCatching {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                }.onFailure { status = "Open Android Settings and allow microphone access for NESTNOTE." }
+            }) {
+                Text("Open app settings")
+            }
+        }
     }
-}
 }
 
 /** Converts uncompressed 16-bit mono/stereo WAV to the inline player’s 16 kHz mono PCM format. */
@@ -890,4 +959,59 @@ private fun abandonVoiceAudioFocus(
     if (listener == null) return
     val request = voiceAudioFocusRequests.remove(listener) ?: return
     audioManager.abandonAudioFocusRequest(request)
+}
+
+
+/** Small pulsing dot shown while a voice recording is active. Decorative. */
+@Composable
+private fun RecordingDot(active: Boolean, reducedMotion: Boolean) {
+    val alpha = if (active && !reducedMotion) {
+        val transition = rememberInfiniteTransition(label = "recording-dot")
+        val pulsing by transition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+            label = "recording-dot-alpha"
+        )
+        pulsing
+    } else {
+        1f
+    }
+    Box(
+        Modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.error.copy(alpha = alpha))
+    )
+}
+
+/** Three tiny bars marking the audio card that is currently playing. Decorative. */
+@Composable
+private fun PlayingEqualizer(reducedMotion: Boolean) {
+    val alpha = if (reducedMotion) {
+        0.9f
+    } else {
+        val transition = rememberInfiniteTransition(label = "voice-equalizer")
+        val pulsing by transition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
+            label = "voice-equalizer-alpha"
+        )
+        pulsing
+    }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        listOf(12.dp, 18.dp, 8.dp).forEach { barHeight ->
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .height(barHeight)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+            )
+        }
+    }
 }

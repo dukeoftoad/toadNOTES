@@ -80,6 +80,9 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -119,8 +122,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 
@@ -130,14 +135,26 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 internal fun NestNoteApp(store: NoteStore) {
     val context = LocalContext.current
+    // Read once per process; PackageManager is the honest version source (BuildConfig is off).
+    val appVersion = remember { readAppVersion(context) }
     val windowSizeClass = (context as? ComponentActivity)?.let { calculateWindowSizeClass(it) }
     val isExpandedWidth = windowSizeClass?.widthSizeClass != null &&
         windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val preferences = remember { context.getSharedPreferences(PREFS, 0) }
-    val initialNoteLoad = remember { store.loadSafely() }
-    var notes by remember { mutableStateOf(initialNoteLoad.notes) }
-    var storageRecoveryRequired by remember { mutableStateOf(initialNoteLoad.recoveryRequired) }
-    var showStorageRecoveryDialog by remember { mutableStateOf(initialNoteLoad.recoveryRequired) }
+    // Storage (crypto + JSON) stays off the first composition path. Notes start empty and
+    // fill in from Dispatchers.IO; [storageLoaded] gates every write below so a slow or
+    // failed load can never overwrite real data with an empty collection.
+    var notes by remember { mutableStateOf<List<NestNote>>(emptyList()) }
+    var storageLoaded by remember { mutableStateOf(false) }
+    var storageRecoveryRequired by remember { mutableStateOf(false) }
+    var showStorageRecoveryDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(store) {
+        val result = withContext(Dispatchers.IO) { store.loadSafely() }
+        notes = result.notes
+        storageRecoveryRequired = result.recoveryRequired
+        showStorageRecoveryDialog = result.recoveryRequired
+        storageLoaded = true
+    }
     var pendingRestore by remember { mutableStateOf<List<NestNote>?>(null) }
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
     var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
@@ -173,6 +190,11 @@ internal fun NestNoteApp(store: NoteStore) {
         preferences.edit().putString(key, value).apply()
     }
     fun persist(next: List<NestNote>, allowRecovery: Boolean = false): Boolean {
+        if (!storageLoaded) {
+            // Notes are still being decrypted; writing now could persist an empty collection.
+            coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
+            return false
+        }
         if (storageRecoveryRequired && !allowRecovery) {
             coroutineScope.launch { snackbarHostState.showSnackbar("Restore a backup before changing notes. Existing local data was not overwritten.") }
             return false
@@ -271,18 +293,9 @@ internal fun NestNoteApp(store: NoteStore) {
     } else if (dark) nestNoteDarkScheme
     else nestNoteLightScheme
 
-    val filteredNotes = notes.filter { note ->
-        ((selectedView == "Archived" && note.archived) ||
-            (selectedView != "Archived" && !note.archived && (selectedView == "Home" || selectedView == "All notes" ||
-            (selectedView == "Pinned" && note.pinned) || note.category == selectedView ||
-            (selectedView == "Reminders" && note.reminder.isNotBlank())))) &&
-            (search.isBlank() || (note.title + " " + note.body + " " + note.category).contains(search, true))
-    }.let { visible ->
-        when {
-            sortByTitle -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenBy { it.title.lowercase(Locale.getDefault()) })
-            sortByCreated -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.created })
-            else -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.updated })
-        }
+    // Recomputed only when an input changes, not on every recomposition of the shell.
+    val filteredNotes = remember(notes, selectedView, search, sortByTitle, sortByCreated) {
+        NoteFilters.visibleNotes(notes, selectedView, search, sortByTitle, sortByCreated)
     }
 
     // Complete navigation only after the predictive-back gesture is committed.
@@ -313,12 +326,12 @@ internal fun NestNoteApp(store: NoteStore) {
                     title = {
                         Column {
                             Text(
-                                when (selectedView) { "Settings" -> "Settings"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
+                                when (selectedView) { "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.2.sp
                             )
                             Text(
-                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
+                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "Backup" -> "Save a JSON backup or merge-restore one"; "About" -> "Version, licence and how NESTNOTE works"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
@@ -339,9 +352,15 @@ internal fun NestNoteApp(store: NoteStore) {
                     selectedView = selectedView,
                     onSelect = { selectedView = it },
                     onNewNote = {
-                        editorNoteId = null
-                        editorDraftId = NoteStore.allocateNoteId(notes)
-                        editorVisible = true
+                        // Wait for the async load so a draft ID can never collide with a
+                        // note that is still being decrypted.
+                        if (!storageLoaded) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
+                        } else {
+                            editorNoteId = null
+                            editorDraftId = NoteStore.allocateNoteId(notes)
+                            editorVisible = true
+                        }
                     }
                 )
             }
@@ -354,6 +373,30 @@ internal fun NestNoteApp(store: NoteStore) {
                     (if (isExpandedWidth) Modifier.widthIn(max = 840.dp) else Modifier)
                         .fillMaxSize()
                 ) {
+                if (storageRecoveryRequired) {
+                    // Persistent, calm recovery state: visible after the recovery dialog is dismissed.
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = colors.errorContainer,
+                        contentColor = colors.onErrorContainer
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CloudOff, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                Text("Notes need recovery", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "Stored notes couldn't be read. Nothing was overwritten. Restore a backup before creating, editing, or deleting notes.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            TextButton(onClick = { selectedView = "Settings" }) { Text("Open") }
+                        }
+                    }
+                }
                 if (selectedView == "Home" || selectedView == "All notes" || searchVisible) {
                     OutlinedTextField(
                         value = search, onValueChange = { search = it },
@@ -400,10 +443,12 @@ internal fun NestNoteApp(store: NoteStore) {
                         pinnedCount = notes.count { it.pinned && !it.archived },
                         archivedCount = notes.count { it.archived },
                         categoryCount = categories.size,
+                        versionLabel = AboutInfo.versionLabel(appVersion),
                         onOpen = { selectedView = it }
                     )
-                } else if (selectedView == "Settings") {
+                } else if (selectedView == "Settings" || selectedView == "Backup") {
                     SettingsScreen(
+                        focusBackup = selectedView == "Backup",
                         themeMode = themeMode,
                         onThemeChange = { themeMode = it; savePreference(PREF_THEME, it.name) },
                         dynamicColors = dynamicColors,
@@ -436,7 +481,12 @@ internal fun NestNoteApp(store: NoteStore) {
                         onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
                         onResetDefaults = { resetPreferences() }
                     )
+                } else if (selectedView == "About") {
+                    AboutScreen(version = appVersion)
                 } else if (selectedView == "Categories") {
+                    val activeCategoryCounts = remember(notes) {
+                        categories.associateWith { category -> notes.count { it.category == category && !it.archived } }
+                    }
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Categories", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         categories.chunked(2).forEach { pair ->
@@ -448,7 +498,7 @@ internal fun NestNoteApp(store: NoteStore) {
                                     ) {
                                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                             Text(category, style = MaterialTheme.typography.titleMedium)
-                                            Text("${notes.count { it.category == category && !it.archived }} active notes", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                            Text("${activeCategoryCounts[category] ?: 0} active notes", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                 }
@@ -462,7 +512,12 @@ internal fun NestNoteApp(store: NoteStore) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (selectedView == "Home") {
-                            Spacer(Modifier.height(2.dp))
+                            // Prototype parity: calm time-of-day greeting above the notes heading.
+                            Text(
+                                remember { NoteText.greetingFor(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) },
+                                style = MaterialTheme.typography.titleSmall,
+                                color = colors.onSurfaceVariant
+                            )
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
@@ -493,6 +548,20 @@ internal fun NestNoteApp(store: NoteStore) {
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f)
                             )
+                            // Prototype parity: direct theme toggle routed through the existing
+                            // themeMode preference state — no second persistence path.
+                            IconButton(
+                                onClick = {
+                                    val next = if (dark) ThemeMode.LIGHT else ThemeMode.DARK
+                                    themeMode = next
+                                    savePreference(PREF_THEME, next.name)
+                                }
+                            ) {
+                                Icon(
+                                    if (dark) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                    contentDescription = if (dark) "Switch to light theme" else "Switch to dark theme"
+                                )
+                            }
                             var sortMenuExpanded by remember { mutableStateOf(false) }
                             Box {
                                 TextButton(onClick = { sortMenuExpanded = true }) {
@@ -517,7 +586,17 @@ internal fun NestNoteApp(store: NoteStore) {
                             }
                         }
                     }
-                    if (filteredNotes.isEmpty()) {
+                    if (!storageLoaded) {
+                        // Calm loading state: never flashes the empty state before decryption finishes.
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 44.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                            Text("Loading your notes…", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else if (filteredNotes.isEmpty()) {
                         Column(
                             Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 44.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -651,7 +730,8 @@ internal fun NestNoteApp(store: NoteStore) {
             )
         }
 
-        if (editorVisible) {
+        // The editor waits for storage so a restored note is never mistaken for a new draft.
+        if (editorVisible && storageLoaded) {
             val closeEditor = {
                 editorHasUnsavedChanges = false
                 confirmSystemDiscard = false

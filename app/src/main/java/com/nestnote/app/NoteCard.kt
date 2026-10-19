@@ -180,7 +180,8 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                 )
             }
             // Progress remains visible even when note previews are disabled.
-            val (checklistTotal, checklistDone) = NoteText.checklistProgress(note.body)
+            // Parsed once per note body, not on every dashboard recomposition.
+            val (checklistTotal, checklistDone) = remember(note.body) { NoteText.checklistProgress(note.body) }
             if (checklistTotal > 0) {
                 Text(
                     "Checklist · $checklistDone/$checklistTotal complete",
