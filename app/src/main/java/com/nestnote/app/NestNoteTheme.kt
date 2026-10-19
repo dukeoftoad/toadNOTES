@@ -1,5 +1,9 @@
 package com.nestnote.app
 
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+
 import android.app.DatePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -138,14 +142,73 @@ internal val nestNoteShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp)
 )
 
-internal val nestNoteTypography = Typography(
-    displaySmall = TextStyle(fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.25).sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
-    bodyLarge = TextStyle(letterSpacing = 0.15.sp, lineHeight = 26.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp)
+// Display face: Fraunces (variable, SIL OFL). Body text stays on the system font to keep the APK small.
+@OptIn(ExperimentalTextApi::class)
+internal val nestNoteDisplayFont = FontFamily(
+    listOf(FontWeight.Normal, FontWeight.SemiBold, FontWeight.Bold).map { weight ->
+        Font(
+            R.font.fraunces_variable,
+            weight = weight,
+            variationSettings = FontVariation.Settings(
+                FontVariation.weight(weight.weight),
+                FontVariation.Setting("opsz", 36f)
+            )
+        )
+    }
 )
+
+// Derive from the Material defaults so sizes and line heights are preserved.
+// (Passing a bare TextStyle replaces the default style, dropping its font size.)
+private val baseTypography = Typography()
+internal val nestNoteTypography = baseTypography.copy(
+    displaySmall = baseTypography.displaySmall.copy(fontFamily = nestNoteDisplayFont, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
+    headlineMedium = baseTypography.headlineMedium.copy(fontFamily = nestNoteDisplayFont, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
+    headlineSmall = baseTypography.headlineSmall.copy(fontFamily = nestNoteDisplayFont, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.25).sp),
+    titleLarge = baseTypography.titleLarge.copy(fontFamily = nestNoteDisplayFont, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp),
+    titleMedium = baseTypography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+    bodyLarge = baseTypography.bodyLarge.copy(letterSpacing = 0.15.sp, lineHeight = 26.sp),
+    labelLarge = baseTypography.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp)
+)
+
+// Warm "paper and terracotta" palette used when wallpaper colours are off or unavailable.
+internal val nestNoteLightScheme = lightColorScheme(
+    primary = Color(0xFFC4552D), onPrimary = Color.White,
+    primaryContainer = Color(0xFFFFDBD0), onPrimaryContainer = Color(0xFF3A0B00),
+    secondary = Color(0xFF77574E), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFFFDBD0), onSecondaryContainer = Color(0xFF2C150F),
+    background = Color(0xFFF6F1EA), onBackground = Color(0xFF26221F),
+    surface = Color(0xFFFFFBF7), onSurface = Color(0xFF26221F),
+    surfaceVariant = Color(0xFFEFE5DD), onSurfaceVariant = Color(0xFF6B625B),
+    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFFBF5EF),
+    surfaceContainer = Color(0xFFF6EFE8), surfaceContainerHigh = Color(0xFFF0E8E0),
+    outline = Color(0xFFA89E94), outlineVariant = Color(0xFFE7DFD5)
+)
+internal val nestNoteDarkScheme = darkColorScheme(
+    primary = Color(0xFFFF8A5C), onPrimary = Color(0xFF2A140B),
+    primaryContainer = Color(0xFF5A2A18), onPrimaryContainer = Color(0xFFFFDBD0),
+    secondary = Color(0xFFE7BDB1), onSecondary = Color(0xFF442A22),
+    secondaryContainer = Color(0xFF5D4037), onSecondaryContainer = Color(0xFFFFDBD0),
+    background = Color(0xFF171412), onBackground = Color(0xFFF2EBE3),
+    surface = Color(0xFF1B1714), onSurface = Color(0xFFF2EBE3),
+    surfaceVariant = Color(0xFF342E29), onSurfaceVariant = Color(0xFFC3B8AD),
+    surfaceContainerLowest = Color(0xFF110E0C), surfaceContainerLow = Color(0xFF221E1B),
+    surfaceContainer = Color(0xFF27221F), surfaceContainerHigh = Color(0xFF302A26),
+    outline = Color(0xFF8F857B), outlineVariant = Color(0xFF3F3832)
+)
+
+/** Pure-black surfaces for OLED screens. Applied on top of any dark scheme. */
+internal fun ColorScheme.asAmoled(): ColorScheme = copy(
+    background = Color.Black, surface = Color.Black,
+    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF0B0B0B),
+    surfaceContainer = Color(0xFF121212), surfaceContainerHigh = Color(0xFF1A1A1A)
+)
+
+/** Shared motion tokens so every screen animates with the same feel. */
+internal object NestMotion {
+    fun <T> spatial() = spring<T>(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+    fun <T> fast() = spring<T>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+}
+
 // Distinct, slightly richer swatches remain soft while being easy to tell apart.
 internal val noteAccents = listOf(
     Color(0xFFF4EEE3), Color(0xFFE88C98), Color(0xFFE98555),

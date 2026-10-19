@@ -133,6 +133,8 @@ internal fun SettingsScreen(
     onThemeChange: (ThemeMode) -> Unit,
     dynamicColors: Boolean,
     onDynamicColorsChange: (Boolean) -> Unit,
+    amoled: Boolean,
+    onAmoledChange: (Boolean) -> Unit,
     dashboardLayout: DashboardLayout,
     onLayoutChange: (DashboardLayout) -> Unit,
     editorMode: EditorPresentationMode,
@@ -184,6 +186,12 @@ internal fun SettingsScreen(
                     summary = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use Android dynamic colors from your wallpaper" else "Requires Android 12 or newer; older devices use the app palette",
                     checked = dynamicColors,
                     onChange = onDynamicColorsChange
+                )
+                SwitchRow(
+                    title = "Pure black in dark mode",
+                    summary = "Saves battery on OLED screens. Applies when the theme is dark.",
+                    checked = amoled,
+                    onChange = onAmoledChange
                 )
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 SettingLabel("Note card colors")

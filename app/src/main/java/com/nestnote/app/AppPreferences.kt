@@ -130,6 +130,7 @@ internal val categories = listOf("Work", "Personal", "Ideas", "Health", "Finance
 internal const val PREFS = "nestnote_preferences"
 internal const val PREF_THEME = "theme_mode"
 internal const val PREF_DYNAMIC = "dynamic_colors"
+internal const val PREF_AMOLED = "amoled_black"
 internal const val PREF_LAYOUT = "dashboard_layout"
 internal const val PREF_EDITOR = "editor_mode"
 internal const val PREF_DENSITY = "dashboard_density"

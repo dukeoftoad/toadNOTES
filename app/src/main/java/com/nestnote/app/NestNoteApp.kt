@@ -141,6 +141,7 @@ internal fun NestNoteApp(store: NoteStore) {
     var pendingRestore by remember { mutableStateOf<List<NestNote>?>(null) }
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
     var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
+    var amoled by remember { mutableStateOf(preferences.getBoolean(PREF_AMOLED, false)) }
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
     var editorMode by remember { mutableStateOf(EditorPresentationMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "FULL_SCREEN") } ?: EditorPresentationMode.FULL_SCREEN) }
     var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
@@ -220,6 +221,7 @@ internal fun NestNoteApp(store: NoteStore) {
         preferences.edit().clear().apply()
         themeMode = ThemeMode.SYSTEM
         dynamicColors = true
+        amoled = false
         dashboardLayout = DashboardLayout.GRID
         editorMode = EditorPresentationMode.FULL_SCREEN
         dashboardDensity = DashboardDensity.COMPACT
@@ -266,8 +268,8 @@ internal fun NestNoteApp(store: NoteStore) {
     }
     val scheme = if (dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (dark) darkColorScheme(primary = Color(0xFFD0BCFF), secondary = Color(0xFFCCC2DC))
-    else lightColorScheme(primary = fallbackAccent, secondary = Color(0xFF625B71))
+    } else if (dark) nestNoteDarkScheme
+    else nestNoteLightScheme
 
     val filteredNotes = notes.filter { note ->
         ((selectedView == "Archived" && note.archived) ||
@@ -294,7 +296,7 @@ internal fun NestNoteApp(store: NoteStore) {
 
     val expressiveScheme = scheme.copy(
         tertiary = if (dark) Color(0xFF9CCBC1) else Color(0xFF426F67)
-    )
+    ).let { if (dark && amoled) it.asAmoled() else it }
 
     MaterialTheme(
         colorScheme = expressiveScheme,
@@ -489,6 +491,8 @@ internal fun NestNoteApp(store: NoteStore) {
                         onThemeChange = { themeMode = it; savePreference(PREF_THEME, it.name) },
                         dynamicColors = dynamicColors,
                         onDynamicColorsChange = { dynamicColors = it; preferences.edit().putBoolean(PREF_DYNAMIC, it).apply() },
+                        amoled = amoled,
+                        onAmoledChange = { amoled = it; preferences.edit().putBoolean(PREF_AMOLED, it).apply() },
                         dashboardLayout = dashboardLayout,
                         onLayoutChange = { dashboardLayout = it; savePreference(PREF_LAYOUT, it.name) },
                         editorMode = editorMode,
