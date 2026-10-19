@@ -1,6 +1,21 @@
 # NESTNOTE Changelog
 
-## v1.2.8 — Upcoming
+## v1.3.2 — Upcoming
+
+### Fixed (Android CI)
+- Run Android lint, unit tests, debug/release APK builds, and instrumentation-test compilation through the repository Gradle wrapper to keep the Gradle version consistent with the project.
+- Remove hardcoded local Java 17 paths from `gradle.properties` so CI uses the Java installation configured on the runner.
+- Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
+
+### Testing and release readiness
+- CI configuration fixes address Gradle provisioning and Java-home failures; confirm a complete green workflow run before release.
+- Device-only gesture interruption, predictive-back cancellation, and editor integration checks remain pending.
+
+## v1.3.1 — Current release
+
+- Current version reported by the project maintainer; a release date and full feature list have not been independently verified in this changelog update.
+
+## v1.2.8 — Historical entry
 
 ### Changed (UI/UX redesign, branch `feature/ui-redesign`)
 - Split `MainActivity.kt` into theme, preferences, app shell, settings, note card, editor and appearance files (no behaviour change).
