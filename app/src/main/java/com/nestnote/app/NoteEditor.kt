@@ -131,6 +131,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
+    (measuredHeight * fraction).roundToInt().coerceAtLeast(0)
+
 
 // Unified create/edit note editor.
 
@@ -757,7 +760,7 @@ private fun CollapsibleSlot(visible: Boolean, content: @Composable () -> Unit) {
         Modifier
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints)
-                layout(placeable.width, (placeable.height * fraction).roundToInt()) { placeable.place(0, 0) }
+                  layout(placeable.width, collapsibleSlotHeight(placeable.height, fraction)) { placeable.place(0, 0) }
             }
             .clipToBounds()
             .alpha(fraction)
