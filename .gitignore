@@ -4,3 +4,7 @@ fdroid/keystore.p12.*
 fdroid/*.p12.bak
 fdroid/*.jks
 fdroid/*.keystore
+
+# Redesign archives and bundles
+*.zip
+*.bundle
