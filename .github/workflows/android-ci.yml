@@ -7,6 +7,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# Debounce main pushes and serialize CI per ref. A newer main push cancels the
+# older pending debounce/run; the surviving run checks out the latest main tip.
 concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -15,7 +17,16 @@ jobs:
     name: Unit tests, API 36 debug build and release compilation
     runs-on: ubuntu-latest
     steps:
+      - name: Debounce main branch pushes
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          echo "Waiting 5 minutes for a burst of main commits to settle."
+          sleep 300
       - uses: actions/checkout@v4
+        with:
+          # After the debounce, test the current combined main tip, not the
+          # potentially stale SHA that originally triggered this workflow.
+          ref: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'main' || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
