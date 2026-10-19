@@ -18,11 +18,19 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release-version.outputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+
+      - name: Set release version output
+        id: release-version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Validate version
         env:
@@ -129,3 +137,12 @@ jobs:
               --generate-notes
           fi
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fx "$APK_NAME"
+
+  publish-fdroid:
+    name: Publish F-Droid repository
+    needs: release
+    if: ${{ needs.release.result == 'success' }}
+    uses: ./.github/workflows/fdroid-repository.yml
+    with:
+      release_tag: ${{ needs.release.outputs.release_tag }}
+    secrets: inherit
