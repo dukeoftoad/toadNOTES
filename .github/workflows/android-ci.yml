@@ -41,13 +41,13 @@ jobs:
       - name: Run Android lint
         run: ./gradlew --no-daemon lintDebug
       - name: Run unit tests
-        run: gradle --no-daemon testDebugUnitTest
+        run: ./gradlew --no-daemon testDebugUnitTest
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        run: ./gradlew --no-daemon assembleDebug
       - name: Build minified release APK
-        run: gradle --no-daemon assembleRelease
+        run: ./gradlew --no-daemon assembleRelease
       - name: Compile Android instrumentation tests
-        run: gradle --no-daemon assembleDebugAndroidTest
+        run: ./gradlew --no-daemon assembleDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
