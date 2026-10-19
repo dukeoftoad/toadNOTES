@@ -2,9 +2,12 @@ name: NESTNOTE F-Droid Repository
 
 # Run only after the Android Release workflow finishes successfully.
 on:
-  workflow_run:
-    workflows: ["Android Release"]
-    types: [completed]
+  workflow_call:
+    inputs:
+      release_tag:
+        description: "Stable release tag created by Android Release"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       release_tag:
@@ -14,7 +17,6 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 concurrency:
   group: fdroid-repository
@@ -22,10 +24,6 @@ concurrency:
 
 jobs:
   publish:
-    # Never publish from a failed/cancelled release build. Manual reruns remain available.
-    if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -33,38 +31,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve release tag from completed Android Release
-        if: github.event_name == 'workflow_run'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          RELEASE_STARTED_AT: ${{ github.event.workflow_run.run_started_at }}
-          RELEASE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Tag-triggered releases have the version tag as head_branch.
-          if [[ "$RELEASE_HEAD_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            RELEASE_TAG="$RELEASE_HEAD_BRANCH"
-          else
-            # Manual Android Release runs use the branch as head_branch. Resolve
-            # the stable release published by that successful run's time window.
-            RELEASE_TAG="$(gh release list --limit 100 --json tagName,publishedAt,isPrerelease \
-              --jq 'map(select(.isPrerelease == false and .publishedAt != null)) | sort_by(.publishedAt) | reverse | .[] | select(.publishedAt >= "'"$RELEASE_STARTED_AT"'") | .tagName' | head -n1)"
-          fi
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Could not resolve a stable SemVer release for the successful Android Release run."
-            exit 1
-          fi
-          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
-          echo "Resolved release tag: $RELEASE_TAG"
-
-      - name: Resolve manually selected release tag
-        if: github.event_name == 'workflow_dispatch'
+      - name: Resolve release tag
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::F-Droid publishing requires a stable tag like v1.2.5."
+            exit 1
+          fi
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
 
       - name: Validate release asset
