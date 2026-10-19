@@ -8,13 +8,13 @@ This is a working draft for an eventual merge request to the official `fdroiddat
 - **License:** `GPL-3.0-only`
 - **Source code:** https://github.com/dukeoftoad/toadNOTES
 - **Issue tracker:** https://github.com/dukeoftoad/toadNOTES/issues
-- **Current upstream release:** `v1.2.5` (published 2026-10-18; release notes: https://github.com/dukeoftoad/toadNOTES/releases/tag/v1.2.5)
+- **Latest release documented in `CHANGELOG.md`:** `v1.2.7`; the `v1.2.8` notes are currently marked upcoming. Confirm the published GitHub Release and tag before treating a version as current.
 - **Build system:** Gradle / Android Gradle Plugin
 - **Build environment observed in CI:** Java 17, Gradle 8.13, Android SDK platform 36, build tools 36.0.0
 - **Minimum SDK:** 26
 - **Suggested category:** Writing
-- **Suggested summary:** Local-first notes with encrypted storage and Markdown preview.
-- **Suggested description:** NESTNOTE is a native Android note-taking app for creating, organizing, searching, archiving, and backing up notes. Notes are stored locally; note payloads are encrypted using AES-GCM with a key held by Android Keystore. The app supports categories, checklists, Markdown preview, themes, and user-controlled JSON backup and restore. It does not provide account-based cloud sync.
+- **Suggested summary:** Local-first encrypted notes with Markdown and voice attachments.
+- **Suggested description:** NESTNOTE is a native Android note-taking app for creating, organizing, searching, archiving, and backing up notes. It supports categories, checklists, Markdown formatting and preview, themes, voice recording with a review-before-attach flow, WAV import, and inline playback cards for multiple audio attachments. Notes are stored locally; note payloads are encrypted using AES-GCM with a key held by Android Keystore. The app has no account-based cloud sync. JSON backups contain plaintext note data, and audio attachments are not currently included in JSON backup/restore.
 
 ## Candidate build recipe — validate before submission
 
