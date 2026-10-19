@@ -13,7 +13,29 @@
 
 ## v1.3.1 — Current release
 
-- Current version reported by the project maintainer; a release date and full feature list have not been independently verified in this changelog update.
+### Added
+- Expanded the Markdown editor toolbar with H2/H3 headings, configurable heading levels, numbered lists, links, blockquotes, strikethrough, and inline code.
+- Added Material 3 personalization and more flexible note creation.
+- Added encrypted local voice-attachment storage, attachment metadata, and voice-note recording/playback integration.
+- Added inline voice markers and preview-mode playback, with a single-player coordinator and insertion at the editor cursor.
+
+### Improved
+- Redesigned the app around a floating four-tab navigation bar with a central New action and a More hub for Library, Data, Preferences, Settings, Pinned, Archived, and Categories.
+- Refreshed the visual system with Fraunces display typography, warm light/dark palettes, an optional AMOLED-black theme, and shared expressive motion.
+- Reworked the editor with a slim right-side tool rail, compact Markdown controls, borderless writing fields, keyboard-docked formatting actions, lock/edit modes, and on-demand voice controls.
+- Improved adaptive layouts, predictive-back navigation, and editor sizing for expanded windows.
+- Hardened voice-attachment lifecycle handling, including safe cleanup after deletion is committed and orphan-attachment reconciliation.
+- Updated F-Droid listing/metadata documentation to reflect current app features and added checks for repository publication.
+
+### Fixed
+- Fixed the `SlimRailPanel` initial anchored-drag offset crash and added Compose regression coverage.
+- Corrected Markdown numbered-list matching, link insertion cursor placement, and Markdown preview link navigation.
+- Added Markdown preview HTML-safety tests and expanded editor formatting regression coverage.
+
+### Notes
+- Voice attachments are stored locally and remain excluded from the current JSON backup/restore format.
+- The self-hosted F-Droid repository is separate from the official F-Droid listing; successful workflow completion should be followed by checking the published repository index.
+- This entry summarizes feature and fix commits found in the repository history. The exact v1.3.1 release date and precise commit/tag boundary were not independently confirmed.
 
 ## v1.2.8 — Historical entry
 
