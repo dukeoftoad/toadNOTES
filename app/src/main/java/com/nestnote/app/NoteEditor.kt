@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
@@ -172,6 +173,7 @@ internal fun NoteEditorContent(
     var discardConfirmation by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf(false) }
     var reminderMenu by remember { mutableStateOf(false) }
+    var voiceNoteDialog by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
@@ -450,6 +452,16 @@ internal fun NoteEditorContent(
                                 onDismissRequest = { moreMenu = false }
                             ) {
                                 if (editorMode == EditorMode.Editing) {
+                                    DropdownMenuItem(
+                                        text = { Text("Voice note") },
+                                        onClick = {
+                                            moreMenu = false
+                                            voiceNoteDialog = true
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Mic, contentDescription = null)
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = { Text(if (pinned) "Unpin note" else "Pin note") },
                                         onClick = { moreMenu = false; pinned = !pinned },
@@ -868,26 +880,6 @@ internal fun NoteEditorContent(
                         )
                     }
 
-                    // ---- Voice recording surface (edit mode only) ----
-                    // Always visible so the user can anchor a new recording at the
-                    // cursor without hunting through a menu. Playback of existing
-                    // recordings happens in Preview mode via InlineVoicePlayer.
-                    if (editorMode == EditorMode.Editing) {
-                        Spacer(Modifier.height(8.dp))
-                        VoiceNoteControls(
-                            noteId = voiceNoteId,
-                            cursorAtRecordStart = { bodyValue.selection.start },
-                            onRecordingAttached = { attachmentId, cursor ->
-                                val (newText, newCursor) = NoteText.insertVoiceMarker(
-                                    bodyValue.text, cursor, attachmentId
-                                )
-                                bodyValue = TextFieldValue(newText, TextRange(newCursor))
-                                voiceChangesPending = true
-                            },
-                            onDiscardHandlerReady = onRegisterVoiceDiscard
-                        )
-                    }
-
                     Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
 
                     // ---- Category chip ----
@@ -1066,6 +1058,31 @@ internal fun NoteEditorContent(
             },
             dismissButton = {
                 TextButton(onClick = { discardConfirmation = false }) { Text("Keep editing") }
+            }
+        )
+    }
+
+    // ---- Voice note dialog (opened from the editor More menu) ----
+    if (voiceNoteDialog && editorMode == EditorMode.Editing) {
+        AlertDialog(
+            onDismissRequest = { voiceNoteDialog = false },
+            title = { Text("Voice note") },
+            text = {
+                VoiceNoteControls(
+                    noteId = voiceNoteId,
+                    cursorAtRecordStart = { bodyValue.selection.start },
+                    onRecordingAttached = { attachmentId, cursor ->
+                        val (newText, newCursor) = NoteText.insertVoiceMarker(
+                            bodyValue.text, cursor, attachmentId
+                        )
+                        bodyValue = TextFieldValue(newText, TextRange(newCursor))
+                        voiceChangesPending = true
+                    },
+                    onDiscardHandlerReady = onRegisterVoiceDiscard
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { voiceNoteDialog = false }) { Text("Done") }
             }
         )
     }
