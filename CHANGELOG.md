@@ -2,6 +2,13 @@
 
 ## v1.2.8 — Upcoming
 
+### Changed (UI/UX redesign, branch `feature/ui-redesign`)
+- Split `MainActivity.kt` into theme, preferences, app shell, settings, note card, editor and appearance files (no behaviour change).
+- New warm light/dark palettes, Fraunces display font (SIL OFL, see `docs/THIRD_PARTY_FONTS.md`) and shared motion tokens; fixed the typography definition dropping default font sizes.
+- Floating four-tab bar (Home, Notes, New, Reminders, More); the More tab now hosts Pinned, Archived, Categories, Backup & restore and Settings.
+- Editor: slim vertical tool rail (Colour, Background, Format) replaces the two wide side panels; pin, reminder, voice note, read mode, archive, share, copy and delete moved into the editor More menu; single category chip; voice recorder revealed on demand.
+- Optional pure-black dark mode.
+
 ### Fixed
 - Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
 

@@ -17,8 +17,8 @@ Do not call the app UI/UX-mature based on a few polished screens. Maturity means
 ## 2. Editor and Appearance interaction contract
 
 - The note editor is the primary writing surface. Title, body, and formatting controls must have clear hierarchy, readable spacing, and minimal distraction.
-- Appearance is opened from the editor toolbar and **slides in from the right**. Do not use a bottom sheet as the primary colour/background picker.
-- On phones, the Appearance panel overlays the editor so it does not permanently squeeze the writing canvas. On wider screens, it may use a wider side panel.
+- Appearance and Format share one **slim vertical tool rail** (about 58dp) that **slides in from the right** with Colour, Background and Format tabs. Do not use a bottom sheet as the primary colour/background picker, and do not reintroduce wide side panels.
+- The rail overlays the editor so it does not permanently squeeze the writing canvas; it scrolls internally on short screens. Format actions apply immediately; Colour/Background are a draft until Apply.
 - Use a polished, restrained slide/fade transition with sensible duration/easing. Respect system reduced-motion/accessibility settings where supported.
 - Show background/wallpaper previews, a clear colour palette, selected-state indicators, and a visible close action. Make the currently selected option unambiguous.
 - Preview selections immediately in the draft. Do not persist note changes just because a swatch was tapped; use the existing note save flow.
@@ -41,7 +41,7 @@ Do not call the app UI/UX-mature based on a few polished screens. Maturity means
 - Icons must be recognizable and have meaningful accessibility descriptions; decorative icons should not create redundant announcements.
 - Empty, loading, error, selected, disabled, and success states must be intentionally designed—not left as raw placeholders.
 - Controls must work. Do not add decorative/inert actions; if functionality is deferred, label the limitation clearly.
-- Preserve the current navigation architecture (Home, All notes, Categories, Reminders, More, Settings; Archive and Pinned under More unless an approved roadmap change says otherwise).
+- Navigation architecture (approved revision, replaces the earlier six-destination bar): a floating bottom bar with **Home, Notes, [New note], Reminders, More**. Pinned, Archived, Categories, Backup & restore and Settings live under **More**, and Back from them returns to More. The editor toolbar is **Back, Colour, Format, More (⋯), Save**; Pin, Reminder, Voice note, Read mode, Archive, Share, Copy and Delete live in the editor More menu. The voice recorder is hidden until chosen from that menu or the note already has recordings.
 
 ## 5. Responsive and accessible by default
 

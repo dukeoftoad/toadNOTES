@@ -1,5 +1,13 @@
 package com.nestnote.app
 
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import kotlin.math.roundToInt
+
 import android.app.DatePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -154,10 +162,10 @@ internal fun NoteEditorContent(
     var backgroundIndex by rememberSaveable(original?.id) { mutableIntStateOf(original?.background?.coerceIn(0, 5) ?: 0) }
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
-    var appearanceVisible by remember { mutableStateOf(false) }
-    val appearanceRailState = rememberSlimRailState()
-    val formattingRailState = rememberSlimRailState()
-    var formattingVisible by remember { mutableStateOf(false) }
+    var toolRailVisible by remember { mutableStateOf(false) }
+    var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
+    var categoryMenu by remember { mutableStateOf(false) }
+    var showVoiceControls by rememberSaveable(original?.id) { mutableStateOf(false) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
@@ -306,99 +314,118 @@ internal fun NoteEditorContent(
                     },
                     actions = {
                         if (editorMode == EditorMode.Editing) {
-                                IconButton(onClick = { pinned = !pinned }) {
-                                    Icon(
-                                        Icons.Default.PushPin,
-                                        contentDescription = if (pinned) "Unpin note" else "Pin note",
-                                        tint = if (pinned) accent else if (darkEditor) colors.onSurfaceVariant else Color(0xFF55515C)
-                                    )
-                                }
-                                Box {
-                                    IconButton(onClick = { reminderMenu = true }) {
-                                        Icon(
-                                            Icons.Default.NotificationsNone,
-                                            contentDescription = "Choose reminder time",
-                                            tint = if (reminder.isNotBlank()) accent else colors.onSurfaceVariant
-                                        )
-                                    }
-                                    DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
-                                        // Hide this preset when three hours from now would cross into tomorrow.
-                                        val laterToday = NoteText.laterTodayOrNull(Calendar.getInstance())
-                                        if (laterToday != null) {
-                                            DropdownMenuItem(text = { Text("Later today") }, onClick = {
-                                                reminderMenu = false
-                                                NoteText.laterTodayOrNull(Calendar.getInstance())?.let {
-                                                    reminder = NoteText.formatReminder(it)
-                                                }
-                                            })
-                                        }
-                                        DropdownMenuItem(text = { Text("Tomorrow morning") }, onClick = {
-                                            reminderMenu = false; reminder = NoteText.formatReminder(NoteText.tomorrowMorning(Calendar.getInstance()))
-                                        })
-                                        DropdownMenuItem(text = { Text("Next Monday") }, onClick = {
-                                            reminderMenu = false; reminder = NoteText.formatReminder(NoteText.nextMonday(Calendar.getInstance()))
-                                        })
-                                        DropdownMenuItem(text = { Text("Pick date and time…") }, onClick = { reminderMenu = false; pickReminder() })
-                                        if (reminder.isNotBlank()) {
-                                            DropdownMenuItem(text = { Text("Remove reminder") }, onClick = { reminderMenu = false; reminder = "" })
-                                        }
-                                    }
-                                }
-                                if (original != null) {
-                                    IconButton(onClick = { onSave(buildNote(archived = true)) }) {
-                                        Icon(Icons.Default.Archive, contentDescription = "Archive note", tint = colors.onSurfaceVariant)
-                                    }
-                                }
-                                IconButton(onClick = {
+                            IconButton(
+                                onClick = {
                                     appearanceStartColor = colorIndex
                                     appearanceStartBackground = backgroundIndex
-                                    appearanceVisible = true
-                                }) {
-                                    Icon(Icons.Default.Palette, contentDescription = "Choose note appearance", tint = accent)
-                                }
-                                Box {
-                                    IconButton(onClick = { moreMenu = true }) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "More editor actions", tint = colors.onSurfaceVariant)
-                                    }
-                                    DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                                        DropdownMenuItem(
-                                            text = { Text("Formatting") },
-                                            onClick = { moreMenu = false; formattingVisible = true },
-                                            leadingIcon = { Icon(Icons.Default.FormatSize, null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Share note") },
-                                            enabled = title.isNotBlank() || body.isNotBlank(),
-                                            onClick = { moreMenu = false; shareNote() },
-                                            leadingIcon = { Icon(Icons.Default.Share, null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Copy text") },
-                                            enabled = title.isNotBlank() || body.isNotBlank(),
-                                            onClick = { moreMenu = false; copyNote() },
-                                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
-                                        )
-                                    }
-                                }
-                        }
-                        IconButton(
-                            onClick = {
-                                if (editorMode == EditorMode.Editing) {
-                                    keyboardController?.hide()
-                                    editorModeViewModel.lock()
-                                } else {
-                                    editorModeViewModel.edit()
-                                }
-                            },
-                            modifier = Modifier.semantics {
-                                contentDescription = if (editorMode == EditorMode.Editing) "Lock note editing" else "Edit note"
+                                    toolRailTab = ToolRailTab.Colour
+                                    toolRailVisible = true
+                                },
+                                modifier = Modifier.testTag("editor_appearance_button")
+                            ) {
+                                Icon(Icons.Default.Palette, contentDescription = "Choose note appearance", tint = accent)
                             }
-                        ) {
-                            AnimatedContent(targetState = editorMode, transitionSpec = { (fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideInHorizontally(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it / 3 }) togetherWith (fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideOutHorizontally(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { -it / 3 }) }, label = "editor-lock-icon") { mode ->
-                                Icon(
-                                    imageVector = if (mode == EditorMode.Editing) Icons.Default.Lock else Icons.Default.Edit,
-                                    contentDescription = null
+                            IconButton(
+                                onClick = {
+                                    appearanceStartColor = colorIndex
+                                    appearanceStartBackground = backgroundIndex
+                                    toolRailTab = ToolRailTab.Format
+                                    toolRailVisible = true
+                                },
+                                modifier = Modifier.testTag("editor_format_button")
+                            ) {
+                                Icon(Icons.Default.FormatSize, contentDescription = "Formatting", tint = colors.onSurfaceVariant)
+                            }
+                        }
+                        Box {
+                            IconButton(onClick = { moreMenu = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More editor actions", tint = colors.onSurfaceVariant)
+                            }
+                            DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                                if (editorMode == EditorMode.Editing) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (pinned) "Unpin note" else "Pin note") },
+                                        onClick = { moreMenu = false; pinned = !pinned },
+                                        leadingIcon = { Icon(Icons.Default.PushPin, null, tint = if (pinned) accent else colors.onSurfaceVariant) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (reminder.isNotBlank()) "Change reminder" else "Add reminder") },
+                                        onClick = { moreMenu = false; reminderMenu = true },
+                                        leadingIcon = { Icon(Icons.Default.NotificationsNone, null, tint = if (reminder.isNotBlank()) accent else colors.onSurfaceVariant) }
+                                    )
+                                    if (!showVoiceControls && voiceAttachmentCount == 0) {
+                                        DropdownMenuItem(
+                                            text = { Text("Voice note") },
+                                            onClick = { moreMenu = false; showVoiceControls = true },
+                                            leadingIcon = { Icon(Icons.Default.Mic, null) }
+                                        )
+                                    } else if (voiceAttachmentCount == 0) {
+                                        DropdownMenuItem(
+                                            text = { Text("Hide voice note") },
+                                            onClick = { moreMenu = false; showVoiceControls = false },
+                                            leadingIcon = { Icon(Icons.Default.Mic, null) }
+                                        )
+                                    }
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(if (editorMode == EditorMode.Editing) "Read mode" else "Edit note") },
+                                    onClick = {
+                                        moreMenu = false
+                                        if (editorMode == EditorMode.Editing) {
+                                            keyboardController?.hide()
+                                            editorModeViewModel.lock()
+                                        } else {
+                                            editorModeViewModel.edit()
+                                        }
+                                    },
+                                    leadingIcon = { Icon(if (editorMode == EditorMode.Editing) Icons.Default.Lock else Icons.Default.Edit, null) }
                                 )
+                                if (editorMode == EditorMode.Editing && original != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Archive") },
+                                        onClick = { moreMenu = false; onSave(buildNote(archived = true)) },
+                                        leadingIcon = { Icon(Icons.Default.Archive, null) }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Share note") },
+                                    enabled = title.isNotBlank() || body.isNotBlank(),
+                                    onClick = { moreMenu = false; shareNote() },
+                                    leadingIcon = { Icon(Icons.Default.Share, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Copy text") },
+                                    enabled = title.isNotBlank() || body.isNotBlank(),
+                                    onClick = { moreMenu = false; copyNote() },
+                                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
+                                )
+                                if (editorMode == EditorMode.Editing && onDelete != null && original != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete note", color = colors.error) },
+                                        onClick = { moreMenu = false; deleteConfirmation = true },
+                                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = colors.error) }
+                                    )
+                                }
+                            }
+                            // Reminder presets open from the More menu, anchored to the same button.
+                            DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
+                                val laterToday = NoteText.laterTodayOrNull(Calendar.getInstance())
+                                if (laterToday != null) {
+                                    DropdownMenuItem(text = { Text("Later today") }, onClick = {
+                                        reminderMenu = false
+                                        NoteText.laterTodayOrNull(Calendar.getInstance())?.let { reminder = NoteText.formatReminder(it) }
+                                    })
+                                }
+                                DropdownMenuItem(text = { Text("Tomorrow morning") }, onClick = {
+                                    reminderMenu = false; reminder = NoteText.formatReminder(NoteText.tomorrowMorning(Calendar.getInstance()))
+                                })
+                                DropdownMenuItem(text = { Text("Next Monday") }, onClick = {
+                                    reminderMenu = false; reminder = NoteText.formatReminder(NoteText.nextMonday(Calendar.getInstance()))
+                                })
+                                DropdownMenuItem(text = { Text("Pick date and time…") }, onClick = { reminderMenu = false; pickReminder() })
+                                if (reminder.isNotBlank()) {
+                                    DropdownMenuItem(text = { Text("Remove reminder") }, onClick = { reminderMenu = false; reminder = "" })
+                                }
                             }
                         }
                         AnimatedContent(targetState = editorMode, transitionSpec = { (fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it / 4 }) togetherWith (fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + slideOutVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { -it / 4 }) }, label = "editor-save-done") { mode ->
@@ -472,12 +499,24 @@ internal fun NoteEditorContent(
                         }
                     }
                 )
-                    VoiceNoteControls(
-                        noteId = voiceNoteId,
-                        onAttachmentCountChanged = { voiceAttachmentCount = it },
-                        onVoiceAttachmentAdded = { voiceChangesPending = true },
-                        onDiscardHandlerReady = onRegisterVoiceDiscard
-                    )
+                    // Stays composed (so recordings, playback and discard handling keep working) but
+                    // collapses to nothing until the user opens it from More or the note has recordings.
+                    CollapsibleSlot(visible = showVoiceControls || voiceAttachmentCount > 0) {
+                        VoiceNoteControls(
+                            noteId = voiceNoteId,
+                            onAttachmentCountChanged = { voiceAttachmentCount = it },
+                            onVoiceAttachmentAdded = { voiceChangesPending = true },
+                            onDiscardHandlerReady = onRegisterVoiceDiscard
+                        )
+                    }
+                    if (pinned) {
+                        AssistChip(
+                            onClick = { if (editorMode == EditorMode.Editing) pinned = false },
+                            label = { Text("Pinned") },
+                            leadingIcon = { Icon(Icons.Default.PushPin, null, tint = accent, modifier = Modifier.size(18.dp)) },
+                            modifier = Modifier.padding(top = 4.dp).semantics { contentDescription = "Pinned. Tap to unpin" }
+                        )
+                    }
                     val checklistItems = NoteText.checklistItems(bodyValue.text)
                     if (checklistItems.isNotEmpty()) {
                         Surface(
@@ -579,25 +618,22 @@ internal fun NoteEditorContent(
                     }
     
                     Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
-                    Text("Category", style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(horizontal = 12.dp))
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        categories.forEach { item ->
-                            FilterChip(
-                                selected = category == item,
-                                enabled = editorMode == EditorMode.Editing,
-                                onClick = { category = item },
-                                label = { Text(item) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = colors.surfaceVariant.copy(alpha = if (darkEditor) 0.72f else 0.55f),
-                                    labelColor = ink,
-                                    selectedContainerColor = accent,
-                                    selectedLabelColor = colors.onPrimary
-                                ),
-                                border = BorderStroke(1.dp, colors.outlineVariant)
-                            )
+                    Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        AssistChip(
+                            onClick = { if (editorMode == EditorMode.Editing) categoryMenu = true },
+                            label = { Text("Category · $category") },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                            border = BorderStroke(1.dp, colors.outlineVariant),
+                            modifier = Modifier.testTag("category_chip")
+                        )
+                        DropdownMenu(expanded = categoryMenu, onDismissRequest = { categoryMenu = false }) {
+                            categories.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(item) },
+                                    onClick = { category = item; categoryMenu = false },
+                                    trailingIcon = { if (category == item) Icon(Icons.Default.Check, null, tint = accent) }
+                                )
+                            }
                         }
                     }
                     if (reminder.isNotBlank()) {
@@ -641,110 +677,40 @@ internal fun NoteEditorContent(
 
     }
 
-    fun dismissAppearance(discardDraft: Boolean) {
+    fun dismissToolRail(discardDraft: Boolean) {
         if (discardDraft) {
             colorIndex = appearanceStartColor
             backgroundIndex = appearanceStartBackground
         }
-        appearanceVisible = false
+        toolRailVisible = false
     }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Keep the writing canvas dominant on phones, while giving the appearance
-        // controls a little more room on tablets and other wide editor windows.
-        val appearancePanelMaxWidth = if (maxWidth >= 600.dp) 480.dp else 360.dp
-        AnimatedVisibility(visible = appearanceVisible, enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.fillMaxSize().background(colors.scrim.copy(alpha = 0.40f)).clickable { dismissAppearance(discardDraft = true) }.testTag("appearance_scrim"))
-        }
-        LaunchedEffect(appearanceVisible) {
-            if (appearanceVisible) {
-                appearanceRailState.open()
-                snapshotFlow { appearanceRailState.targetValue }.collect { target ->
-                    if (target == RailValue.Closed && appearanceVisible) dismissAppearance(discardDraft = true)
-                }
-            } else {
-                appearanceRailState.close()
+    EditorToolRail(
+        visible = toolRailVisible,
+        tab = toolRailTab,
+        onTabChange = { toolRailTab = it },
+        colorIndex = colorIndex,
+        backgroundIndex = backgroundIndex,
+        onColorSelected = { colorIndex = it },
+        onBackgroundSelected = { backgroundIndex = it },
+        onApply = { dismissToolRail(discardDraft = false) },
+        onCancel = { dismissToolRail(discardDraft = true) },
+        onFormat = { action ->
+            when (action) {
+                FormatAction.Checklist -> applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) }
+                FormatAction.Bullet -> applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) }
+                FormatAction.Numbered -> applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) }
+                FormatAction.Quote -> applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) }
+                FormatAction.Bold -> applyInlineEdit("**")
+                FormatAction.Italic -> applyInlineEdit("_")
+                FormatAction.Strike -> applyInlineEdit("~~")
+                FormatAction.Code -> applyInlineEdit("`")
+                FormatAction.Link -> applyMarkdownLink()
+                FormatAction.Heading1 -> applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 1) }
+                FormatAction.Heading2 -> applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 2) }
+                FormatAction.Heading3 -> applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 3) }
             }
         }
-        if (appearanceVisible) {
-            SlimRailPanel(
-                state = appearanceRailState,
-                panelWidth = appearancePanelMaxWidth,
-                contentDescription = "Note appearance",
-                modifier = Modifier.testTag("appearance_side_panel")
-            ) {
-                AppearanceSidePanel(
-                    colorIndex = colorIndex,
-                    backgroundIndex = backgroundIndex,
-                    onColorSelected = { colorIndex = it },
-                    onBackgroundSelected = { backgroundIndex = it },
-                    onDismiss = { dismissAppearance(discardDraft = true) },
-                    onApply = { dismissAppearance(discardDraft = false) },
-                    modifier = Modifier.fillMaxHeight().width(appearancePanelMaxWidth)
-                        .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                )
-            }
-        }
-    }
-
-    LaunchedEffect(formattingVisible) {
-        if (formattingVisible) {
-            formattingRailState.open()
-            snapshotFlow { formattingRailState.targetValue }.collect { target ->
-                if (target == RailValue.Closed && formattingVisible) formattingVisible = false
-            }
-        } else {
-            formattingRailState.close()
-        }
-    }
-
-    if (formattingVisible) {
-        SlimRailPanel(
-            state = formattingRailState,
-            panelWidth = 304.dp,
-            contentDescription = "Text formatting",
-            modifier = Modifier.testTag("formatting_side_panel")
-        ) {
-            Column(
-                Modifier.fillMaxHeight().width(304.dp)
-                    .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .verticalScroll(rememberScrollState())
-                    .statusBarsPadding().navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Formatting", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
-                        Text("Format the selected text or current line", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                    }
-                    IconButton(onClick = { formattingVisible = false }, modifier = Modifier.testTag("formatting_close")) {
-                        Icon(Icons.Default.Close, contentDescription = "Close formatting panel")
-                    }
-                }
-                Text("Paragraph", style = MaterialTheme.typography.labelLarge, color = colors.primary)
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.cycleChecklist(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckBox, null); Spacer(Modifier.width(12.dp)); Text("Checklist") }
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBullet(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null); Spacer(Modifier.width(12.dp)); Text("Bullet list") }
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleNumberedList(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatListNumbered, null); Spacer(Modifier.width(12.dp)); Text("Numbered list") }
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleBlockquote(text, cursor) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatQuote, null); Spacer(Modifier.width(12.dp)); Text("Blockquote") }
-                HorizontalDivider()
-                Text("Text style", style = MaterialTheme.typography.labelLarge, color = colors.primary)
-                TextButton(onClick = { applyInlineEdit("**") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatBold, null); Spacer(Modifier.width(12.dp)); Text("Bold") }
-                TextButton(onClick = { applyInlineEdit("_") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatItalic, null); Spacer(Modifier.width(12.dp)); Text("Italic") }
-                TextButton(onClick = { applyInlineEdit("~~") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatStrikethrough, null); Spacer(Modifier.width(12.dp)); Text("Strikethrough") }
-                TextButton(onClick = { applyInlineEdit("`") }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Code, null); Spacer(Modifier.width(12.dp)); Text("Inline code") }
-                TextButton(onClick = { applyMarkdownLink() }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Link, null); Spacer(Modifier.width(12.dp)); Text("Insert link") }
-                HorizontalDivider()
-                Text("Headings", style = MaterialTheme.typography.labelLarge, color = colors.primary)
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 1) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FormatSize, null); Spacer(Modifier.width(12.dp)); Text("Heading 1") }
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 2) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(12.dp)); Text("Heading 2") }
-                TextButton(onClick = { applyLineEdit { text, cursor -> NoteText.toggleHeadingLevel(text, cursor, 3) } }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Title, null); Spacer(Modifier.width(12.dp)); Text("Heading 3") }
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = { formattingVisible = false }, modifier = Modifier.fillMaxWidth()) { Text("Done") }
-            }
-        }
-    }
+    )
 
     if (deleteConfirmation && onDelete != null) {
         AlertDialog(
@@ -781,4 +747,20 @@ internal fun NoteEditorContent(
             }
         )
     }
+}
+
+/** Keeps [content] composed but animates it to zero height (and hides it from accessibility) when not [visible]. */
+@Composable
+private fun CollapsibleSlot(visible: Boolean, content: @Composable () -> Unit) {
+    val fraction by animateFloatAsState(if (visible) 1f else 0f, NestMotion.spatial(), label = "collapsible-slot")
+    Box(
+        Modifier
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, (placeable.height * fraction).roundToInt()) { placeable.place(0, 0) }
+            }
+            .clipToBounds()
+            .alpha(fraction)
+            .then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
+    ) { content() }
 }
