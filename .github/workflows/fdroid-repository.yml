@@ -172,3 +172,42 @@ jobs:
           git add -A
           git commit -m "Publish NESTNOTE F-Droid repository for $RELEASE_TAG"
           git push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" HEAD:gh-pages
+
+      - name: Verify published repository is publicly readable
+        run: |
+          set -euo pipefail
+          # Do not report a successful publish until the public index and APK
+          # both expose the exact release that this run just published.
+          INDEX_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/gh-pages/fdroid/repo/index-v2.json"
+          APK_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/gh-pages/fdroid/repo/com.nestnote.app_${APK_VERSION_CODE}.apk"
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location "$INDEX_URL?verify=$GITHUB_RUN_ID-$attempt" -o "$RUNNER_TEMP/index-v2.json" \
+              && curl --fail --silent --show-error --location "$APK_URL?verify=$GITHUB_RUN_ID-$attempt" -o "$RUNNER_TEMP/published.apk"; then
+              if python3 - "$RUNNER_TEMP/index-v2.json" "$APK_VERSION_CODE" "$RUNNER_TEMP/published.apk" "$APK_PATH" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          index_path, version_code, published_apk, source_apk = sys.argv[1:]
+          index = json.loads(Path(index_path).read_text())
+          versions = index["packages"]["com.nestnote.app"]["versions"]
+          expected = str(version_code)
+          if not any(str(item["manifest"].get("versionCode")) == expected
+                     for item in versions.values()):
+              raise SystemExit(f"Published index does not contain versionCode {expected}")
+          published_hash = hashlib.sha256(Path(published_apk).read_bytes()).hexdigest()
+          source_hash = hashlib.sha256(Path(source_apk).read_bytes()).hexdigest()
+          if published_hash != source_hash:
+              raise SystemExit("Public APK hash does not match the release APK")
+          print(f"Verified public F-Droid index versionCode={expected} and APK SHA-256={published_hash}")
+          PY
+              then
+                exit 0
+              fi
+            fi
+            echo "Public repository has not propagated the expected APK/index yet (attempt $attempt/12)."
+            sleep 10
+          done
+          echo "::error::F-Droid publication push succeeded, but the public index/APK did not become readable with the expected version."
+          exit 1
