@@ -1,5 +1,42 @@
 # NESTNOTE Changelog
 
+## v1.2.7 — Upcoming
+
+### Added
+- Redesigned note-editor appearance and formatting access with a slim rail and more discoverable controls.
+- Expanded note appearance customization and integrated Markdown formatting tools, including headings, bold, italic, strikethrough, inline code, links, lists, checklists, and blockquotes.
+- Release-to-F-Droid workflow orchestration so the self-hosted F-Droid publishing workflow can run after the GitHub release workflow completes successfully.
+
+### Improved
+- Refined the editor layout and interaction patterns using stable Material 3 components and API 36-compatible implementation choices.
+- Improved access to formatting and appearance controls while keeping the writing area focused.
+- Clarified release automation sequencing to reduce the chance of publishing F-Droid metadata before a successful release build.
+
+### Distribution notes
+- The self-hosted F-Droid repository remains separate from the official F-Droid listing.
+- Automated workflow completion does not by itself prove that the repository index is available; verify the published index after a successful publishing run.
+- These changes are documented as upcoming and should not be treated as released until v1.2.7 is published.
+
+## v1.2.6 — Upcoming
+
+### Added
+- Inline voice recording and audio-file attachment actions inside the Note editor.
+- A recording review step after stopping, with preview playback, rename, explicit Attach, and Discard actions.
+- Inline audio attachment cards with play/pause, seek/progress, elapsed time, and total duration.
+- Support for multiple audio attachments in one note, with independent controls for each card.
+
+### Improved
+- Kept audio recording and playback within the Note tab, without playback dialogs, a separate audio tab, a mini-tab, or a floating mini-player.
+- Improved recording-state feedback, elapsed-time display, and the review-before-attach workflow.
+- Preserved existing note content and attachments when reviewing or discarding an additional recording.
+- Continued hardening audio attachment lifecycle and playback regression coverage.
+
+### Compatibility and privacy notes
+- Audio-file import currently supports uncompressed 16-bit mono or stereo WAV files; other formats are not yet supported.
+- Voice recordings are stored as local attachments. Audio attachments remain excluded from the current JSON backup/restore format.
+- NESTNOTE remains local-first with no account-based cloud sync.
+- These changes are documented as upcoming and should not be treated as released until v1.2.6 is published.
+
 ## v1.2.5 — 2026-10-18
 
 ### Added
