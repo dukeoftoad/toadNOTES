@@ -25,7 +25,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.Surface
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -219,6 +222,7 @@ internal fun VoiceNoteControls(
     onDiscardHandlerReady: (() -> Unit) -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val attachmentStore = remember(context) { VoiceAttachmentStore(context) }
     val attachmentManifest = remember(context) { VoiceAttachmentManifest(context) }
@@ -372,23 +376,17 @@ internal fun VoiceNoteControls(
         }
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Voice recordings", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Stored encrypted on this device. Voice audio is not included in note backups.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                "Maximum recording size: 25 MiB. If the limit or a microphone error is reached, the partial recording is discarded.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Voice", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Button(
                     modifier = Modifier.semantics {
                         contentDescription = "Record voice note"
@@ -402,6 +400,7 @@ internal fun VoiceNoteControls(
                     },
                     enabled = canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null),
                     onClick = {
+                        keyboardController?.hide()
                         if (!canStartVoiceRecording(recording, startingRecording, pendingPermission, playingId != null)) return@Button
                         startingRecording = true
                         showPermissionSettings = false
@@ -429,6 +428,7 @@ internal fun VoiceNoteControls(
                     Text(if (startingRecording || pendingPermission) "Starting…" else "Record")
                 }
                 OutlinedButton(
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)),
                     modifier = Modifier.semantics {
                         contentDescription = if (recordingPaused) "Resume voice recording" else "Pause voice recording"
                         stateDescription = when {
@@ -454,6 +454,7 @@ internal fun VoiceNoteControls(
                     Text(if (recordingPaused) "Resume" else "Pause")
                 }
                 OutlinedButton(
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)),
                     modifier = Modifier.semantics {
                         contentDescription = "Stop voice recording"
                         stateDescription = if (recording) "Available" else "Unavailable when not recording"
@@ -464,14 +465,15 @@ internal fun VoiceNoteControls(
                     Icon(Icons.Default.Stop, contentDescription = "Stop recording")
                     Text("Stop")
                 }
-            }
+                }
+                }
             if (recording) {
                 val minutes = elapsedRecordingSeconds / 60
                 val seconds = elapsedRecordingSeconds % 60
                 Text(
                     if (recordingPaused) "Recording paused • %02d:%02d".format(minutes, seconds)
                     else "Recording • %02d:%02d".format(minutes, seconds),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
             } else if (startingRecording || pendingPermission) {
@@ -586,6 +588,7 @@ internal fun VoiceNoteControls(
             }
         }
     }
+}
 }
 
 private fun startVoiceRecording(
