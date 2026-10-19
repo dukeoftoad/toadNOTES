@@ -11,10 +11,12 @@
 
 ### Fixed
 - Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
+- Updated Android CI to run all build and test tasks through the repository's Gradle wrapper, keeping the Gradle version consistent with the project configuration.
+- Removed hardcoded local Java 17 paths from `gradle.properties` so CI uses the Java installation configured by the runner.
 
 ### Testing
 - Added Compose instrumentation regression coverage for initial closed rendering, repeated open/close transitions, and custom panel/rail widths.
-- Android CI passes unit tests, debug APK build, minified release APK build, and instrumentation-test compilation. Device-only gesture interruption, predictive-back cancellation, and editor integration checks remain pending.
+- Android CI fixes address Gradle provisioning and Java-home configuration failures. A successful full CI run after these fixes still needs confirmation; device-only gesture interruption, predictive-back cancellation, and editor integration checks remain pending.
 
 ## v1.2.7
 
