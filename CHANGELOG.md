@@ -1,6 +1,10 @@
 # NESTNOTE Changelog
 
-## v1.2.7 — Upcoming
+## v1.2.8 — Upcoming
+
+Release notes will be added here as v1.2.8 changes are finalized.
+
+## v1.2.7
 
 ### Added
 - Redesigned note-editor appearance and formatting access with a slim rail and more discoverable controls.
@@ -15,9 +19,8 @@
 ### Distribution notes
 - The self-hosted F-Droid repository remains separate from the official F-Droid listing.
 - Automated workflow completion does not by itself prove that the repository index is available; verify the published index after a successful publishing run.
-- These changes are documented as upcoming and should not be treated as released until v1.2.7 is published.
 
-## v1.2.6 — Upcoming
+## v1.2.6
 
 ### Added
 - Inline voice recording and audio-file attachment actions inside the Note editor.
@@ -35,7 +38,6 @@
 - Audio-file import currently supports uncompressed 16-bit mono or stereo WAV files; other formats are not yet supported.
 - Voice recordings are stored as local attachments. Audio attachments remain excluded from the current JSON backup/restore format.
 - NESTNOTE remains local-first with no account-based cloud sync.
-- These changes are documented as upcoming and should not be treated as released until v1.2.6 is published.
 
 ## v1.2.5 — 2026-10-18
 
