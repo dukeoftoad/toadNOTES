@@ -182,6 +182,45 @@ internal fun NoteWallpaperArtwork(index: Int, modifier: Modifier = Modifier) {
                 }
                 drawPath(frontDune, Color(0xFFD48E69))
             }
+            5 -> {
+                drawRect(Color(0xFF202C4A))
+                drawCircle(Color(0xFFF6E7A7), radius = w * 0.12f, center = Offset(w * 0.72f, h * 0.24f))
+                drawCircle(Color(0xFFE9EEF9), radius = w * 0.018f, center = Offset(w * 0.22f, h * 0.18f))
+                drawCircle(Color(0xFFE9EEF9), radius = w * 0.025f, center = Offset(w * 0.43f, h * 0.34f))
+                drawCircle(Color(0xFFE9EEF9), radius = w * 0.016f, center = Offset(w * 0.84f, h * 0.48f))
+                val nightHill = Path().apply {
+                    moveTo(0f, h * 0.70f); cubicTo(w * 0.28f, h * 0.47f, w * 0.63f, h * 0.88f, w, h * 0.62f)
+                    lineTo(w, h); lineTo(0f, h); close()
+                }
+                drawPath(nightHill, Color(0xFF39476B))
+            }
+            6 -> {
+                drawRect(Color(0xFFE6E0F2))
+                for (i in 0..5) {
+                    val x = w * (i / 5f)
+                    drawLine(if (i % 2 == 0) Color(0xFFAA9BCB) else Color(0xFFD4A5B8), Offset(x, 0f), Offset(w - x * 0.35f, h), strokeWidth = w * 0.08f)
+                }
+                drawCircle(Color(0xFFF8E8B8), radius = w * 0.15f, center = Offset(w * 0.25f, h * 0.28f))
+            }
+            7 -> {
+                drawRect(Color(0xFFFFE5ED))
+                for (i in 0..7) {
+                    val x = w * ((i * 37 % 100) / 100f)
+                    val y = h * ((i * 53 % 100) / 100f)
+                    drawCircle(if (i % 2 == 0) Color(0xFFE89BB7) else Color(0xFFF7BBD0), radius = w * 0.07f, center = Offset(x, y))
+                    drawCircle(Color(0xFFFFF7D6), radius = w * 0.025f, center = Offset(x, y))
+                }
+                drawRect(Color(0xFFB8D8B2), Offset(0f, h * 0.86f), Size(w, h * 0.14f))
+            }
+            8 -> {
+                drawRect(Color(0xFFD8E7D7))
+                for (i in 0..4) {
+                    val x = w * (i / 4f)
+                    drawLine(Color(0xFF76977C), Offset(x, h), Offset(x + w * 0.12f, h * 0.16f), strokeWidth = w * 0.025f)
+                    drawOval(if (i % 2 == 0) Color(0xFF91B29A) else Color(0xFFB1C9A9), Offset(x - w * 0.12f, h * 0.25f), Size(w * 0.25f, h * 0.18f))
+                }
+                drawRect(Color(0xFFB8D0B4), Offset(0f, h * 0.82f), Size(w, h * 0.18f))
+            }
             else -> {
                 drawRect(Color(0xFFC7E0E3))
                 drawCircle(Color(0xFFF2B7A0), radius = w * 0.18f, center = Offset(w * 0.26f, h * 0.28f))
