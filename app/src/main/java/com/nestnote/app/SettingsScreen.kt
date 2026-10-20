@@ -187,6 +187,14 @@ internal fun SettingsScreen(
     val colors = MaterialTheme.colorScheme
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val settingsScope = rememberCoroutineScope()
+    val settingsDestinations = listOf(
+        "Appearance" to 1,
+        "Layout" to 2,
+        "Note behavior" to 3,
+        "Note editor" to 4,
+        "Data" to 5
+    )
 
     // Resolve gracefully if a persisted sort key is no longer valid.
     val selectedSort = SortOptions.firstOrNull { it.first == sortKey } ?: SortOptions.first()
@@ -202,6 +210,34 @@ internal fun SettingsScreen(
         item(key = SettingsItemKeys[0]) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Make NESTNOTE feel like yours.", color = colors.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Text("Jump to", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                settingsDestinations.forEach { (label, index) ->
+                    AssistChip(
+                        onClick = {
+                            settingsScope.launch { listState.animateScrollToItem(index) }
+                        },
+                        label = { Text(label) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = when (label) {
+                                    "Appearance" -> Icons.Default.Palette
+                                    "Layout" -> Icons.Default.GridView
+                                    "Note behavior" -> Icons.Default.Settings
+                                    "Note editor" -> Icons.Default.Edit
+                                    else -> Icons.Default.Archive
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    )
+                }
+            }
         }
         item(key = SettingsItemKeys[1]) {
             SettingsSection(title = "Appearance", subtitle = "Colors that fit your device") {
