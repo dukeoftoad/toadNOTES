@@ -14,6 +14,31 @@ object NoteText {
 
     private val listPrefixes = listOf(CHECKED, UNCHECKED, BULLET)
 
+    /**
+     * Converts ordinary note prose into readable Markdown without changing the stored note.
+     * Recognizes headings, bullets, numbered lists, and simple checklists; other lines stay intact.
+     */
+    fun toMarkdown(title: String, plainText: String): String {
+        val output = mutableListOf<String>()
+        if (title.isNotBlank()) {
+            output += "# ${title.trim()}"
+            output += ""
+        }
+        plainText.trim().lines().forEach { raw ->
+            val line = raw.trim()
+            when {
+                line.isEmpty() -> output += ""
+                line.matches(Regex("^#{1,6}\\s+.*")) -> output += line
+                line.matches(Regex("^[-*•]\\s+.*")) -> output += "- " + line.replaceFirst(Regex("^[-*•]\\s+"), "")
+                line.matches(Regex("^\\d+[.)]\\s+.*")) -> output += line.replaceFirst(Regex("^\\d+[.)]\\s+"), "").let { item -> "${Regex("^\\d+").find(line)?.value ?: "1"}. $item" }
+                line.startsWith("☑ ") -> output += "- [x] " + line.removePrefix("☑ ")
+                line.startsWith("☐ ") -> output += "- [ ] " + line.removePrefix("☐ ")
+                else -> output += line
+            }
+        }
+        return output.joinToString("\\n").trimEnd() + "\\n"
+    }
+
     fun wordCount(text: String): Int =
         text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
 
