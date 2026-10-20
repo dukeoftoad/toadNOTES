@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -89,6 +90,7 @@ internal fun EditorToolRail(
     colorIndex: Int,
     backgroundIndex: Int,
     onColorSelected: (Int) -> Unit,
+    onImportWallpaper: () -> Unit,
     onBackgroundSelected: (Int) -> Unit,
     onApply: () -> Unit,
     onCancel: () -> Unit,
@@ -140,7 +142,8 @@ internal fun EditorToolRail(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         when (tab) {
-                            ToolRailTab.Colour -> noteAccents.forEachIndexed { index, tint ->
+                            ToolRailTab.Colour -> {
+                                noteAccents.forEachIndexed { index, tint ->
                                 val isSelected = index == colorIndex
                                 Box(
                                     Modifier.size(34.dp).clip(CircleShape).background(tint)
@@ -150,6 +153,10 @@ internal fun EditorToolRail(
                                         .testTag("note_color_$index"),
                                     contentAlignment = Alignment.Center
                                 ) { if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF383044)) }
+                                }
+                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(colors.secondaryContainer).clickable(onClick = onImportWallpaper).testTag("import_wallpaper_button"), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Add, contentDescription = "Import wallpaper image", tint = colors.onSecondaryContainer)
+                                }
                             }
                             ToolRailTab.Background -> backgroundNames.forEachIndexed { index, name ->
                                 val isSelected = index == backgroundIndex
