@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -1084,6 +1085,23 @@ internal fun NoteEditorContent(
                         }
                     )
 
+                    // Keep voice playback available while editing, without switching to Preview.
+                    // Players are siblings of BasicTextField so audio controls never interfere
+                    // with text selection, IME composition, or cursor offsets.
+                    if (editorMode == EditorMode.Editing &&
+                        NoteText.voiceSegments(body).any { it.attachmentId != null }
+                    ) {
+                        InlineVoicePlayersForBody(
+                            body = body,
+                            noteId = voiceNoteId,
+                            activePlayerId = activeVoicePlayerId,
+                            onPlayRequested = { id -> activeVoicePlayerId = id },
+                            onStopRequested = { activeVoicePlayerId = null },
+                            onDeleteRequested = { id -> pendingVoiceDeletion = id },
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 176.dp)
+                        )
+                    }
+
                     if (pinned) {
                         AssistChip(
                             onClick = { if (editorMode == EditorMode.Editing) pinned = false },
@@ -1234,7 +1252,9 @@ internal fun NoteEditorContent(
                                 colors.onPrimaryContainer,
                                 voiceNames
                             ) else VisualTransformation.None,
-                            modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp),
+                            modifier = Modifier.fillMaxWidth()
+                                .weight(1f)
+                                .padding(top = 3.dp),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = textSize.bodySp.sp,
                                 lineHeight = (textSize.bodySp * 1.45f).sp,
@@ -1539,6 +1559,35 @@ internal fun NoteEditorContent(
                 TextButton(onClick = { pendingVoiceDeletion = null }) { Text("Keep") }
             }
         )
+    }
+}
+
+@Composable
+private fun InlineVoicePlayersForBody(
+    body: String,
+    noteId: Long,
+    activePlayerId: String?,
+    onPlayRequested: (String) -> Unit,
+    onStopRequested: () -> Unit,
+    onDeleteRequested: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val attachmentIds = remember(body) {
+        NoteText.voiceSegments(body).mapNotNull { it.attachmentId }.distinct()
+    }
+
+    Column(modifier.verticalScroll(rememberScrollState())) {
+        attachmentIds.forEach { attachmentId ->
+            InlineVoicePlayer(
+                noteId = noteId,
+                attachmentId = attachmentId,
+                activePlayerId = activePlayerId,
+                onPlayRequested = onPlayRequested,
+                onStopRequested = onStopRequested,
+                onDeleteRequested = onDeleteRequested,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            )
+        }
     }
 }
 

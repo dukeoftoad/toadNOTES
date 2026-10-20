@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Added a dedicated inline voice-player area to the note editor so voice attachments can be played while editing, without opening Markdown preview. Validation is in progress.
+
 ### Fixed
 - Voice-note playback cards stack their title/waveform and seek controls vertically, preventing the seek bar from overlapping the voice-note label.
 - Voice attachment markers render as readable labels instead of exposing internal attachment IDs.
