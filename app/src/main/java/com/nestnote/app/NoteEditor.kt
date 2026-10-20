@@ -1510,7 +1510,7 @@ internal fun NoteEditorContent(
 }
 
 @Composable
-private fun PreviewWithInlineVoice(
+internal fun PreviewWithInlineVoice(
     body: String,
     noteId: Long,
     textSize: EditorTextSize,
@@ -1524,14 +1524,15 @@ private fun PreviewWithInlineVoice(
     val segments = remember(body) { NoteText.voiceSegments(body) }
     val bodySp = textSize.bodySp.toFloat()
     Column(modifier.verticalScroll(rememberScrollState())) {
-        segments.forEach { segment ->
+        segments.forEachIndexed { segmentIndex, segment ->
             if (segment.attachmentId == null) {
-                if (segment.text.isNotBlank()) {
+                if (segment.text.isNotEmpty()) {
                     val spanned = remember(segment.text, bodySp, ink) {
                         MarkdownPreview.toSpanned(segment.text)
                     }
                     AndroidView(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            .testTag("voice_preview_text_$segmentIndex"),
                         factory = { viewContext ->
                             TextView(viewContext).apply {
                                 setTextColor(ink.toArgb())
@@ -1556,6 +1557,7 @@ private fun PreviewWithInlineVoice(
                     onStopRequested = onStopRequested,
                     onDeleteRequested = onDeleteRequested,
                     modifier = Modifier.padding(vertical = 6.dp)
+                        .testTag("voice_preview_player")
                 )
             }
         }
