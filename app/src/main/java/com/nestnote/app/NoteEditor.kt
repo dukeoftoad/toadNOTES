@@ -269,6 +269,15 @@ internal fun NoteEditorContent(
     var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
+    var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
+    val wallpaperImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            customWallpaperUri = uri.toString()
+            backgroundIndex = 0
+            android.widget.Toast.makeText(context, "Wallpaper imported", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     val markdownExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
         if (uri != null) {
             runCatching {
@@ -312,6 +321,7 @@ internal fun NoteEditorContent(
         category != (original?.category ?: defaultNoteCategory) ||
         colorIndex != (original?.color ?: 0) ||
         backgroundIndex != (original?.background ?: 0) ||
+        customWallpaperUri != original?.wallpaperUri.orEmpty() ||
         pinned != (original?.pinned ?: false) ||
         reminder != original?.reminder.orEmpty() ||
         voiceChangesPending
@@ -333,7 +343,8 @@ internal fun NoteEditorContent(
             updated = original?.updated ?: 0L,
             created = original?.created ?: now,
             archived = archived,
-            background = backgroundIndex
+            background = backgroundIndex,
+            wallpaperUri = customWallpaperUri
         )
     }
 
@@ -485,7 +496,10 @@ internal fun NoteEditorContent(
             )
             .background(editorCanvas)
     ) {
-        if (backgroundIndex > 0) {
+        if (customWallpaperUri.isNotBlank()) {
+            NoteCustomWallpaper(customWallpaperUri, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(noteTints[colorIndex].copy(alpha = 0.58f)))
+        } else if (backgroundIndex > 0) {
             NoteWallpaperArtwork(backgroundIndex, Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(noteTints[colorIndex].copy(alpha = 0.58f)))
         }
@@ -1105,6 +1119,7 @@ internal fun NoteEditorContent(
         colorIndex = colorIndex,
         backgroundIndex = backgroundIndex,
         onColorSelected = { colorIndex = it },
+        onImportWallpaper = { wallpaperImportLauncher.launch(arrayOf("image/*")) },
         onBackgroundSelected = { backgroundIndex = it },
         onApply = { dismissToolRail(discardDraft = false) },
         onCancel = { dismissToolRail(discardDraft = true) },
