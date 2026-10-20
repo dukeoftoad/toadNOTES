@@ -36,7 +36,7 @@ object NoteText {
                 else -> output += line
             }
         }
-        return output.joinToString("\\n").trimEnd() + "\\n"
+        return output.joinToString("\n").trimEnd() + "\n"
     }
 
     fun wordCount(text: String): Int =
