@@ -2,6 +2,7 @@ package com.nestnote.app
 
 import android.text.style.ImageSpan
 import android.text.style.URLSpan
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,4 +32,17 @@ class MarkdownPreviewTest {
         assertTrue(MarkdownPreview.toSpanned("").isEmpty())
         assertTrue(MarkdownPreview.toSpanned("ordinary note").toString().contains("ordinary note"))
     }
+
+    @Test
+    fun markdownFormattingIsPreservedInTextSegmentsAroundVoiceNotes() {
+        val id = "11111111-1111-4111-8111-111111111111"
+        val body = "**before**\\n[[voice:$id]]\\n*after*"
+        val segments = NoteText.voiceSegments(body)
+
+        assertEquals(3, segments.size)
+        assertTrue(MarkdownPreview.toSpanned(segments[0].text).toString().contains("before"))
+        assertEquals(id, segments[1].attachmentId)
+        assertTrue(MarkdownPreview.toSpanned(segments[2].text).toString().contains("after"))
+    }
+
 }
