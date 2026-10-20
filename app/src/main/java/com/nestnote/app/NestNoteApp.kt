@@ -486,7 +486,8 @@ internal fun NestNoteApp(store: NoteStore) {
                         archivedNotes = notes.count { it.archived },
                         onExportNotes = { exportLauncher.launch("nestnote-backup.json") },
                         onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
-                        onResetDefaults = { resetPreferences() }
+                        onResetDefaults = { resetPreferences() },
+                        onOpenBackupRestore = { selectedView = "Backup" }
                     )
                 } else if (selectedView == "About") {
                     AboutScreen(version = appVersion)
