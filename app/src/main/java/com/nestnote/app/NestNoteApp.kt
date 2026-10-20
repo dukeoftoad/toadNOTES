@@ -15,6 +15,10 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -149,6 +153,7 @@ internal fun NestNoteApp(store: NoteStore) {
     var storageLoaded by remember { mutableStateOf(false) }
     var lastBackupAt by remember { mutableLongStateOf(preferences.getLong("backup_last_success_at", 0L)) }
     var backupStatus by remember { mutableStateOf(preferences.getString("backup_last_status", "Not yet backed up") ?: "Not yet backed up") }
+    var automaticBackupEnabled by remember { mutableStateOf(preferences.getBoolean("automatic_backup_enabled", false)) }
     var storageRecoveryRequired by remember { mutableStateOf(false) }
     var showStorageRecoveryDialog by remember { mutableStateOf(false) }
     LaunchedEffect(store) {
@@ -495,6 +500,18 @@ internal fun NestNoteApp(store: NoteStore) {
                         pinnedNotes = notes.count { it.pinned && !it.archived },
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
+                        automaticBackupEnabled = automaticBackupEnabled,
+                        onAutomaticBackupChange = { enabled ->
+                            automaticBackupEnabled = enabled
+                            preferences.edit().putBoolean("automatic_backup_enabled", enabled).apply()
+                            val workManager = WorkManager.getInstance(context)
+                            if (enabled) {
+                                val request = PeriodicWorkRequestBuilder<AutomaticBackupWorker>(24, TimeUnit.HOURS).build()
+                                workManager.enqueueUniquePeriodicWork("nestnote_automatic_backup", ExistingPeriodicWorkPolicy.UPDATE, request)
+                            } else {
+                                workManager.cancelUniqueWork("nestnote_automatic_backup")
+                            }
+                        },
                         onExportNotes = { includeArchived ->
                             exportArchivedNotes = includeArchived
                             exportLauncher.launch("nestnote-backup.json")
