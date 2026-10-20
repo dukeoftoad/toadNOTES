@@ -344,7 +344,9 @@ object NoteText {
     // The id itself is a UUID and never contains ']' or newlines; the regex
     // excludes both so a malformed marker cannot swallow the rest of the note.
 
-    private val VoiceMarkerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
+    private val VoiceMarkerCandidateRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
+    private val VoiceAttachmentIdRegex = Regex("""(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
+    private val VoiceMarkerRegex = Regex("""\[\[voice:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\]\]""")
 
     /** Position of a voice marker in the body. [range] is the marker's character span, end-exclusive. */
     data class VoiceMarker(val attachmentId: String, val range: IntRange)
@@ -368,11 +370,17 @@ object NoteText {
     fun voiceSegments(body: String): List<VoiceSegment> {
         val out = mutableListOf<VoiceSegment>()
         var cursor = 0
-        VoiceMarkerRegex.findAll(body).forEach { match ->
+        VoiceMarkerCandidateRegex.findAll(body).forEach { match ->
             if (match.range.first > cursor) {
                 out += VoiceSegment(body.substring(cursor, match.range.first), null)
             }
-            out += VoiceSegment("", match.groupValues[1])
+            val attachmentId = match.groupValues[1]
+            if (VoiceAttachmentIdRegex.matches(attachmentId)) {
+                out += VoiceSegment("", attachmentId)
+            } else {
+                // Never expose malformed internal marker payloads in the rendered preview.
+                out += VoiceSegment("Voice note", null)
+            }
             cursor = match.range.last + 1
         }
         if (cursor < body.length) out += VoiceSegment(body.substring(cursor), null)
