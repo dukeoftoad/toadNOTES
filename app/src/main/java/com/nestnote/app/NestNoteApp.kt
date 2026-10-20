@@ -501,6 +501,8 @@ internal fun NestNoteApp(store: NoteStore) {
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
                         automaticBackupEnabled = automaticBackupEnabled,
+                        automaticBackupLastRun = preferences.getLong("automatic_backup_last_run", 0L),
+                        automaticBackupStatus = preferences.getString("automatic_backup_last_status", "Not run yet") ?: "Not run yet",
                         onAutomaticBackupChange = { enabled ->
                             automaticBackupEnabled = enabled
                             preferences.edit().putBoolean("automatic_backup_enabled", enabled).apply()
