@@ -152,6 +152,7 @@ private class VoiceMarkerVisualTransformation(
     private val names: Map<String, String> = emptyMap()
 ) : VisualTransformation {
     private val markerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
+    private val validAttachmentId = Regex("""(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
 
     override fun filter(text: AnnotatedString): TransformedText {
         val matches = markerRegex.findAll(text.text).toList()
@@ -166,7 +167,9 @@ private class VoiceMarkerVisualTransformation(
             val prefix = text.text.substring(sourceCursor, match.range.first)
             output.append(prefix)
             outputCursor += prefix.length
-            val label = "  🎙 " + (names[match.groupValues[1]] ?: "Voice note").take(28) + "  "
+            val attachmentId = match.groupValues[1]
+            val displayName = if (validAttachmentId.matches(attachmentId)) names[attachmentId] ?: "Voice note" else "Voice note unavailable"
+            val label = "  🎙 " + displayName.take(28) + "  "
             val transformedStart = outputCursor
             output.pushStyle(
                 SpanStyle(
