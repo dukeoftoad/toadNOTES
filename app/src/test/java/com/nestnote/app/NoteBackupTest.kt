@@ -27,6 +27,18 @@ class NoteBackupTest {
     }
 
     @Test
+    fun versionedBackupIncludesPortableMetadataAndRejectsUnknownSchema() {
+        val encoded = NoteStore.encodeBackup(listOf(note(42, "Portable")))
+        val envelope = org.json.JSONObject(encoded)
+        assertEquals("com.nestnote.backup", envelope.getString("format"))
+        assertEquals(1, envelope.getInt("schemaVersion"))
+        assertTrue(envelope.getLong("createdAt") > 0L)
+        assertEquals(listOf(note(42, "Portable")), NoteStore.decodeBackup(encoded))
+        envelope.put("schemaVersion", 999)
+        assertNull(NoteStore.decodeBackup(envelope.toString()))
+    }
+
+    @Test
     fun decodeRejectsInvalidAndUnrelatedJson() {
         assertNull(NoteStore.decode("not json"))
         assertNull(NoteStore.decode("{\"a\":1}"))
