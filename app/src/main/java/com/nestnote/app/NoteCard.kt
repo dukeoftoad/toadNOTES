@@ -35,6 +35,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -73,6 +74,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Palette
@@ -85,6 +87,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -129,6 +132,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val markdownLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+                    writer.write("# " + note.title.trim() + "\n\n" + note.body)
+                } ?: error("Unable to open destination")
+                android.widget.Toast.makeText(context, "Markdown note saved", android.widget.Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                android.widget.Toast.makeText(context, "Could not save Markdown file", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val colors = MaterialTheme.colorScheme
     // Wallpaper palettes can produce very bright onSurface/primary colors that
     // disappear on the fixed pastel note backgrounds. Use a stable high-contrast
@@ -138,7 +154,7 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
     val cardSecondary = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF625D6B) else colors.onSurfaceVariant
     val cardAccent = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF51466B) else colors.primary
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = { menu = true }),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = if (note.background > 0) Color.Transparent else tint, contentColor = cardText),
         border = BorderStroke(1.dp, colors.outlineVariant)
@@ -162,6 +178,16 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Actions for " + note.title, tint = cardText) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; onPin() }, leadingIcon = { Icon(Icons.Default.PushPin, null) })
+                        DropdownMenuItem(
+                            text = { Text("Download as Markdown") },
+                            onClick = {
+                                menu = false
+                                val safeTitle = note.title.trim().ifBlank { "note" }.replace(Regex("[\\\\/:*?\\"<>|]"), "_")
+                                markdownLauncher.launch("$safeTitle.md")
+                            },
+                            leadingIcon = { Icon(Icons.Default.Download, null) },
+                            modifier = Modifier.testTag("note_export_markdown")
+                        )
                         DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onOpen() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
                         DropdownMenuItem(text = { Text(if (note.archived) "Restore from archive" else "Archive") }, onClick = { menu = false; onArchive() }, leadingIcon = { Icon(if (note.archived) Icons.Default.Home else Icons.Default.Delete, null) })
                         DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
