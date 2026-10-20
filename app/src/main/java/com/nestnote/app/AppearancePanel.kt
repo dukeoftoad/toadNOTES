@@ -95,6 +95,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.Image
+import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -123,6 +128,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+
+
+@Composable
+internal fun NoteCustomWallpaper(uri: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val bitmap = remember(uri) {
+        runCatching {
+            context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(bitmap = bitmap, contentDescription = "Custom note wallpaper", modifier = modifier, contentScale = ContentScale.Crop)
+    } else {
+        Box(modifier.background(Color(0xFFE7E1D7)))
+    }
+}
 
 // Note wallpaper artwork used by the editor tool rail and previews.
 
