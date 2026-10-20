@@ -8,10 +8,14 @@ fdroid/*.keystore
 # Redesign archives and bundles
 *.zip
 *.bundle
+
 # Gradle
 .gradle/
 build/
 app/build/
+
+# Kotlin compiler session state (generated locally)
+.kotlin/
 
 # Android Studio / IntelliJ
 .idea/
