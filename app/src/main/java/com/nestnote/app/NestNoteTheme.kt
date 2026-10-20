@@ -226,9 +226,15 @@ internal object NestMotion {
 // Distinct, slightly richer swatches remain soft while being easy to tell apart.
 internal val noteAccents = listOf(
     Color(0xFFF4EEE3), Color(0xFFE88C98), Color(0xFFE98555),
-    Color(0xFFD8C34D), Color(0xFFA6CC91), Color(0xFF69B9B3), Color(0xFF73ACD8)
+    Color(0xFFD8C34D), Color(0xFFA6CC91), Color(0xFF69B9B3), Color(0xFF73ACD8),
+    Color(0xFFB39DDB), Color(0xFF8D9FE8), Color(0xFFDF9BCB),
+    Color(0xFF8CADA0), Color(0xFFB9A38C), Color(0xFF7E8797),
+    Color(0xFFDA7777), Color(0xFF9BBA5A)
 )
 internal val noteTints = listOf(
     Color(0xFFFFFCF6), Color(0xFFFFE8E9), Color(0xFFFFE8DC),
-    Color(0xFFFFF6CC), Color(0xFFEBF5E5), Color(0xFFE0F4F1), Color(0xFFE5F1FC)
+    Color(0xFFFFF6CC), Color(0xFFEBF5E5), Color(0xFFE0F4F1), Color(0xFFE5F1FC),
+    Color(0xFFF0E9FC), Color(0xFFE8ECFF), Color(0xFFFBE8F5),
+    Color(0xFFE5F0E9), Color(0xFFF2EADF), Color(0xFFE9EBF0),
+    Color(0xFFFFE4E1), Color(0xFFF0F5DB)
 )
