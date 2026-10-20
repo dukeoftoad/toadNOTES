@@ -144,8 +144,6 @@ private val SettingsItemKeys = listOf(
     "settings_reset"
 )
 
-private const val BackupSectionKey = "settings_backup"
-
 /** Sort choices are immutable and never change, so keep them off the composition. */
 private val SortOptions: List<Pair<String, String>> = listOf(
     "RECENT" to "Edited",
@@ -156,7 +154,6 @@ private val SortOptions: List<Pair<String, String>> = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(
-    focusBackup: Boolean,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
     dynamicColors: Boolean,
@@ -183,28 +180,13 @@ internal fun SettingsScreen(
     onEditorTextSizeChange: (EditorTextSize) -> Unit,
     showEditorCounts: Boolean,
     onShowEditorCountsChange: (Boolean) -> Unit,
-    totalNotes: Int,
-    archivedNotes: Int,
-    onExportNotes: () -> Unit,
-    onImportNotes: () -> Unit,
     onResetDefaults: () -> Unit,
     modifier: Modifier = Modifier,
-    // Allows the caller to clear the "jump to backup" event after it is handled,
-    // so returning to a preserved screen does not scroll again.
-    onBackupFocusHandled: () -> Unit = {},
     onOpenBackupRestore: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
-
-    val currentOnBackupFocusHandled by rememberUpdatedState(onBackupFocusHandled)
-    LaunchedEffect(focusBackup, listState) {
-        if (focusBackup) {
-            listState.scrollToItem(SettingsItemKeys.indexOf(BackupSectionKey))
-            currentOnBackupFocusHandled()
-        }
-    }
 
     // Resolve gracefully if a persisted sort key is no longer valid.
     val selectedSort = SortOptions.firstOrNull { it.first == sortKey } ?: SortOptions.first()
