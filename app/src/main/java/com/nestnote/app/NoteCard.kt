@@ -182,7 +182,7 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                             text = { Text("Download as Markdown") },
                             onClick = {
                                 menu = false
-                                val safeTitle = note.title.trim().ifBlank { "note" }.replace(Regex("[\\\\/:*?\\"<>|]"), "_")
+                                val safeTitle = note.title.trim().ifBlank { "note" }.replace(Regex("""[\\/:*?"<>|]"""), "_")
                                 markdownLauncher.launch("$safeTitle.md")
                             },
                             leadingIcon = { Icon(Icons.Default.Download, null) },
