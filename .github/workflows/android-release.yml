@@ -68,9 +68,10 @@ jobs:
             platforms;android-36
             build-tools;36.0.0
 
-      # Run validation and packaging in one Gradle invocation to reuse task graph
-      # and avoid paying Gradle startup/configuration overhead twice.
-      - name: Test and build release APK
+      - name: Run unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Build release APK with release version
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
           VERSION_CODE: ${{ github.run_number }}
@@ -78,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION_NAME="${RELEASE_TAG#v}"
-          ./gradlew --no-daemon testDebugUnitTest assembleRelease \
+          ./gradlew --no-daemon assembleRelease \
             -PversionName="$VERSION_NAME" \
             -PversionCode="$VERSION_CODE"
 
