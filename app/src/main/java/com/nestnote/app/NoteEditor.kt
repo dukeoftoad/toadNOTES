@@ -865,7 +865,6 @@ internal fun NoteEditorContent(
                                         noteFormat = if (noteFormat == "markdown") "plain" else "markdown"
                                         previewVisible = false
                                     },
-                                    leadingIcon = { Icon(Icons.Default.TextFields, null) }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Convert to Markdown file") },
