@@ -292,6 +292,7 @@ internal fun NoteEditorContent(
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
     var categoryMenu by remember { mutableStateOf(false) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
+    var noteFormat by rememberSaveable(original?.id) { mutableStateOf(original?.format ?: "plain") }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
     var discardConfirmation by remember { mutableStateOf(false) }
@@ -384,6 +385,7 @@ internal fun NoteEditorContent(
         customWallpaperUri != original?.wallpaperUri.orEmpty() ||
         pinned != (original?.pinned ?: false) ||
         reminder != original?.reminder.orEmpty() ||
+        noteFormat != (original?.format ?: "plain") ||
         voiceChangesPending
 
     // ---- Undo/redo plumbing ----
@@ -438,7 +440,8 @@ internal fun NoteEditorContent(
             created = original?.created ?: now,
             archived = archived,
             background = backgroundIndex,
-            wallpaperUri = customWallpaperUri
+            wallpaperUri = customWallpaperUri,
+            format = if (noteFormat == "markdown") "markdown" else "plain"
         )
     }
 
@@ -856,6 +859,15 @@ internal fun NoteEditorContent(
                                     leadingIcon = { Icon(Icons.Default.Share, null) }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Note format · " + if (noteFormat == "markdown") "Markdown" else "Plain text") },
+                                    onClick = {
+                                        moreMenu = false
+                                        noteFormat = if (noteFormat == "markdown") "plain" else "markdown"
+                                        previewVisible = false
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.TextFields, null) }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Convert to Markdown file") },
                                     enabled = title.isNotBlank() || body.isNotBlank(),
                                     onClick = {
@@ -1161,19 +1173,20 @@ internal fun NoteEditorContent(
                     // Reading mode renders the real inline voice players by default.
                     // Markdown preview remains an optional editing aid, not a prerequisite
                     // for playing attachments from a saved note.
-                    if (editorMode == EditorMode.Editing) {
+                    if (editorMode == EditorMode.Editing && noteFormat == "markdown") {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = { previewVisible = !previewVisible }) {
-                                Text(if (previewVisible) "Edit note" else "Preview formatting")
+                                Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
                             }
                         }
                     }
 
-                    if (previewVisible || editorMode == EditorMode.Locked) {
+                    if ((noteFormat == "markdown" && (previewVisible || editorMode == EditorMode.Locked)) ||
+                        (editorMode == EditorMode.Locked && noteFormat != "markdown")) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f),
                             shape = RoundedCornerShape(12.dp),
@@ -1192,10 +1205,11 @@ internal fun NoteEditorContent(
                                 onStopRequested = { activeVoicePlayerId = null },
                                 onDeleteRequested = { id -> pendingVoiceDeletion = id },
                                 modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                renderMarkdown = noteFormat == "markdown"
                             )
                         }
-                        if (editorMode == EditorMode.Editing) {
+                        if (editorMode == EditorMode.Editing && noteFormat == "markdown") {
                             Text(
                                 "Preview supports basic headings, emphasis, inline code, links, " +
                                     "simple lists, and inline voice notes.",
@@ -1213,11 +1227,11 @@ internal fun NoteEditorContent(
                             readOnly = editorMode == EditorMode.Locked,
                             // Keep attachment IDs out of both editable and read-only
                             // views. The stored body remains the canonical marker text.
-                            visualTransformation = VoiceMarkerVisualTransformation(
+                            visualTransformation = if (noteFormat == "markdown") VoiceMarkerVisualTransformation(
                                 colors.primaryContainer,
                                 colors.onPrimaryContainer,
                                 voiceNames
-                            ),
+                            ) else VisualTransformation.None,
                             modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = textSize.bodySp.sp,
@@ -1531,7 +1545,8 @@ internal fun PreviewWithInlineVoice(
     onPlayRequested: (String) -> Unit,
     onStopRequested: () -> Unit,
     onDeleteRequested: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    renderMarkdown: Boolean = true
 ) {
     val segments = remember(body) { NoteText.voiceSegments(body) }
     val bodySp = textSize.bodySp.toFloat()
@@ -1539,8 +1554,9 @@ internal fun PreviewWithInlineVoice(
         segments.forEachIndexed { segmentIndex, segment ->
             if (segment.attachmentId == null) {
                 if (segment.text.isNotEmpty()) {
-                    val spanned = remember(segment.text, bodySp, ink) {
-                        MarkdownPreview.toSpanned(segment.text)
+                    val spanned = remember(segment.text, bodySp, ink, renderMarkdown) {
+                        if (renderMarkdown) MarkdownPreview.toSpanned(segment.text)
+                        else android.text.SpannableString(segment.text)
                     }
                     AndroidView(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
