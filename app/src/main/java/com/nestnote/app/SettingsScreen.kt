@@ -71,6 +71,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Home
@@ -662,20 +663,56 @@ internal fun BackupRestoreScreen(
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Your notes, in your control", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
-            "Create a backup file or restore notes from one whenever you need to move or protect your data.",
+            "Your notes, in your control",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            "Keep a copy of your notes or bring notes back from a backup file.",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant
         )
-        SettingsSection(title = "Backup & restore", subtitle = "Stored locally, shared only when you choose") {
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = colors.secondaryContainer
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Archive,
+                    contentDescription = null,
+                    tint = colors.onSecondaryContainer,
+                    modifier = Modifier.size(28.dp)
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "$totalNotes notes on this device",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSecondaryContainer
+                    )
+                    Text(
+                        "$archivedNotes archived",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSecondaryContainer
+                    )
+                }
+            }
+        }
+
+        SettingsSection(title = "Back up notes", subtitle = "Save a portable copy") {
             Text(
-                "$" + "{totalNotes} notes on this device · $" + "{archivedNotes} archived",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                "Create a NESTNOTE backup file that you can keep or move to another device.",
+                style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                "Backups include note text and note settings. Voice recordings and audio attachments are not included.",
+                "Includes note text and note settings. Voice recordings and audio attachments are not included.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant
             )
@@ -685,28 +722,28 @@ internal fun BackupRestoreScreen(
             ) {
                 Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Back up notes")
+                Text("Create backup")
             }
+        }
+
+        SettingsSection(title = "Restore a backup", subtitle = "Add notes from a backup file") {
+            Text(
+                "Choose a NESTNOTE backup file to review its changes before restoring.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                "Restore merges notes with your existing notes; it does not delete notes that aren't in the backup. If a note exists in both places, the most recently edited version is kept.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
             OutlinedButton(
                 onClick = onImportNotes,
                 modifier = Modifier.fillMaxWidth().testTag("settings_restore")
             ) {
-                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Restore backup")
+                Text("Choose backup file")
             }
-            Text(
-                "Restore merges notes instead of deleting your existing notes. When the same note exists in both places, the most recently edited copy is kept.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant
-            )
-        }
-        SettingsSection(title = "More data tools", subtitle = "Room for future features") {
-            Text(
-                "Additional options such as backup reminders, backup history, and data-management tools can live here as they are added.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant
-            )
         }
     }
 }
