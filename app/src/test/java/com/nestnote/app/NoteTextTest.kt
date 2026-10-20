@@ -378,6 +378,34 @@ class NoteTextTest {
 
 
     @Test
+    fun voiceMarkersOnlyAcceptUuidIdsAndHideMalformedMarkerPayloads() {
+        val valid = "11111111-1111-4111-8111-111111111111"
+        val body = "before [[voice:$valid]] middle [[voice:not-a-uuid]] after [[voice:123]]"
+        assertEquals(listOf(valid), NoteText.voiceMarkers(body).map { it.attachmentId })
+        assertEquals(
+            listOf(
+                NoteText.VoiceSegment("before ", null),
+                NoteText.VoiceSegment("", valid),
+                NoteText.VoiceSegment(" middle ", null),
+                NoteText.VoiceSegment("Voice note", null),
+                NoteText.VoiceSegment(" after ", null),
+                NoteText.VoiceSegment("Voice note", null)
+            ),
+            NoteText.voiceSegments(body)
+        )
+    }
+
+    @Test
+    fun legacyUuidVoiceMarkersRemainBackwardCompatible() {
+        val id = "ABCDEF12-3456-7890-abcd-ef1234567890"
+        assertEquals(listOf(id), NoteText.voiceMarkers("legacy [[voice:$id]]").map { it.attachmentId })
+        assertEquals(
+            listOf(NoteText.VoiceSegment("legacy ", null), NoteText.VoiceSegment("", id)),
+            NoteText.voiceSegments("legacy [[voice:$id]]")
+        )
+    }
+
+    @Test
     fun voiceSegmentsPreserveWhitespaceAroundMarkers() {
         val id = "11111111-1111-4111-8111-111111111111"
         val body = "first paragraph\\n\\n[[voice:$id]]\\n\\nlast paragraph"
