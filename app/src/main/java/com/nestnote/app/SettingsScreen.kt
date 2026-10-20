@@ -325,6 +325,7 @@ internal fun SettingsScreen(
                 }
             }
         }
+        }
         if (settingsSearch.isBlank() || listOf("layout", "dashboard", "density", "grid", "list", "compact").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[2]) {
             SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
@@ -344,6 +345,7 @@ internal fun SettingsScreen(
                 SegmentedChoice(DashboardDensity.entries, dashboardDensity, { it.label }, onDensityChange)
                 Text(dashboardDensity.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
+        }
         }
         if (settingsSearch.isBlank() || listOf("behavior", "category", "sort", "pin", "preview", "date", "reminder", "notes").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[3]) {
@@ -379,6 +381,7 @@ internal fun SettingsScreen(
                     onChange = onShowNoteTimestampsChange
                 )
             }
+        }
         }
         if (settingsSearch.isBlank() || listOf("editor", "writing", "text", "size", "word", "reading", "count").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[4]) {
@@ -417,6 +420,7 @@ internal fun SettingsScreen(
                     onChange = onShowEditorCountsChange
                 )
             }
+        }
         }
         if (settingsSearch.isBlank() || listOf("data", "backup", "restore", "export", "import", "archive").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[5]) {
