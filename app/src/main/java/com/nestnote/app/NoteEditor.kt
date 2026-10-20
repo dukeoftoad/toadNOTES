@@ -252,7 +252,7 @@ internal fun NoteEditorContent(
         mutableIntStateOf(original?.color?.coerceIn(0, noteAccents.lastIndex) ?: 0)
     }
     var backgroundIndex by rememberSaveable(original?.id) {
-        mutableIntStateOf(original?.background?.coerceIn(0, 5) ?: 0)
+        mutableIntStateOf(original?.background?.coerceIn(0, 9) ?: 0)
     }
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
