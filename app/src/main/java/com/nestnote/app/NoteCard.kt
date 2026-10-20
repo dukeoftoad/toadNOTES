@@ -156,16 +156,18 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
     Card(
         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = { menu = true }),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (note.background > 0) Color.Transparent else tint, contentColor = cardText),
+        colors = CardDefaults.cardColors(containerColor = if (note.background > 0 || note.wallpaperUri.isNotBlank()) Color.Transparent else tint, contentColor = cardText),
         border = BorderStroke(1.dp, colors.outlineVariant)
     ) {
         Box {
-            if (note.background > 0) {
+            if (note.wallpaperUri.isNotBlank()) {
+                NoteCustomWallpaper(note.wallpaperUri, Modifier.matchParentSize())
+            } else if (note.background > 0) {
                 NoteWallpaperArtwork(note.background, Modifier.matchParentSize())
             }
             Column(
                 Modifier.fillMaxWidth()
-                    .background(if (note.background > 0) noteTints[note.color.coerceIn(0, noteTints.lastIndex)].copy(alpha = 0.68f) else Color.Transparent)
+                    .background(if (note.background > 0 || note.wallpaperUri.isNotBlank()) noteTints[note.color.coerceIn(0, noteTints.lastIndex)].copy(alpha = 0.68f) else Color.Transparent)
                     .padding(if (compact) 10.dp else 16.dp)
             ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
