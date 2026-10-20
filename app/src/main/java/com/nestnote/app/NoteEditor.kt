@@ -131,7 +131,7 @@ private class VoiceMarkerVisualTransformation(
     private val chipBackground: Color,
     private val chipForeground: Color
 ) : VisualTransformation {
-    private val markerRegex = Regex("""\\[\\[voice:([^\\]\\n]+)\\]\\]""")
+    private val markerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
     private val label = "  🎙 Voice recording  "
 
     override fun filter(text: AnnotatedString): TransformedText {
