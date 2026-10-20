@@ -25,7 +25,8 @@ data class NestNote(
     val created: Long = System.currentTimeMillis(),
     val archived: Boolean = false,
     val background: Int = 0,
-    val wallpaperUri: String = ""
+    val wallpaperUri: String = "",
+    val format: String = "plain"
 )
 
 data class MergeResult(val notes: List<NestNote>, val added: Int, val updated: Int)
@@ -184,6 +185,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     put("pinned", n.pinned); put("reminder", n.reminder)
                     put("updated", n.updated); put("created", n.created); put("archived", n.archived)
                     put("background", n.background.coerceIn(0, 9)); put("wallpaperUri", n.wallpaperUri)
+                    put("format", if (n.format == "markdown") "markdown" else "plain")
                 })
             }
             return array.toString()
@@ -240,7 +242,8 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     created = o.optLong("created", o.optLong("id", System.currentTimeMillis())),
                     archived = o.optBoolean("archived", false),
                     background = o.optInt("background", 0).coerceIn(0, 9),
-                    wallpaperUri = o.optString("wallpaperUri", "")
+                    wallpaperUri = o.optString("wallpaperUri", ""),
+                    format = if (o.optString("format", "plain") == "markdown") "markdown" else "plain"
                 )
             }
             require(isValidNoteCollection(decoded)) { "invalid note records" }
