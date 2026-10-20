@@ -291,7 +291,7 @@ internal fun InlineVoicePlayer(
                     )
                     Text(
                         if (isActive) {
-                            "\u0024{formatInlineTime(positionMs)} / \u0024{formatInlineTime(shownDuration)}"
+                            formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
                         } else {
                             formatInlineTime(fallbackDurationMs)
                         },
