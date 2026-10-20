@@ -315,7 +315,9 @@ internal fun InlineVoicePlayer(
                 }
             }
         }
-        if (shownDuration >= 60_000) {
+        // Seeking must be available for short clips too; hiding the slider below
+        // one minute made recordings under 60 seconds impossible to scrub.
+        if (shownDuration > 0) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,

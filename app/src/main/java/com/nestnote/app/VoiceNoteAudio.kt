@@ -52,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -304,6 +305,8 @@ internal fun VoiceNoteControls(
     var reviewPaused by remember { mutableStateOf(false) }
     var reviewPositionMs by remember { mutableIntStateOf(0) }
     var reviewDurationMs by remember { mutableIntStateOf(0) }
+    var seekingReview by remember { mutableStateOf(false) }
+    var pendingReviewSeekMs by remember { mutableIntStateOf(0) }
     var reviewSession by remember { mutableStateOf<PcmVoicePlayback?>(null) }
 
     // Import state
@@ -789,10 +792,26 @@ internal fun VoiceNoteControls(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    if (previewingReview || reviewPositionMs > 0) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
+                    if (shownDuration > 0 && (previewingReview || reviewPositionMs > 0)) {
+                        Slider(
+                            value = (if (seekingReview) pendingReviewSeekMs else reviewPositionMs)
+                                .coerceIn(0, shownDuration).toFloat(),
+                            onValueChange = { value ->
+                                seekingReview = true
+                                pendingReviewSeekMs = value.toInt().coerceIn(0, shownDuration)
+                            },
+                            onValueChangeFinished = {
+                                val target = pendingReviewSeekMs.coerceIn(0, shownDuration)
+                                reviewPositionMs = target
+                                reviewSession?.seekTo(target.toLong())
+                                seekingReview = false
+                            },
+                            enabled = previewingReview && reviewSession != null,
+                            valueRange = 0f..shownDuration.toFloat(),
+                            modifier = Modifier.fillMaxWidth().semantics {
+                                contentDescription = "Seek recording preview"
+                                stateDescription = "${formatPlaybackTime(if (seekingReview) pendingReviewSeekMs else reviewPositionMs)} of ${formatPlaybackTime(shownDuration)}"
+                            }
                         )
                     }
                     Row(
@@ -832,8 +851,11 @@ internal fun VoiceNoteControls(
                                             val player = PcmVoicePlayback(
                                                 context, attachmentStore, reviewAttachment,
                                                 onProgress = { positionMs, durationMs ->
-                                                    reviewPositionMs = positionMs
-                                                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                    if (!seekingReview) {
+                                                        reviewPositionMs = positionMs
+                                                            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                                                        pendingReviewSeekMs = reviewPositionMs
+                                                    }
                                                     reviewDurationMs = durationMs
                                                         .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                                                 }

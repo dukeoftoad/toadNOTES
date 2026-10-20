@@ -3,6 +3,7 @@
 ## v1.3.2 — Upcoming
 
 ### Fixed (Android CI)
+- Show the inline voice-note seek slider for short recordings as well as long clips; previously, seeking was hidden for every clip shorter than 60 seconds.
 - Run Android lint, unit tests, debug/release APK builds, and instrumentation-test compilation through the repository Gradle wrapper to keep the Gradle version consistent with the project.
 - Remove hardcoded local Java 17 paths from `gradle.properties` so CI uses the Java installation configured on the runner.
 - Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
