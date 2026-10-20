@@ -1199,11 +1199,13 @@ internal fun NoteEditorContent(
                                 if (editorMode == EditorMode.Editing) onBodyChange(it)
                             },
                             readOnly = editorMode == EditorMode.Locked,
-                            visualTransformation = if (editorMode == EditorMode.Editing) {
-                                VoiceMarkerVisualTransformation(colors.primaryContainer, colors.onPrimaryContainer, voiceNames)
-                            } else {
-                                VisualTransformation.None
-                            },
+                            // Keep attachment IDs out of both editable and read-only
+                            // views. The stored body remains the canonical marker text.
+                            visualTransformation = VoiceMarkerVisualTransformation(
+                                colors.primaryContainer,
+                                colors.onPrimaryContainer,
+                                voiceNames
+                            ),
                             modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = textSize.bodySp.sp,
