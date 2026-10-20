@@ -656,6 +656,8 @@ internal fun BackupRestoreScreen(
     lastBackupAt: Long,
     backupStatus: String,
     automaticBackupEnabled: Boolean,
+    automaticBackupLastRun: Long,
+    automaticBackupStatus: String,
     onAutomaticBackupChange: (Boolean) -> Unit,
     onExportNotes: (Boolean) -> Unit,
     onImportNotes: () -> Unit,
@@ -717,7 +719,7 @@ internal fun BackupRestoreScreen(
                 }
             }
             Text(
-                if (automaticBackupEnabled) "Last run: shown in Backup status. Android may delay background work; backups run only when the system permits. The private copy is not uploaded to cloud storage and may be removed if the app is uninstalled." else "Next run is not scheduled. Enable this option to create a daily local backup.",
+                if (!automaticBackupEnabled) "Next run: not scheduled." else "Last run: " + (if (automaticBackupLastRun > 0L) java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(automaticBackupLastRun)) + " · " + automaticBackupStatus else "Not run yet") + ". Next run: approximately within 24 hours; Android may defer background work. The private copy is not uploaded to cloud storage and may be removed if the app is uninstalled.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant
             )
