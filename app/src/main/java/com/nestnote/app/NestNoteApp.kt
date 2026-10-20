@@ -455,7 +455,6 @@ internal fun NestNoteApp(store: NoteStore) {
                     )
                 } else if (selectedView == "Settings") {
                     SettingsScreen(
-                        focusBackup = false,
                         themeMode = themeMode,
                         onThemeChange = { themeMode = it; savePreference(PREF_THEME, it.name) },
                         dynamicColors = dynamicColors,
@@ -482,10 +481,6 @@ internal fun NestNoteApp(store: NoteStore) {
                         onEditorTextSizeChange = { editorTextSize = it; savePreference(PREF_TEXT_SIZE, it.name) },
                         showEditorCounts = showEditorCounts,
                         onShowEditorCountsChange = { showEditorCounts = it; preferences.edit().putBoolean(PREF_EDITOR_COUNTS, it).apply() },
-                        totalNotes = notes.size,
-                        archivedNotes = notes.count { it.archived },
-                        onExportNotes = { exportLauncher.launch("nestnote-backup.json") },
-                        onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
                         onResetDefaults = { resetPreferences() },
                         onOpenBackupRestore = { selectedView = "Backup" }
                     )
