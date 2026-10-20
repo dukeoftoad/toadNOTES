@@ -652,11 +652,13 @@ internal fun OverviewTile(
 internal fun BackupRestoreScreen(
     totalNotes: Int,
     archivedNotes: Int,
+    pinnedNotes: Int,
     onExportNotes: () -> Unit,
     onImportNotes: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    var showBackupDetails by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier.fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -674,35 +676,51 @@ internal fun BackupRestoreScreen(
             color = colors.onSurfaceVariant
         )
 
-        Surface(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            color = colors.secondaryContainer
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            BackupStatTile(
+                label = "Active",
+                count = (totalNotes - archivedNotes).coerceAtLeast(0),
+                icon = Icons.Default.Edit,
+                modifier = Modifier.weight(1f)
+            )
+            BackupStatTile(
+                label = "Archived",
+                count = archivedNotes,
+                icon = Icons.Default.Archive,
+                modifier = Modifier.weight(1f)
+            )
+            BackupStatTile(
+                label = "Pinned",
+                count = pinnedNotes,
+                icon = Icons.Default.PushPin,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        SettingsSection(title = "Backup contents", subtitle = "Know what travels with your backup") {
             Row(
-                modifier = Modifier.padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    Icons.Default.Archive,
-                    contentDescription = null,
-                    tint = colors.onSecondaryContainer,
-                    modifier = Modifier.size(28.dp)
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        "$totalNotes notes on this device",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.onSecondaryContainer
-                    )
-                    Text(
-                        "$archivedNotes archived",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSecondaryContainer
-                    )
-                }
+                Icon(Icons.Default.Check, contentDescription = null, tint = colors.primary)
+                Text("Note titles, text, categories, and note settings")
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = colors.primary)
+                Text("Pinned and archived note state")
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = null, tint = colors.error)
+                Text("Voice recordings and audio attachments are not included")
             }
         }
 
@@ -726,15 +744,10 @@ internal fun BackupRestoreScreen(
             }
         }
 
-        SettingsSection(title = "Restore a backup", subtitle = "Add notes from a backup file") {
+        SettingsSection(title = "Restore a backup", subtitle = "Review before applying changes") {
             Text(
-                "Choose a NESTNOTE backup file to review its changes before restoring.",
+                "Choose a NESTNOTE backup file to inspect and review its changes before restoring.",
                 style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                "Restore merges notes with your existing notes; it does not delete notes that aren't in the backup. If a note exists in both places, the most recently edited version is kept.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant
             )
             OutlinedButton(
                 onClick = onImportNotes,
@@ -744,6 +757,57 @@ internal fun BackupRestoreScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("Choose backup file")
             }
+            TextButton(
+                onClick = { showBackupDetails = !showBackupDetails },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (showBackupDetails) "Hide restore rules" else "How restore works")
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    if (showBackupDetails) Icons.Default.Close else Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            AnimatedVisibility(visible = showBackupDetails) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "• Your existing notes are not cleared.\n• Notes in the backup are merged with local notes.\n• When the same note exists in both places, the most recently edited version is kept.\n• You can cancel at the review step before changes are applied.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun BackupStatTile(
+    label: String,
+    count: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = colors.surfaceContainerLow,
+        border = BorderStroke(1.dp, colors.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.primary)
+            Text(
+                count.toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(label, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
         }
     }
 }
