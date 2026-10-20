@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledIconButton
@@ -31,6 +33,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -309,6 +313,50 @@ internal fun InlineVoicePlayer(
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
+            }
+        }
+        if (shownDuration >= 60_000) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    formatInlineTime(if (isActive) positionMs else 0),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = if (isActive) pendingSeekMs.coerceIn(0, shownDuration).toFloat() else 0f,
+                    onValueChange = { value ->
+                        if (isActive) {
+                            seekingPlayback = true
+                            pendingSeekMs = value.toInt()
+                        }
+                    },
+                    onValueChangeFinished = {
+                        if (isActive) {
+                            positionMs = pendingSeekMs
+                            runCatching { player?.seekTo(pendingSeekMs.toLong()) }
+                        }
+                        seekingPlayback = false
+                    },
+                    valueRange = 0f..shownDuration.coerceAtLeast(1).toFloat(),
+                    enabled = isActive && shownDuration > 0,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier.weight(1f).height(28.dp).semantics {
+                        contentDescription = "Seek voice note"
+                    }
+                )
+                Text(
+                    formatInlineTime(shownDuration),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
