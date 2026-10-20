@@ -97,10 +97,15 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -115,6 +120,90 @@ import kotlin.math.roundToInt
 
 internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
     (measuredHeight * fraction).roundToInt().coerceAtLeast(0)
+
+
+/**
+ * Hides internal attachment IDs while editing without changing the saved note body.
+ * Each marker is displayed as a compact, styled voice-note label. Offset mapping
+ * keeps text selection and cursor movement anchored to the underlying marker.
+ */
+private class VoiceMarkerVisualTransformation(
+    private val chipBackground: Color,
+    private val chipForeground: Color
+) : VisualTransformation {
+    private val markerRegex = Regex("""\\[\\[voice:([^\\]\\n]+)\\]\\]""")
+    private val label = "  🎙 Voice recording  "
+
+    override fun filter(text: AnnotatedString): TransformedText {
+        val matches = markerRegex.findAll(text.text).toList()
+        if (matches.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+
+        val output = AnnotatedString.Builder()
+        val ranges = mutableListOf<MarkerOffset>()
+        var sourceCursor = 0
+        var outputCursor = 0
+
+        matches.forEach { match ->
+            val prefix = text.text.substring(sourceCursor, match.range.first)
+            output.append(prefix)
+            outputCursor += prefix.length
+            val transformedStart = outputCursor
+            output.pushStyle(
+                SpanStyle(
+                    color = chipForeground,
+                    background = chipBackground,
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+            output.append(label)
+            output.pop()
+            outputCursor += label.length
+            ranges += MarkerOffset(match.range.first, match.range.last + 1, transformedStart, outputCursor)
+            sourceCursor = match.range.last + 1
+        }
+        output.append(text.text.substring(sourceCursor))
+
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                val safe = offset.coerceIn(0, text.length)
+                var delta = 0
+                for (range in ranges) {
+                    if (safe < range.originalStart) break
+                    if (safe <= range.originalEnd) {
+                        return if (safe == range.originalEnd) range.transformedEnd
+                        else range.transformedStart
+                    }
+                    delta += (range.transformedEnd - range.transformedStart) -
+                        (range.originalEnd - range.originalStart)
+                }
+                return (safe + delta).coerceIn(0, output.length)
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                val safe = offset.coerceIn(0, output.length)
+                var delta = 0
+                for (range in ranges) {
+                    if (safe < range.transformedStart) break
+                    if (safe <= range.transformedEnd) {
+                        return if (safe == range.transformedEnd) range.originalEnd
+                        else range.originalStart
+                    }
+                    delta += (range.originalEnd - range.originalStart) -
+                        (range.transformedEnd - range.transformedStart)
+                }
+                return (safe + delta).coerceIn(0, text.length)
+            }
+        }
+        return TransformedText(output.toAnnotatedString(), mapping)
+    }
+
+    private data class MarkerOffset(
+        val originalStart: Int,
+        val originalEnd: Int,
+        val transformedStart: Int,
+        val transformedEnd: Int
+    )
+}
 
 /**
  * Unified create/edit note editor.
@@ -855,6 +944,11 @@ internal fun NoteEditorContent(
                                 if (editorMode == EditorMode.Editing) onBodyChange(it)
                             },
                             readOnly = editorMode == EditorMode.Locked,
+                            visualTransformation = if (editorMode == EditorMode.Editing) {
+                                VoiceMarkerVisualTransformation(colors.primaryContainer, colors.onPrimaryContainer)
+                            } else {
+                                VisualTransformation.None
+                            },
                             modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = textSize.bodySp.sp,
