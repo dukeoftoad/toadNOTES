@@ -243,6 +243,30 @@ internal fun SettingsScreen(
                         )
                     }
                 }
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                SettingLabel("Custom note wallpapers")
+                Text(
+                    "Open any note and select the palette tool. In the Colour tab, tap + to choose an image from your device. The wallpaper is saved with that note; use the Background tab to return to an illustrated background.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = colors.secondaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Palette, contentDescription = null, tint = colors.onSecondaryContainer)
+                        Column(Modifier.weight(1f)) {
+                            Text("Personalize each note", style = MaterialTheme.typography.titleSmall, color = colors.onSecondaryContainer)
+                            Text("Choose a color and background independently for each note.", style = MaterialTheme.typography.bodySmall, color = colors.onSecondaryContainer)
+                        }
+                    }
+                }
             }
         }
         item(key = SettingsItemKeys[2]) {
