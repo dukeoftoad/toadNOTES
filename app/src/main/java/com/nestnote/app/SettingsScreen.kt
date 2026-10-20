@@ -440,7 +440,7 @@ internal fun SettingsScreen(
                     onClick = onOpenBackupRestore,
                     modifier = Modifier.fillMaxWidth().testTag("settings_open_backup_restore")
                 ) {
-                    Icon(Icons.Default.Backup, contentDescription = null)
+                    Icon(Icons.Default.Archive, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Backup & restore")
                     Spacer(Modifier.weight(1f))
@@ -683,7 +683,7 @@ internal fun BackupRestoreScreen(
                 onClick = onExportNotes,
                 modifier = Modifier.fillMaxWidth().testTag("settings_backup")
             ) {
-                Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Back up notes")
             }
@@ -691,7 +691,7 @@ internal fun BackupRestoreScreen(
                 onClick = onImportNotes,
                 modifier = Modifier.fillMaxWidth().testTag("settings_restore")
             ) {
-                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Restore backup")
             }
