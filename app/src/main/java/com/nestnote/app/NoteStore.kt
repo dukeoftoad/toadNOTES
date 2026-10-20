@@ -193,7 +193,9 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
         fun encodeBackup(notes: List<NestNote>): String {
             require(isValidNoteCollection(notes)) { "invalid note records" }
             return JSONObject()
+                .put("format", "com.nestnote.backup")
                 .put("schemaVersion", CURRENT_BACKUP_SCHEMA_VERSION)
+                .put("createdAt", System.currentTimeMillis())
                 .put("notes", JSONArray(encode(notes)))
                 .toString()
         }
@@ -205,6 +207,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                 decode(raw, requireFields = true)
             } else {
                 val envelope = JSONObject(raw)
+                require(envelope.optString("format", "com.nestnote.backup") == "com.nestnote.backup") { "unsupported backup format" }
                 require(envelope.optInt("schemaVersion", -1) == CURRENT_BACKUP_SCHEMA_VERSION) {
                     "unsupported backup schema"
                 }
