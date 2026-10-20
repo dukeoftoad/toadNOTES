@@ -1155,22 +1155,29 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { previewVisible = !previewVisible }) {
-                            Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
+                    // Reading mode renders the real inline voice players by default.
+                    // Markdown preview remains an optional editing aid, not a prerequisite
+                    // for playing attachments from a saved note.
+                    if (editorMode == EditorMode.Editing) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { previewVisible = !previewVisible }) {
+                                Text(if (previewVisible) "Edit note" else "Preview formatting")
+                            }
                         }
                     }
 
-                    if (previewVisible) {
+                    if (previewVisible || editorMode == EditorMode.Locked) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f),
                             shape = RoundedCornerShape(12.dp),
                             color = colors.surface.copy(alpha = 0.82f),
-                            border = BorderStroke(1.dp, colors.outlineVariant)
+                            border = if (editorMode == EditorMode.Editing) {
+                                BorderStroke(1.dp, colors.outlineVariant)
+                            } else null
                         ) {
                             PreviewWithInlineVoice(
                                 body = body,
@@ -1185,13 +1192,15 @@ internal fun NoteEditorContent(
                                     .padding(horizontal = 14.dp, vertical = 10.dp)
                             )
                         }
-                        Text(
-                            "Preview supports basic headings, emphasis, inline code, links, " +
-                                "simple lists, and inline voice notes.",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = muted
-                        )
+                        if (editorMode == EditorMode.Editing) {
+                            Text(
+                                "Preview supports basic headings, emphasis, inline code, links, " +
+                                    "simple lists, and inline voice notes.",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = muted
+                            )
+                        }
                     } else {
                         BasicTextField(
                             value = bodyValue,
