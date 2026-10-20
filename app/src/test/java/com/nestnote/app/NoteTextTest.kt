@@ -376,4 +376,37 @@ class NoteTextTest {
         )
     }
 
+
+    @Test
+    fun voiceSegmentsPreserveWhitespaceAroundMarkers() {
+        val id = "11111111-1111-4111-8111-111111111111"
+        val body = "first paragraph\\n\\n[[voice:$id]]\\n\\nlast paragraph"
+
+        assertEquals(
+            listOf(
+                NoteText.VoiceSegment("first paragraph\\n\\n", null),
+                NoteText.VoiceSegment("", id),
+                NoteText.VoiceSegment("\\n\\nlast paragraph", null)
+            ),
+            NoteText.voiceSegments(body)
+        )
+    }
+
+    @Test
+    fun voiceSegmentsPreserveLeadingAndTrailingWhitespaceAndAdjacentMarkers() {
+        val first = "11111111-1111-4111-8111-111111111111"
+        val second = "22222222-2222-4222-8222-222222222222"
+        val body = "\\n[[voice:$first]][[voice:$second]]\\n"
+
+        assertEquals(
+            listOf(
+                NoteText.VoiceSegment("\\n", null),
+                NoteText.VoiceSegment("", first),
+                NoteText.VoiceSegment("", second),
+                NoteText.VoiceSegment("\\n", null)
+            ),
+            NoteText.voiceSegments(body)
+        )
+    }
+
 }
