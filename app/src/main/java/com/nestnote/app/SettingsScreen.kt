@@ -655,6 +655,10 @@ internal fun BackupRestoreScreen(
     pinnedNotes: Int,
     lastBackupAt: Long,
     backupStatus: String,
+    automaticBackupEnabled: Boolean,
+    automaticBackupLastRun: Long,
+    automaticBackupStatus: String,
+    onAutomaticBackupChange: (Boolean) -> Unit,
     onExportNotes: (Boolean) -> Unit,
     onImportNotes: () -> Unit,
     modifier: Modifier = Modifier
@@ -700,6 +704,36 @@ internal fun BackupRestoreScreen(
                 count = pinnedNotes,
                 icon = Icons.Default.PushPin,
                 modifier = Modifier.weight(1f)
+            )
+        }
+
+        SettingsSection(title = "Automatic backup", subtitle = "Scheduled copies stay on this device") {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onAutomaticBackupChange(!automaticBackupEnabled) }.padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = automaticBackupEnabled, onCheckedChange = onAutomaticBackupChange)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Enable daily automatic backup")
+                    Text("Saves the latest copy in NESTNOTE's private app storage.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
+            Text(
+                if (!automaticBackupEnabled) "Next run: not scheduled." else "Last run: " + (if (automaticBackupLastRun > 0L) java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(automaticBackupLastRun)) + " · " + automaticBackupStatus else "Not run yet") + ". Next run: approximately within 24 hours; Android may defer background work. The private copy is not uploaded to cloud storage and may be removed if the app is uninstalled.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        }
+
+        SettingsSection(title = "Privacy and portability", subtitle = "Understand where your backup goes") {
+            Text(
+                "Manual exports are saved only to the location you choose in Android's save dialog. Exporting does not upload or sync a file to the cloud; a cloud provider is involved only if you explicitly choose its location.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                "The JSON backup has a format identifier, schema version, creation timestamp, and named note fields so future versions can validate and migrate it. Password-protected export is not offered yet; keep exported files somewhere private.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
             )
         }
 

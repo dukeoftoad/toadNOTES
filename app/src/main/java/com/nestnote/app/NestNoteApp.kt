@@ -15,6 +15,10 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -149,6 +153,7 @@ internal fun NestNoteApp(store: NoteStore) {
     var storageLoaded by remember { mutableStateOf(false) }
     var lastBackupAt by remember { mutableLongStateOf(preferences.getLong("backup_last_success_at", 0L)) }
     var backupStatus by remember { mutableStateOf(preferences.getString("backup_last_status", "Not yet backed up") ?: "Not yet backed up") }
+    var automaticBackupEnabled by remember { mutableStateOf(preferences.getBoolean("automatic_backup_enabled", false)) }
     var storageRecoveryRequired by remember { mutableStateOf(false) }
     var showStorageRecoveryDialog by remember { mutableStateOf(false) }
     LaunchedEffect(store) {
@@ -316,7 +321,7 @@ internal fun NestNoteApp(store: NoteStore) {
             }.getOrNull()
             val incoming = raw?.let { NoteStore.decodeBackup(it) }
             val message = if (incoming == null) {
-                "That file isn't a valid NESTNOTE backup"
+                "Couldn't restore this file. Choose a NESTNOTE JSON backup with a supported schema and valid note records. Your existing notes were not changed."
             } else {
                 pendingRestore = incoming
                 "Backup validated. Review the restore before applying it."
@@ -495,6 +500,20 @@ internal fun NestNoteApp(store: NoteStore) {
                         pinnedNotes = notes.count { it.pinned && !it.archived },
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
+                        automaticBackupEnabled = automaticBackupEnabled,
+                        automaticBackupLastRun = preferences.getLong("automatic_backup_last_run", 0L),
+                        automaticBackupStatus = preferences.getString("automatic_backup_last_status", "Not run yet") ?: "Not run yet",
+                        onAutomaticBackupChange = { enabled ->
+                            automaticBackupEnabled = enabled
+                            preferences.edit().putBoolean("automatic_backup_enabled", enabled).apply()
+                            val workManager = WorkManager.getInstance(context)
+                            if (enabled) {
+                                val request = PeriodicWorkRequestBuilder<AutomaticBackupWorker>(24, TimeUnit.HOURS).build()
+                                workManager.enqueueUniquePeriodicWork("nestnote_automatic_backup", ExistingPeriodicWorkPolicy.UPDATE, request)
+                            } else {
+                                workManager.cancelUniqueWork("nestnote_automatic_backup")
+                            }
+                        },
                         onExportNotes = { includeArchived ->
                             exportArchivedNotes = includeArchived
                             exportLauncher.launch("nestnote-backup.json")
@@ -746,11 +765,11 @@ internal fun NestNoteApp(store: NoteStore) {
             val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
             AlertDialog(
                 onDismissRequest = { pendingRestore = null },
-                title = { Text("Review backup restore") },
+                title = { Text("Review backup merge") },
                 text = {
                     Text(
                         if (withinNoteLimit) {
-                            "This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Voice recordings are not included. Notes not present in the backup will not be deleted."
+                            "Preview: ${preview.added} notes will be added, ${preview.updated} existing notes will be updated, and ${(incoming.size - preview.added - preview.updated).coerceAtLeast(0)} will be skipped. Matching IDs are updated only when the backup note is newer; otherwise the existing note is kept. Notes absent from the backup are never deleted. Voice recordings and audio attachments are not included."
                         } else {
                             "This restore would exceed NESTNOTE's ${NoteStore.MAX_NOTES}-note limit. Remove notes or choose a smaller backup before restoring."
                         }
@@ -762,12 +781,17 @@ internal fun NestNoteApp(store: NoteStore) {
                         onClick = {
                             if (persist(preview.notes, allowRecovery = true)) {
                                 pendingRestore = null
+                                selectedView = "Home"
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
+                                    snackbarHostState.showSnackbar("Restore complete: ${preview.added} added, ${preview.updated} updated, ${(incoming.size - preview.added - preview.updated).coerceAtLeast(0)} skipped.")
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Restore couldn't be saved. Your previous notes remain available.")
                                 }
                             }
                         }
-                    ) { Text("Restore notes") }
+                    ) { Text("Merge backup") }
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
