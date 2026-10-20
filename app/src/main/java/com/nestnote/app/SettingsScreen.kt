@@ -186,6 +186,7 @@ internal fun SettingsScreen(
 ) {
     val colors = MaterialTheme.colorScheme
     var confirmReset by rememberSaveable { mutableStateOf(false) }
+    var settingsSearch by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val settingsScope = rememberCoroutineScope()
     val settingsDestinations = listOf(
@@ -210,9 +211,26 @@ internal fun SettingsScreen(
         item(key = SettingsItemKeys[0]) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Make NESTNOTE feel like yours.", color = colors.onSurfaceVariant)
-            Spacer(Modifier.height(4.dp))
-            Text("Jump to", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
-            Row(
+            OutlinedTextField(
+                value = settingsSearch,
+                onValueChange = { settingsSearch = it },
+                modifier = Modifier.fillMaxWidth().testTag("settings_search"),
+                singleLine = true,
+                label = { Text("Search settings") },
+                placeholder = { Text("Try theme, sort, text size…") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (settingsSearch.isNotBlank()) {
+                        IconButton(onClick = { settingsSearch = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear settings search")
+                        }
+                    }
+                }
+            )
+            if (settingsSearch.isBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Jump to", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+                Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -237,8 +255,10 @@ internal fun SettingsScreen(
                         }
                     )
                 }
+                }
             }
         }
+        if (settingsSearch.isBlank() || listOf("appearance", "theme", "wallpaper", "color", "colour", "dark", "oled", "dynamic").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[1]) {
             SettingsSection(title = "Appearance", subtitle = "Colors that fit your device") {
                 SettingLabel("Theme")
@@ -305,6 +325,7 @@ internal fun SettingsScreen(
                 }
             }
         }
+        if (settingsSearch.isBlank() || listOf("layout", "dashboard", "density", "grid", "list", "compact").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[2]) {
             SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
                 SettingLabel("Dashboard view")
@@ -324,6 +345,7 @@ internal fun SettingsScreen(
                 Text(dashboardDensity.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
+        if (settingsSearch.isBlank() || listOf("behavior", "category", "sort", "pin", "preview", "date", "reminder", "notes").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[3]) {
             SettingsSection(title = "Note behavior", subtitle = "Defaults for new and existing notes") {
                 SettingLabel("Default category for new notes")
@@ -358,6 +380,7 @@ internal fun SettingsScreen(
                 )
             }
         }
+        if (settingsSearch.isBlank() || listOf("editor", "writing", "text", "size", "word", "reading", "count").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[4]) {
             SettingsSection(title = "Note editor", subtitle = "Choose how writing feels") {
                 SettingLabel("Open editor as")
@@ -395,6 +418,7 @@ internal fun SettingsScreen(
                 )
             }
         }
+        if (settingsSearch.isBlank() || listOf("data", "backup", "restore", "export", "import", "archive").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[5]) {
             SettingsSection(title = "Data", subtitle = "Backup and manage your notes") {
                 Text(
@@ -418,6 +442,7 @@ internal fun SettingsScreen(
                 }
             }
         }
+        }
         item(key = SettingsItemKeys[6]) {
             OutlinedButton(
                 onClick = { confirmReset = true },
@@ -425,6 +450,12 @@ internal fun SettingsScreen(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.error)
             ) {
                 Text("Reset settings to defaults")
+            }
+        }
+        if (settingsSearch.isNotBlank() && listOf("appearance", "theme", "wallpaper", "color", "colour", "dark", "oled", "dynamic", "layout", "dashboard", "density", "grid", "list", "compact", "behavior", "category", "sort", "pin", "preview", "date", "reminder", "notes", "editor", "writing", "text", "size", "word", "reading", "count", "data", "backup", "restore", "export", "import", "archive").none { settingsSearch.contains(it, ignoreCase = true) }) {
+            item(key = "settings_no_search_results") {
+                Text("No matching settings", style = MaterialTheme.typography.titleMedium)
+                Text("Try searching for theme, layout, category, text size, or backup.", color = colors.onSurfaceVariant)
             }
         }
     }
