@@ -9,6 +9,8 @@
 - Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
 
 ### Testing and release readiness
+- Add Robolectric regression tests for plaintext and encrypted-v1 note migrations, migration idempotence, corrupt/tampered payload recovery, and preservation of unreadable source data.
+- Add Compose settings regressions for search filtering and fallback from an obsolete persisted sort value.
 - CI configuration fixes address Gradle provisioning and Java-home failures; confirm a complete green workflow run before release.
 - Device-only gesture interruption, predictive-back cancellation, and editor integration checks remain pending.
 
