@@ -45,7 +45,7 @@ jobs:
           ps -ef | grep -E '[e]mulator|[q]emu|[a]db' > emulator-diagnostics/processes.txt || true
           for dir in "$HOME/.android/avd" /tmp "$ANDROID_HOME/emulator"; do
             if [[ -d "$dir" ]]; then
-              find "$dir" -maxdepth 4 -type f \\\n                \( -iname '*emulator*.log' -o -iname 'emu*.log' -o -iname '*crash*.log' \) \\\n                -print -exec cp --parents {} emulator-diagnostics/ \\; 2>/dev/null || true
+              find "$dir" -maxdepth 4 -type f \( -iname '*emulator*.log' -o -iname 'emu*.log' -o -iname '*crash*.log' \) -print -exec cp --parents {} emulator-diagnostics/ \; 2>/dev/null || true
             fi
           done
       - uses: actions/upload-artifact@v4
