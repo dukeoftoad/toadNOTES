@@ -9,6 +9,8 @@ import android.content.Intent
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -51,6 +53,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Lock
@@ -266,6 +269,18 @@ internal fun NoteEditorContent(
     var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
+    val markdownExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use {
+                    it.write(NoteText.toMarkdown(title, body))
+                } ?: error("Unable to open destination")
+                android.widget.Toast.makeText(context, "Markdown file saved", android.widget.Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                android.widget.Toast.makeText(context, "Could not save Markdown file", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
     val editorModeViewModel: EditorModeViewModel =
         viewModel(key = "editor-mode-${original?.id ?: draftNoteId}")
@@ -619,6 +634,16 @@ internal fun NoteEditorContent(
                                     enabled = title.isNotBlank() || body.isNotBlank(),
                                     onClick = { moreMenu = false; shareNote() },
                                     leadingIcon = { Icon(Icons.Default.Share, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Convert to Markdown file") },
+                                    enabled = title.isNotBlank() || body.isNotBlank(),
+                                    onClick = {
+                                        moreMenu = false
+                                        val safeTitle = title.trim().ifBlank { "note" }.replace(Regex("""[\\/:*?"<>|]"""), "_")
+                                        markdownExportLauncher.launch("$safeTitle.md")
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Download, null) }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Copy text") },
