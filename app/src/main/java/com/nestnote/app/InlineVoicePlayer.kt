@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +77,7 @@ private const val VOICE_ENVELOPE_OVERHEAD = 32L        // 4 magic + 12 IV + 16 G
  *    removes the marker from the body, deletes the manifest entry and the
  *    encrypted payload, and clears `activePlayerId` if it was this attachment.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun InlineVoicePlayer(
     noteId: Long,
