@@ -182,7 +182,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     put("category", n.category); put("color", n.color)
                     put("pinned", n.pinned); put("reminder", n.reminder)
                     put("updated", n.updated); put("created", n.created); put("archived", n.archived)
-                    put("background", n.background.coerceIn(0, 5))
+                    put("background", n.background.coerceIn(0, 9))
                 })
             }
             return array.toString()
@@ -235,7 +235,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     updated = o.optLong("updated"),
                     created = o.optLong("created", o.optLong("id", System.currentTimeMillis())),
                     archived = o.optBoolean("archived", false),
-                    background = o.optInt("background", 0).coerceIn(0, 5)
+                    background = o.optInt("background", 0).coerceIn(0, 9)
                 )
             }
             require(isValidNoteCollection(decoded)) { "invalid note records" }
