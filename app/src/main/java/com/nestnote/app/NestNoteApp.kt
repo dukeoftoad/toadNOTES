@@ -746,7 +746,7 @@ internal fun NestNoteApp(store: NoteStore) {
             val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
             AlertDialog(
                 onDismissRequest = { pendingRestore = null },
-                title = { Text("Review backup restore") },
+                title = { Text("Review backup merge") },
                 text = {
                     Text(
                         if (withinNoteLimit) {
@@ -772,7 +772,7 @@ internal fun NestNoteApp(store: NoteStore) {
                                 }
                             }
                         }
-                    ) { Text("Restore notes") }
+                    ) { Text("Merge backup") }
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
