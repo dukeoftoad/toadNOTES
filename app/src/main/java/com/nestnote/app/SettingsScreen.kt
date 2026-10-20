@@ -653,12 +653,15 @@ internal fun BackupRestoreScreen(
     totalNotes: Int,
     archivedNotes: Int,
     pinnedNotes: Int,
-    onExportNotes: () -> Unit,
+    lastBackupAt: Long,
+    backupStatus: String,
+    onExportNotes: (Boolean) -> Unit,
     onImportNotes: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
     var showBackupDetails by rememberSaveable { mutableStateOf(false) }
+    var includeArchivedInBackup by rememberSaveable { mutableStateOf(true) }
     Column(
         modifier.fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -724,6 +727,16 @@ internal fun BackupRestoreScreen(
             }
         }
 
+        SettingsSection(title = "Backup status", subtitle = "Know when your notes were last protected") {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(if (backupStatus == "Success") Icons.Default.Check else Icons.Default.Archive, contentDescription = null, tint = if (backupStatus == "Success") colors.primary else colors.onSurfaceVariant)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(if (lastBackupAt > 0L) "Last backup: " + java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastBackupAt)) else "No backup recorded yet", fontWeight = FontWeight.SemiBold)
+                    Text(if (lastBackupAt > 0L) "$backupStatus · backup file saved to the chosen destination" else "Create a backup and save it somewhere safe.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
+        }
+
         SettingsSection(title = "Back up notes", subtitle = "Save a portable copy") {
             Text(
                 "Create a NESTNOTE backup file that you can keep or move to another device.",
@@ -734,14 +747,33 @@ internal fun BackupRestoreScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant
             )
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { includeArchivedInBackup = !includeArchivedInBackup }.padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = includeArchivedInBackup, onCheckedChange = { includeArchivedInBackup = it })
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Include archived notes")
+                    Text("Turn off to export active notes only", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
             FilledTonalButton(
-                onClick = onExportNotes,
+                onClick = { onExportNotes(includeArchivedInBackup) },
                 modifier = Modifier.fillMaxWidth().testTag("settings_backup")
             ) {
                 Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Create backup")
             }
+        }
+
+        SettingsSection(title = "Backup activity", subtitle = "Latest operation") {
+            Text(
+                if (lastBackupAt > 0L) "Most recent backup: " + java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastBackupAt)) + " · " + backupStatus
+                else "No completed backup operation has been recorded yet.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text("A failed export does not update this timestamp. Restore results are reported after a restore is applied.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
 
         SettingsSection(title = "Restore a backup", subtitle = "Review before applying changes") {
