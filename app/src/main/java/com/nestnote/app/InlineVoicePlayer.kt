@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,8 +28,6 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -227,111 +226,87 @@ internal fun InlineVoicePlayer(
     }
 
     val shownDuration = if (durationMs > 0) durationMs else fallbackDurationMs
-    val sliderMax = maxOf(shownDuration, 1)
     val reducedMotion = rememberSystemReducedMotion()
     val displayName = metadata?.displayName?.takeIf { it.isNotBlank() } ?: "Voice recording"
+    var selected by remember(attachmentId) { mutableStateOf(false) }
 
-    Card(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
+            .combinedClickable(
+                onClick = { if (selected) selected = false },
+                onLongClick = { selected = !selected }
+            )
             .semantics { contentDescription = "Voice note: $displayName" },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(
+        Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FilledIconButton(
-                    onClick = {
-                        if (isActive) {
-                            if (paused) {
-                                runCatching { player?.resume() }.onSuccess { paused = false }
-                            } else {
-                                runCatching { player?.pause() }.onSuccess { paused = true }
-                            }
+            FilledIconButton(
+                onClick = {
+                    if (isActive) {
+                        if (paused) {
+                            runCatching { player?.resume() }.onSuccess { paused = false }
                         } else {
-                            onPlayRequested(attachmentId)
+                            runCatching { player?.pause() }.onSuccess { paused = true }
                         }
-                    },
-                    modifier = Modifier.size(46.dp).semantics {
-                        contentDescription = when {
-                            !isActive -> "Play voice note"
-                            paused -> "Resume voice note"
-                            else -> "Pause voice note"
-                        }
+                    } else {
+                        onPlayRequested(attachmentId)
                     }
-                ) {
-                    Icon(
-                        when {
-                            isActive && !paused -> Icons.Default.Pause
-                            else -> Icons.Default.PlayArrow
-                        },
-                        contentDescription = null
-                    )
+                },
+                modifier = Modifier.size(44.dp).semantics {
+                    contentDescription = when {
+                        !isActive -> "Play voice note"
+                        paused -> "Resume voice note"
+                        else -> "Pause voice note"
+                    }
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            ) {
+                Icon(
+                    when {
+                        isActive && !paused -> Icons.Default.Pause
+                        else -> Icons.Default.PlayArrow
+                    },
+                    contentDescription = null
+                )
+            }
+
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         displayName,
+                        modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         if (isActive) {
-                            "${formatInlineTime(positionMs)} / ${formatInlineTime(shownDuration)}"
+                            "\u0024{formatInlineTime(positionMs)} / \u0024{formatInlineTime(shownDuration)}"
                         } else {
                             formatInlineTime(fallbackDurationMs)
                         },
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (isActive && !paused) InlinePlayingEqualizer(reducedMotion)
+                InlineVoiceWaveform(playing = isActive && !paused, reducedMotion = reducedMotion)
+            }
+
+            if (selected) {
                 IconButton(
                     onClick = { onDeleteRequested(attachmentId) },
                     modifier = Modifier.semantics { contentDescription = "Delete voice note" }
                 ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
             }
-            Slider(
-                value = if (isActive) pendingSeekMs.coerceIn(0, sliderMax).toFloat() else 0f,
-                onValueChange = { value ->
-                    if (isActive && shownDuration > 0) {
-                        seekingPlayback = true
-                        pendingSeekMs = value.toInt()
-                    }
-                },
-                onValueChangeFinished = {
-                    if (isActive && shownDuration > 0) {
-                        positionMs = pendingSeekMs
-                        runCatching { player?.seekTo(pendingSeekMs.toLong()) }
-                    }
-                    seekingPlayback = false
-                },
-                valueRange = 0f..sliderMax.toFloat(),
-                enabled = isActive && shownDuration > 0,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
-                ),
-                modifier = Modifier.fillMaxWidth().height(28.dp).semantics {
-                    contentDescription = "Seek voice note"
-                }
-            )
         }
     }
 }
@@ -417,6 +392,40 @@ private fun InlinePlayingEqualizer(reducedMotion: Boolean) {
                     .height(barHeight)
                     .clip(RoundedCornerShape(2.dp))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+            )
+        }
+    }
+}
+
+
+/** Minimal Material-themed waveform; bars animate only while playback is active. */
+@Composable
+private fun InlineVoiceWaveform(playing: Boolean, reducedMotion: Boolean) {
+    val transition = rememberInfiniteTransition(label = "voice-waveform")
+    val levels = listOf(0.28f, 0.62f, 0.42f, 0.9f, 0.5f, 0.74f, 0.34f, 0.82f, 0.46f, 0.68f, 0.3f, 0.58f, 0.4f, 0.76f, 0.36f, 0.64f, 0.48f, 0.86f, 0.32f, 0.56f)
+    Row(
+        modifier = Modifier.fillMaxWidth().height(22.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        levels.forEachIndexed { index, level ->
+            val animated by transition.animateFloat(
+                initialValue = level * 0.55f,
+                targetValue = level,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 360 + (index % 5) * 90, delayMillis = index * 23),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "voice-wave-$index"
+            )
+            val heightFraction = if (playing && !reducedMotion) animated else level * 0.72f
+            Box(
+                Modifier.weight(1f)
+                    .height((20f * heightFraction.coerceIn(0.18f, 1f)).dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(
+                        alpha = if (playing) 0.95f else 0.48f + level * 0.25f
+                    ))
             )
         }
     }
