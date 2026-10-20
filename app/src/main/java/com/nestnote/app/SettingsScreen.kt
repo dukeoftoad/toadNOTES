@@ -17,6 +17,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -72,8 +74,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.MoreVert
@@ -141,6 +143,7 @@ private val SettingsItemKeys = listOf(
     "settings_layout",
     "settings_behavior",
     "settings_editor",
+    "settings_privacy",
     "settings_backup",
     "settings_reset"
 )
@@ -192,13 +195,19 @@ internal fun SettingsScreen(
     var settingsSearch by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val settingsScope = rememberCoroutineScope()
+    // Keep the category rail aligned with the real section order in this LazyColumn.
+    // Icons, selected state, and the spring scroll make navigation easier to scan and use.
     val settingsDestinations = listOf(
-        "Appearance" to 1,
-        "Layout" to 2,
-        "Note behavior" to 3,
-        "Note editor" to 4,
-        "Data" to 5
+        Triple("Appearance", 1, Icons.Default.Palette),
+        Triple("Layout", 2, Icons.Default.GridView),
+        Triple("Notes & search", 3, Icons.Default.Search),
+        Triple("Markdown", 4, Icons.Default.Code),
+        Triple("Privacy", 5, Icons.Default.Lock),
+        Triple("Data", 6, Icons.Default.Archive)
     )
+    val activeSettingsCategory = settingsDestinations
+        .lastOrNull { listState.firstVisibleItemIndex >= it.second }
+        ?.first ?: "Appearance"
 
     // Resolve gracefully if a persisted sort key is no longer valid.
     val selectedSort = SortOptions.firstOrNull { it.first == sortKey } ?: SortOptions.first()
@@ -220,7 +229,7 @@ internal fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().testTag("settings_search"),
                 singleLine = true,
                 label = { Text("Search settings") },
-                placeholder = { Text("Try theme, sort, text size…") },
+                placeholder = { Text("Try theme, Markdown, privacy…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (settingsSearch.isNotBlank()) {
@@ -230,40 +239,46 @@ internal fun SettingsScreen(
                     }
                 }
             )
-            if (settingsSearch.isBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text("Jump to", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
-                Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            AnimatedVisibility(
+                visible = settingsSearch.isBlank(),
+                enter = fadeIn() + slideInVertically(initialOffsetY = { -it / 3 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it / 3 })
             ) {
-                settingsDestinations.forEach { (label, index) ->
-                    AssistChip(
-                        onClick = {
-                            settingsScope.launch { listState.animateScrollToItem(index) }
-                        },
-                        label = { Text(label) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = when (label) {
-                                    "Appearance" -> Icons.Default.Palette
-                                    "Layout" -> Icons.Default.GridView
-                                    "Note behavior" -> Icons.Default.Settings
-                                    "Note editor" -> Icons.Default.Edit
-                                    else -> Icons.Default.Archive
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                        .testTag("settings_category_rail")
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    settingsDestinations.forEach { (label, index, icon) ->
+                        val selected = activeSettingsCategory == label
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                settingsScope.launch {
+                                    listState.animateScrollToItem(index)
+                                }
+                            },
+                            label = { Text(label, maxLines = 1, softWrap = false) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                if (selected) colors.primary else colors.outline
                             )
-                        }
-                    )
-                }
+                        )
+                    }
                 }
             }
         }
         if (settingsSearch.isBlank() || listOf("appearance", "theme", "wallpaper", "color", "colour", "dark", "oled", "dynamic").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[1]) {
-            SettingsSection(title = "Appearance", subtitle = "Colors that fit your device") {
+            SettingsSection(title = "Appearance", subtitle = "Colors that fit your device", icon = Icons.Default.Palette) {
                 SettingLabel("Theme")
                 SegmentedChoice(ThemeMode.entries, themeMode, { it.label }, onThemeChange)
                 if (themeMode == ThemeMode.SYSTEM) {
@@ -331,7 +346,7 @@ internal fun SettingsScreen(
         }
         if (settingsSearch.isBlank() || listOf("layout", "dashboard", "density", "grid", "list", "compact").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[2]) {
-            SettingsSection(title = "Layout", subtitle = "Choose how your notes appear") {
+            SettingsSection(title = "Layout", subtitle = "Choose how your notes appear", icon = Icons.Default.GridView) {
                 SettingLabel("Dashboard view")
                 SegmentedChoice(DashboardLayout.entries, dashboardLayout, { it.label }, onLayoutChange)
                 Text(
@@ -352,7 +367,7 @@ internal fun SettingsScreen(
         }
         if (settingsSearch.isBlank() || listOf("behavior", "category", "sort", "pin", "preview", "date", "reminder", "notes").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[3]) {
-            SettingsSection(title = "Note behavior", subtitle = "Defaults for new and existing notes") {
+            SettingsSection(title = "Notes & search", subtitle = "Defaults for finding and organizing notes", icon = Icons.Default.Search) {
                 SettingLabel("Default category for new notes")
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -386,9 +401,9 @@ internal fun SettingsScreen(
             }
         }
         }
-        if (settingsSearch.isBlank() || listOf("editor", "writing", "text", "size", "word", "reading", "count").any { settingsSearch.contains(it, ignoreCase = true) }) {
+        if (settingsSearch.isBlank() || listOf("editor", "writing", "text", "size", "word", "reading", "count", "markdown").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[4]) {
-            SettingsSection(title = "Note editor", subtitle = "Choose how writing feels") {
+            SettingsSection(title = "Markdown & editor", subtitle = "Choose how writing and reading feel", icon = Icons.Default.Code) {
                 SettingLabel("Open editor as")
                 Column(Modifier.selectableGroup()) {
                     EditorPresentationMode.entries.forEach { mode ->
@@ -425,9 +440,19 @@ internal fun SettingsScreen(
             }
         }
         }
-        if (settingsSearch.isBlank() || listOf("data", "backup", "restore", "export", "import", "archive").any { settingsSearch.contains(it, ignoreCase = true) }) {
+        if (settingsSearch.isBlank() || listOf("privacy", "permissions", "device", "local", "internet", "security").any { settingsSearch.contains(it, ignoreCase = true) }) {
         item(key = SettingsItemKeys[5]) {
-            SettingsSection(title = "Data", subtitle = "Backup and manage your notes") {
+            SettingsSection(title = "Privacy", subtitle = "Your notes stay under your control", icon = Icons.Default.Lock) {
+                Text("NESTNOTE is designed for local-first note taking. Notes are stored on this device and leave it only when you explicitly export or share them.", style = MaterialTheme.typography.bodyMedium)
+                Text("No account is required. Exporting a file does not automatically upload it to cloud storage; the destination is chosen by you in Android's file picker.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                Text("Use Android app permissions and your chosen export destination to control access to your data.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+        }
+        }
+        if (settingsSearch.isBlank() || listOf("data", "backup", "restore", "export", "import", "archive").any { settingsSearch.contains(it, ignoreCase = true) }) {
+        item(key = SettingsItemKeys[6]) {
+            SettingsSection(title = "Data", subtitle = "Backup and manage your notes", icon = Icons.Default.Archive) {
                 Text(
                     "$totalNotes notes stored on this device ($archivedNotes archived).",
                     style = MaterialTheme.typography.bodyMedium
@@ -450,7 +475,7 @@ internal fun SettingsScreen(
             }
         }
         }
-        item(key = SettingsItemKeys[6]) {
+        item(key = SettingsItemKeys[7]) {
             OutlinedButton(
                 onClick = { confirmReset = true },
                 modifier = Modifier.fillMaxWidth().testTag("settings_reset"),
@@ -459,7 +484,7 @@ internal fun SettingsScreen(
                 Text("Reset settings to defaults")
             }
         }
-        if (settingsSearch.isNotBlank() && listOf("appearance", "theme", "wallpaper", "color", "colour", "dark", "oled", "dynamic", "layout", "dashboard", "density", "grid", "list", "compact", "behavior", "category", "sort", "pin", "preview", "date", "reminder", "notes", "editor", "writing", "text", "size", "word", "reading", "count", "data", "backup", "restore", "export", "import", "archive").none { settingsSearch.contains(it, ignoreCase = true) }) {
+        if (settingsSearch.isNotBlank() && listOf("appearance", "theme", "wallpaper", "color", "colour", "dark", "oled", "dynamic", "layout", "dashboard", "density", "grid", "list", "compact", "behavior", "category", "sort", "pin", "preview", "date", "reminder", "notes", "editor", "writing", "text", "size", "word", "reading", "count", "data", "backup", "restore", "export", "import", "archive", "privacy", "permissions", "device", "local", "internet", "security", "markdown").none { settingsSearch.contains(it, ignoreCase = true) }) {
             item(key = "settings_no_search_results") {
                 Text("No matching settings", style = MaterialTheme.typography.titleMedium)
                 Text("Try searching for theme, layout, category, text size, or backup.", color = colors.onSurfaceVariant)
@@ -504,20 +529,40 @@ internal fun <T> SegmentedChoice(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
-        options.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = option == selected,
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEach { option ->
+            val isSelected = option == selected
+            FilterChip(
+                selected = isSelected,
                 onClick = { onSelect(option) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
-            ) {
-                Text(
-                    text = label(option),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis
+                label = {
+                    Text(
+                        text = label(option),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = if (isSelected) {
+                    {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    null
+                },
+                border = BorderStroke(
+                    1.dp,
+                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                 )
-            }
+            )
         }
     }
 }
@@ -530,20 +575,30 @@ internal fun SwitchRow(
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = MaterialTheme.colorScheme
+    val rowColor by animateColorAsState(
+        targetValue = if (checked) colors.secondaryContainer.copy(alpha = 0.42f) else Color.Transparent,
+        label = "settings-switch-row-background"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Keep the entire row comfortably tappable, including when the summary is absent.
+            .defaultMinSize(minHeight = 56.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(rowColor)
+            // One row-level Switch semantic avoids duplicate announcements/toggles.
             .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title)
+            Text(title, style = MaterialTheme.typography.bodyLarge)
             if (summary != null) {
                 Text(
                     summary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = colors.onSurfaceVariant
                 )
             }
         }
@@ -562,6 +617,18 @@ internal fun ChoiceCard(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) colors.secondaryContainer else colors.surface,
+        label = "choice-card-container"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) colors.primary else colors.outlineVariant,
+        label = "choice-card-border"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (selected) 2.dp else 1.dp,
+        label = "choice-card-border-width"
+    )
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -569,11 +636,8 @@ internal fun ChoiceCard(
             // and the card joins the surrounding selectableGroup().
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = if (selected) colors.secondaryContainer else colors.surface,
-        border = BorderStroke(
-            width = if (selected) 2.dp else 1.dp,
-            color = if (selected) colors.primary else colors.outlineVariant
-        )
+        color = containerColor,
+        border = BorderStroke(width = borderWidth, color = borderColor)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -583,7 +647,11 @@ internal fun ChoiceCard(
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
-            if (selected) {
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn() + slideInHorizontally(initialOffsetX = { it / 3 }),
+                exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it / 3 })
+            ) {
                 // Decorative: the selectable modifier already exposes selection state.
                 Icon(Icons.Default.Check, contentDescription = null, tint = colors.primary)
             }
@@ -596,23 +664,47 @@ internal fun SettingsSection(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (icon != null) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = colors.secondaryContainer,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = colors.onSecondaryContainer,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.65f))
             content()
         }
     }
