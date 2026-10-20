@@ -68,6 +68,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Home
@@ -256,6 +257,34 @@ internal fun NestNoteApp(store: NoteStore) {
         editorTextSize = EditorTextSize.MEDIUM
         showEditorCounts = true
         coroutineScope.launch { snackbarHostState.showSnackbar("Settings reset to defaults") }
+    }
+    val markdownImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val markdown = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            }.getOrNull()
+            if (markdown == null) {
+                coroutineScope.launch { snackbarHostState.showSnackbar("Couldn't read that Markdown file") }
+            } else {
+                val firstHeading = Regex("(?m)^#\\s+(.+?)\\s*$").find(markdown)
+                val importedTitle = firstHeading?.groupValues?.get(1)?.trim().orEmpty()
+                    .ifBlank { uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.ifBlank { "Imported note" } ?: "Imported note" }
+                val importedBody = if (firstHeading != null) {
+                    markdown.removeRange(firstHeading.range).trim()
+                } else markdown.trim()
+                val imported = NestNote(
+                    id = System.currentTimeMillis(),
+                    title = importedTitle,
+                    body = importedBody,
+                    category = defaultNoteCategory,
+                    updated = System.currentTimeMillis(),
+                    created = System.currentTimeMillis()
+                )
+                notes = listOf(imported) + notes
+                selectedView = "Home"
+                coroutineScope.launch { snackbarHostState.showSnackbar("Markdown file imported as a new note") }
+            }
+        }
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -553,6 +582,14 @@ internal fun NestNoteApp(store: NoteStore) {
                             )
                             // Prototype parity: direct theme toggle routed through the existing
                             // themeMode preference state — no second persistence path.
+                            if (selectedView == "Home") {
+                                IconButton(
+                                    onClick = { markdownImportLauncher.launch(arrayOf("text/markdown", "text/plain", "text/x-markdown", "application/octet-stream")) },
+                                    modifier = Modifier.testTag("import_markdown_button")
+                                ) {
+                                    Icon(Icons.Default.FileOpen, contentDescription = "Import Markdown file")
+                                }
+                            }
                             IconButton(
                                 onClick = {
                                     val next = if (dark) ThemeMode.LIGHT else ThemeMode.DARK
