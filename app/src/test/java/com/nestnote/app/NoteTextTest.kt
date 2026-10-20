@@ -334,4 +334,46 @@ class NoteTextTest {
         assertNotNull(NoteText.laterTodayOrNull(Calendar.getInstance().apply { clear(); set(2026, Calendar.DECEMBER, 31, 8, 0, 0) }))
     }
 
+
+    @Test
+    fun inlineVoiceMarkersSplitTextWithoutLosingSurroundingContent() {
+        val marker = "[[voice:3e967866-b886-4db1-abde-4724b7f2bf6c]]"
+        assertEquals(
+            listOf(
+                NoteText.VoiceSegment("before ", null),
+                NoteText.VoiceSegment("", "3e967866-b886-4db1-abde-4724b7f2bf6c"),
+                NoteText.VoiceSegment(" after", null)
+            ),
+            NoteText.voiceSegments("before " + marker + " after")
+        )
+    }
+
+    @Test
+    fun adjacentVoiceMarkersRemainDistinctAndKeepTextOrder() {
+        val first = "11111111-1111-4111-8111-111111111111"
+        val second = "22222222-2222-4222-8222-222222222222"
+        val body = "start\n[[voice:$first]][[voice:$second]]\nend"
+        assertEquals(
+            listOf(
+                NoteText.VoiceSegment("start\n", null),
+                NoteText.VoiceSegment("", first),
+                NoteText.VoiceSegment("", second),
+                NoteText.VoiceSegment("\nend", null)
+            ),
+            NoteText.voiceSegments(body)
+        )
+        assertEquals(listOf(first, second), NoteText.voiceMarkers(body).map { it.attachmentId })
+    }
+
+    @Test
+    fun voiceMarkerRemovalPreservesInlineTextAndOtherAttachments() {
+        val first = "11111111-1111-4111-8111-111111111111"
+        val second = "22222222-2222-4222-8222-222222222222"
+        val body = "before [[voice:$first]] middle [[voice:$second]] after"
+        assertEquals(
+            "before  middle [[voice:$second]] after",
+            NoteText.removeVoiceMarker(body, first)
+        )
+    }
+
 }
