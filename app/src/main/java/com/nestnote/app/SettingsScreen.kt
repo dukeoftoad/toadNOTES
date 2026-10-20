@@ -191,7 +191,8 @@ internal fun SettingsScreen(
     modifier: Modifier = Modifier,
     // Allows the caller to clear the "jump to backup" event after it is handled,
     // so returning to a preserved screen does not scroll again.
-    onBackupFocusHandled: () -> Unit = {}
+    onBackupFocusHandled: () -> Unit = {},
+    onOpenBackupRestore: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     var confirmReset by rememberSaveable { mutableStateOf(false) }
@@ -353,32 +354,25 @@ internal fun SettingsScreen(
             }
         }
         item(key = SettingsItemKeys[5]) {
-            SettingsSection(title = "Backup & privacy", subtitle = "Your notes stay on this device") {
+            SettingsSection(title = "Data", subtitle = "Backup and manage your notes") {
                 Text(
                     "$totalNotes notes stored on this device ($archivedNotes archived).",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "NESTNOTE does not sync to a cloud account. Backups contain note text and note settings only; " +
-                        "voice recordings are excluded and will not return when you restore. Back up your notes to a " +
-                        "file you choose, and restore it any time. Restoring adds missing notes and keeps the most " +
-                        "recently edited copy of notes that already exist; nothing is deleted.",
+                    "Keep a portable backup of your notes or restore from a backup file.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(
-                        onClick = onExportNotes,
-                        modifier = Modifier.weight(1f).testTag("settings_backup")
-                    ) {
-                        Text("Back up notes")
-                    }
-                    OutlinedButton(
-                        onClick = onImportNotes,
-                        modifier = Modifier.weight(1f).testTag("settings_restore")
-                    ) {
-                        Text("Restore backup")
-                    }
+                OutlinedButton(
+                    onClick = onOpenBackupRestore,
+                    modifier = Modifier.fillMaxWidth().testTag("settings_open_backup_restore")
+                ) {
+                    Icon(Icons.Default.Backup, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Backup & restore")
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = null)
                 }
             }
         }
