@@ -787,3 +787,10 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Compared the supplied `NestNote redesign prototype.html` with the native Compose implementation and recorded incomplete work, owning files, and acceptance criteria in [docs/PROTOTYPE_PARITY_AUDIT.md](docs/PROTOTYPE_PARITY_AUDIT.md).
 - Confirmed source-level parity for the floating navigation, More hub, editor menu, slim right-side tool rail, appearance draft flow, markdown preview, and voice-note entry point. The remaining gaps are primarily device validation, accessibility, performance profiling, and small dashboard/More parity decisions.
 - **Validation boundary:** no Android device or emulator was connected for this audit. A live system trace, keyboard/insets review, TalkBack review, large-font review, and visual comparison remain pending. Generated build directories and supplied prototype/archive artifacts remain untracked.
+
+
+## 2026-10-20 — Complete imported wallpaper draft behavior
+- Selecting a built-in background (including plain colour) now replaces a previously imported image instead of leaving the custom image rendered above the selection.
+- The appearance rail now snapshots the imported wallpaper URI when opened and restores it on Cancel/outside-tap/system Back, matching the existing colour/background draft contract.
+- Extended NoteStore round-trip coverage so an imported content URI is asserted to survive save/load.
+- Validation boundary: repository source and test edits were committed to the feature branch; Android CI and real-device picker/permission behavior have not yet been run for this branch.

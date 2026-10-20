@@ -100,7 +100,8 @@ class NoteStoreTest {
     fun noteWallpaperSelectionSurvivesSaveAndLoad() {
         val decorated = NestNote(
             id = 91L, title = "Wallpaper", body = "Botanical",
-            color = 2, background = 1
+            color = 2, background = 1,
+            wallpaperUri = "content://wallpaper-provider/images/91"
         )
         store.save(listOf(decorated))
         assertEquals(decorated, store.load().single())
