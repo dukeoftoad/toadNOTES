@@ -181,6 +181,8 @@ internal fun SettingsScreen(
     showEditorCounts: Boolean,
     onShowEditorCountsChange: (Boolean) -> Unit,
     onResetDefaults: () -> Unit,
+    totalNotes: Int,
+    archivedNotes: Int,
     modifier: Modifier = Modifier,
     onOpenBackupRestore: () -> Unit = {}
 ) {
