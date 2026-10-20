@@ -3,8 +3,15 @@
 ## Unreleased
 
 ### Fixed
-- Voice-note playback cards now stack their title/waveform and seek controls vertically, preventing the seek bar from overlapping the voice-note label.
-- Voice attachment markers render as readable chips in both edit and read-only modes instead of exposing internal attachment IDs.
+- Voice-note playback cards stack their title/waveform and seek controls vertically, preventing the seek bar from overlapping the voice-note label.
+- Voice attachment markers render as readable labels instead of exposing internal attachment IDs.
+- Note format is persisted as plain text or Markdown, with older notes defaulting safely to plain text.
+- The note format menu no longer references an unavailable Material icon, fixing the Android CI compilation failure.
+
+### Known issue
+- The editor screenshot still shows a highlighted voice-note marker rather than an inline player while editing. Inline playback in read mode and Markdown preview is implemented, but direct playback from the editable text field is not yet verified/fixed. Do not consider this interaction complete until tested on-device.
+
+### Tests
 - Added regression coverage for inline and adjacent voice markers, text preservation, and marker removal.
 
 
