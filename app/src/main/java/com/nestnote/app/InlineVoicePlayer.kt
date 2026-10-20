@@ -249,11 +249,14 @@ internal fun InlineVoicePlayer(
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer
             else MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        // Surface content is a Box by default. Stack the header and seek row in a
+        // Column so the slider never paints over the title, waveform, or timestamps.
+        Column {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             FilledIconButton(
                 onClick = {
                     if (isActive) {
@@ -315,11 +318,11 @@ internal fun InlineVoicePlayer(
                 }
             }
         }
-        // Seeking must be available for short clips too; hiding the slider below
-        // one minute made recordings under 60 seconds impossible to scrub.
-        if (shownDuration > 0) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
+            // Seeking must be available for short clips too; hiding the slider below
+            // one minute made recordings under 60 seconds impossible to scrub.
+            if (shownDuration > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -359,6 +362,7 @@ internal fun InlineVoicePlayer(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                }
             }
         }
     }
