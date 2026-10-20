@@ -73,7 +73,7 @@ internal enum class FormatAction(val label: String) {
     Heading1("Heading 1"), Heading2("Heading 2"), Heading3("Heading 3")
 }
 
-private val backgroundNames = listOf("Plain colour", "Botanical", "Sunset", "Waves", "Soft shapes", "Paper")
+private val backgroundNames = listOf("Plain colour", "Botanical", "Sunset", "Waves", "Soft shapes", "Night sky", "Geometric", "Cherry blossom", "Forest", "Paper")
 
 /**
  * Slim vertical tool rail for the editor: Colour, Background and Format tabs in a ~58dp pill on the
