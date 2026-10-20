@@ -511,6 +511,8 @@ internal fun NestNoteApp(store: NoteStore) {
                         showEditorCounts = showEditorCounts,
                         onShowEditorCountsChange = { showEditorCounts = it; preferences.edit().putBoolean(PREF_EDITOR_COUNTS, it).apply() },
                         onResetDefaults = { resetPreferences() },
+                        totalNotes = notes.size,
+                        archivedNotes = notes.count { it.archived },
                         onOpenBackupRestore = { selectedView = "Backup" }
                     )
                 } else if (selectedView == "About") {
