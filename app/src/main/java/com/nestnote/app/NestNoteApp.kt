@@ -331,7 +331,7 @@ internal fun NestNoteApp(store: NoteStore) {
                                 letterSpacing = 0.2.sp
                             )
                             Text(
-                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "Backup" -> "Save a JSON backup or merge-restore one"; "About" -> "Version, licence and how NESTNOTE works"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
+                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
@@ -446,9 +446,16 @@ internal fun NestNoteApp(store: NoteStore) {
                         versionLabel = AboutInfo.versionLabel(appVersion),
                         onOpen = { selectedView = it }
                     )
-                } else if (selectedView == "Settings" || selectedView == "Backup") {
+                } else if (selectedView == "Backup") {
+                    BackupRestoreScreen(
+                        totalNotes = notes.size,
+                        archivedNotes = notes.count { it.archived },
+                        onExportNotes = { exportLauncher.launch("nestnote-backup.json") },
+                        onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+                    )
+                } else if (selectedView == "Settings") {
                     SettingsScreen(
-                        focusBackup = selectedView == "Backup",
+                        focusBackup = false,
                         themeMode = themeMode,
                         onThemeChange = { themeMode = it; savePreference(PREF_THEME, it.name) },
                         dynamicColors = dynamicColors,
