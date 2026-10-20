@@ -15,10 +15,6 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import java.util.concurrent.TimeUnit
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -134,26 +130,22 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 
-// App shell: theme, navigation, dashboard and screen routing.
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 internal fun NestNoteApp(store: NoteStore) {
     val context = LocalContext.current
-    // Read once per process; PackageManager is the honest version source (BuildConfig is off).
     val appVersion = remember { readAppVersion(context) }
     val windowSizeClass = (context as? ComponentActivity)?.let { calculateWindowSizeClass(it) }
     val isExpandedWidth = windowSizeClass?.widthSizeClass != null &&
         windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val preferences = remember { context.getSharedPreferences(PREFS, 0) }
-    // Storage (crypto + JSON) stays off the first composition path. Notes start empty and
-    // fill in from Dispatchers.IO; [storageLoaded] gates every write below so a slow or
-    // failed load can never overwrite real data with an empty collection.
     var notes by remember { mutableStateOf<List<NestNote>>(emptyList()) }
     var storageLoaded by remember { mutableStateOf(false) }
-    var lastBackupAt by remember { mutableLongStateOf(preferences.getLong("backup_last_success_at", 0L)) }
-    var backupStatus by remember { mutableStateOf(preferences.getString("backup_last_status", "Not yet backed up") ?: "Not yet backed up") }
-    var automaticBackupEnabled by remember { mutableStateOf(preferences.getBoolean("automatic_backup_enabled", false)) }
+    var lastBackupAt by remember { mutableLongStateOf(preferences.getLong(PREF_BACKUP_LAST_SUCCESS_AT, 0L)) }
+    var backupStatus by remember { mutableStateOf(preferences.getString(PREF_BACKUP_LAST_STATUS, "Not yet backed up") ?: "Not yet backed up") }
+    var automaticBackupEnabled by remember { mutableStateOf(preferences.getBoolean(PREF_BACKUP_AUTOMATIC_ENABLED, false)) }
+    var automaticBackupLastRun by remember { mutableLongStateOf(preferences.getLong(PREF_BACKUP_AUTOMATIC_LAST_RUN, 0L)) }
+    var automaticBackupStatus by remember { mutableStateOf(preferences.getString(PREF_BACKUP_AUTOMATIC_STATUS, "Not run yet") ?: "Not run yet") }
     var storageRecoveryRequired by remember { mutableStateOf(false) }
     var showStorageRecoveryDialog by remember { mutableStateOf(false) }
     LaunchedEffect(store) {
@@ -162,6 +154,33 @@ internal fun NestNoteApp(store: NoteStore) {
         storageRecoveryRequired = result.recoveryRequired
         showStorageRecoveryDialog = result.recoveryRequired
         storageLoaded = true
+    }
+    LaunchedEffect(storageLoaded) {
+        if (!storageLoaded) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            runCatching { ReminderScheduler.rescheduleAll(context, notes) }
+        }
+    }
+    // Phase 7b: orphaned new-note draft recovery.
+    // orphanDraftCheckCompleted is `remember` (not `rememberSaveable`) so that a
+    // device rotation re-runs the check and re-shows the dialog if the user was
+    // mid-recovery. Losing this once per rotation is better than silently
+    // dropping orphan drafts entirely.
+    var pendingOrphanDrafts by remember { mutableStateOf<List<DraftStore.Draft>>(emptyList()) }
+    var showOrphanDraftDialog by remember { mutableStateOf(false) }
+    var orphanDraftCheckCompleted by remember { mutableStateOf(false) }
+    LaunchedEffect(storageLoaded) {
+        if (!storageLoaded || orphanDraftCheckCompleted) return@LaunchedEffect
+        orphanDraftCheckCompleted = true
+        val drafts = withContext(Dispatchers.IO) { DraftStore(context).listAll() }
+        val noteIds = notes.map { it.id }.toSet()
+        val orphans = drafts
+            .filter { it.noteId !in noteIds && (it.title.isNotBlank() || it.body.isNotBlank()) }
+            .sortedByDescending { it.savedAtMillis }
+        if (orphans.isNotEmpty()) {
+            pendingOrphanDrafts = orphans
+            showOrphanDraftDialog = true
+        }
     }
     var pendingRestore by remember { mutableStateOf<List<NestNote>?>(null) }
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
@@ -179,27 +198,30 @@ internal fun NestNoteApp(store: NoteStore) {
     var editorTextSize by remember { mutableStateOf(EditorTextSize.values().firstOrNull { it.name == preferences.getString(PREF_TEXT_SIZE, "MEDIUM") } ?: EditorTextSize.MEDIUM) }
     var showEditorCounts by remember { mutableStateOf(preferences.getBoolean(PREF_EDITOR_COUNTS, true)) }
     var selectedView by remember { mutableStateOf("Home") }
+    LaunchedEffect(selectedView) {
+        if (selectedView == "Backup") {
+            automaticBackupLastRun = preferences.getLong(PREF_BACKUP_AUTOMATIC_LAST_RUN, 0L)
+            automaticBackupStatus = preferences.getString(PREF_BACKUP_AUTOMATIC_STATUS, "Not run yet") ?: "Not run yet"
+        }
+    }
     var search by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
-    // Reserve a collision-safe identity as soon as a new draft opens. Attachments can
-    // then be staged against the same identity before the note is first saved.
     var editorDraftId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     var editorHasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
     var discardVoiceChanges by remember { mutableStateOf<() -> Unit>({}) }
+    var commitVoiceChanges by remember { mutableStateOf<() -> Unit>({}) }
     var confirmSystemDiscard by remember { mutableStateOf(false) }
-    // Resolve the selected note from persisted notes after recreation.
     val editorNote = notes.firstOrNull { it.id == editorNoteId }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    fun savePreference(key: String, value: String) {
-        preferences.edit().putString(key, value).apply()
-    }
+    fun saveString(key: String, value: String) = preferences.edit().putString(key, value).apply()
+    fun saveBoolean(key: String, value: Boolean) = preferences.edit().putBoolean(key, value).apply()
+    fun saveLong(key: String, value: Long) = preferences.edit().putLong(key, value).apply()
     fun persist(next: List<NestNote>, allowRecovery: Boolean = false): Boolean {
         if (!storageLoaded) {
-            // Notes are still being decrypted; writing now could persist an empty collection.
             coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
             return false
         }
@@ -209,6 +231,14 @@ internal fun NestNoteApp(store: NoteStore) {
         }
         val saved = store.save(next)
         if (saved) {
+            val previousIds = notes.map { it.id }.toSet()
+            val nextIds = next.map { it.id }.toSet()
+            val removedIds = previousIds - nextIds
+            val notesForAlarms = next
+            coroutineScope.launch(Dispatchers.IO) {
+                removedIds.forEach { ReminderScheduler.cancel(context, it) }
+                ReminderScheduler.rescheduleAll(context, notesForAlarms)
+            }
             notes = next
             if (allowRecovery) storageRecoveryRequired = false
         } else {
@@ -217,7 +247,6 @@ internal fun NestNoteApp(store: NoteStore) {
         return saved
     }
     fun deleteNote(note: NestNote, closeEditor: Boolean = false) {
-        // Do not dismiss the editor or offer Undo unless deletion was persisted.
         if (!persist(notes.filterNot { it.id == note.id })) return
         if (closeEditor) editorVisible = false
         coroutineScope.launch {
@@ -228,15 +257,12 @@ internal fun NestNoteApp(store: NoteStore) {
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed && notes.none { it.id == note.id }) {
-                // Undo keeps the attachment directory intact. Restore the note before any cleanup.
                 persist(notes + note)
             } else if (
                 result != SnackbarResult.ActionPerformed &&
                 !storageRecoveryRequired &&
                 notes.none { it.id == note.id }
             ) {
-                // The Undo window has expired and deletion remains persisted. Only now is it safe
-                // to remove the deleted note's encrypted audio; never clean up during recovery.
                 runCatching { VoiceAttachmentStore(context).deleteAll(note.id) }
                 runCatching { VoiceAttachmentManifest(context).removeNote(note.id) }
             }
@@ -245,7 +271,7 @@ internal fun NestNoteApp(store: NoteStore) {
     fun setSort(key: String) {
         sortByTitle = key == "TITLE"
         sortByCreated = key == "CREATED"
-        savePreference(PREF_DEFAULT_SORT, key)
+        saveString(PREF_DEFAULT_SORT, key)
     }
     fun resetPreferences() {
         preferences.edit().clear().apply()
@@ -263,6 +289,10 @@ internal fun NestNoteApp(store: NoteStore) {
         noteColorStyle = NoteColorStyle.PASTEL
         editorTextSize = EditorTextSize.MEDIUM
         showEditorCounts = true
+        automaticBackupEnabled = false
+        automaticBackupLastRun = 0L
+        automaticBackupStatus = "Not run yet"
+        AutomaticBackupScheduler.cancel(context)
         coroutineScope.launch { snackbarHostState.showSnackbar("Settings reset to defaults") }
     }
     val markdownImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -304,10 +334,13 @@ internal fun NestNoteApp(store: NoteStore) {
             if (saved) {
                 lastBackupAt = System.currentTimeMillis()
                 backupStatus = "Success"
-                preferences.edit().putLong("backup_last_success_at", lastBackupAt).putString("backup_last_status", backupStatus).apply()
+                preferences.edit()
+                    .putLong(PREF_BACKUP_LAST_SUCCESS_AT, lastBackupAt)
+                    .putString(PREF_BACKUP_LAST_STATUS, backupStatus)
+                    .apply()
             } else {
                 backupStatus = "Failed"
-                preferences.edit().putString("backup_last_status", backupStatus).apply()
+                saveString(PREF_BACKUP_LAST_STATUS, backupStatus)
             }
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(if (saved) "Backup saved (" + exportNotes.size + " notes). Voice recordings are not included." else "Backup could not be saved. Your notes were not changed.")
@@ -321,7 +354,7 @@ internal fun NestNoteApp(store: NoteStore) {
             }.getOrNull()
             val incoming = raw?.let { NoteStore.decodeBackup(it) }
             val message = if (incoming == null) {
-                "Couldn't restore this file. Choose a NESTNOTE JSON backup with a supported schema and valid note records. Your existing notes were not changed."
+                "That file isn't a valid NESTNOTE backup"
             } else {
                 pendingRestore = incoming
                 "Backup validated. Review the restore before applying it."
@@ -340,13 +373,10 @@ internal fun NestNoteApp(store: NoteStore) {
     } else if (dark) nestNoteDarkScheme
     else nestNoteLightScheme
 
-    // Recomputed only when an input changes, not on every recomposition of the shell.
     val filteredNotes = remember(notes, selectedView, search, sortByTitle, sortByCreated) {
         NoteFilters.visibleNotes(notes, selectedView, search, sortByTitle, sortByCreated)
     }
 
-    // Complete navigation only after the predictive-back gesture is committed.
-    // If the gesture is cancelled, the flow is cancelled and the current destination remains.
     PredictiveBackHandler(enabled = !editorVisible && selectedView != "Home") { progress ->
         progress.collect { /* Reserve the progress stream for future destination previews. */ }
         selectedView = if (selectedView in moreSubViews) "More" else "Home"
@@ -399,8 +429,6 @@ internal fun NestNoteApp(store: NoteStore) {
                     selectedView = selectedView,
                     onSelect = { selectedView = it },
                     onNewNote = {
-                        // Wait for the async load so a draft ID can never collide with a
-                        // note that is still being decrypted.
                         if (!storageLoaded) {
                             coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
                         } else {
@@ -421,7 +449,6 @@ internal fun NestNoteApp(store: NoteStore) {
                         .fillMaxSize()
                 ) {
                 if (storageRecoveryRequired) {
-                    // Persistent, calm recovery state: visible after the recovery dialog is dismissed.
                     Surface(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
                         shape = RoundedCornerShape(16.dp),
@@ -460,7 +487,6 @@ internal fun NestNoteApp(store: NoteStore) {
                         )
                     )
                 }
-                // Keep common category filters one tap away on the dashboard.
                 if (selectedView == "Home" || selectedView == "All notes" || categories.contains(selectedView)) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
@@ -501,18 +527,13 @@ internal fun NestNoteApp(store: NoteStore) {
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
                         automaticBackupEnabled = automaticBackupEnabled,
-                        automaticBackupLastRun = preferences.getLong("automatic_backup_last_run", 0L),
-                        automaticBackupStatus = preferences.getString("automatic_backup_last_status", "Not run yet") ?: "Not run yet",
+                        automaticBackupLastRun = automaticBackupLastRun,
+                        automaticBackupStatus = automaticBackupStatus,
                         onAutomaticBackupChange = { enabled ->
                             automaticBackupEnabled = enabled
-                            preferences.edit().putBoolean("automatic_backup_enabled", enabled).apply()
-                            val workManager = WorkManager.getInstance(context)
-                            if (enabled) {
-                                val request = PeriodicWorkRequestBuilder<AutomaticBackupWorker>(24, TimeUnit.HOURS).build()
-                                workManager.enqueueUniquePeriodicWork("nestnote_automatic_backup", ExistingPeriodicWorkPolicy.UPDATE, request)
-                            } else {
-                                workManager.cancelUniqueWork("nestnote_automatic_backup")
-                            }
+                            saveBoolean(PREF_BACKUP_AUTOMATIC_ENABLED, enabled)
+                            if (enabled) AutomaticBackupScheduler.schedule(context)
+                            else AutomaticBackupScheduler.cancel(context)
                         },
                         onExportNotes = { includeArchived ->
                             exportArchivedNotes = includeArchived
@@ -523,31 +544,31 @@ internal fun NestNoteApp(store: NoteStore) {
                 } else if (selectedView == "Settings") {
                     SettingsScreen(
                         themeMode = themeMode,
-                        onThemeChange = { themeMode = it; savePreference(PREF_THEME, it.name) },
+                        onThemeChange = { themeMode = it; saveString(PREF_THEME, it.name) },
                         dynamicColors = dynamicColors,
-                        onDynamicColorsChange = { dynamicColors = it; preferences.edit().putBoolean(PREF_DYNAMIC, it).apply() },
+                        onDynamicColorsChange = { dynamicColors = it; saveBoolean(PREF_DYNAMIC, it) },
                         amoled = amoled,
-                        onAmoledChange = { amoled = it; preferences.edit().putBoolean(PREF_AMOLED, it).apply() },
+                        onAmoledChange = { amoled = it; saveBoolean(PREF_AMOLED, it) },
                         dashboardLayout = dashboardLayout,
-                        onLayoutChange = { dashboardLayout = it; savePreference(PREF_LAYOUT, it.name) },
+                        onLayoutChange = { dashboardLayout = it; saveString(PREF_LAYOUT, it.name) },
                         editorMode = editorMode,
-                        onEditorModeChange = { editorMode = it; savePreference(PREF_EDITOR, it.name) },
+                        onEditorModeChange = { editorMode = it; saveString(PREF_EDITOR, it.name) },
                         dashboardDensity = dashboardDensity,
-                        onDensityChange = { dashboardDensity = it; savePreference(PREF_DENSITY, it.name) },
+                        onDensityChange = { dashboardDensity = it; saveString(PREF_DENSITY, it.name) },
                         noteColorStyle = noteColorStyle,
-                        onNoteColorStyleChange = { noteColorStyle = it; savePreference(PREF_NOTE_STYLE, it.name) },
+                        onNoteColorStyleChange = { noteColorStyle = it; saveString(PREF_NOTE_STYLE, it.name) },
                         sortKey = when { sortByTitle -> "TITLE"; sortByCreated -> "CREATED"; else -> "RECENT" },
                         onSortChange = { setSort(it) },
                         showNotePreviews = showNotePreviews,
-                        onShowNotePreviewsChange = { showNotePreviews = it; preferences.edit().putBoolean(PREF_NOTE_PREVIEWS, it).apply() },
+                        onShowNotePreviewsChange = { showNotePreviews = it; saveBoolean(PREF_NOTE_PREVIEWS, it) },
                         showNoteTimestamps = showNoteTimestamps,
-                        onShowNoteTimestampsChange = { showNoteTimestamps = it; preferences.edit().putBoolean(PREF_NOTE_TIMESTAMPS, it).apply() },
+                        onShowNoteTimestampsChange = { showNoteTimestamps = it; saveBoolean(PREF_NOTE_TIMESTAMPS, it) },
                         defaultNoteCategory = defaultNoteCategory,
-                        onDefaultNoteCategoryChange = { defaultNoteCategory = it; savePreference(PREF_DEFAULT_CATEGORY, it) },
+                        onDefaultNoteCategoryChange = { defaultNoteCategory = it; saveString(PREF_DEFAULT_CATEGORY, it) },
                         editorTextSize = editorTextSize,
-                        onEditorTextSizeChange = { editorTextSize = it; savePreference(PREF_TEXT_SIZE, it.name) },
+                        onEditorTextSizeChange = { editorTextSize = it; saveString(PREF_TEXT_SIZE, it.name) },
                         showEditorCounts = showEditorCounts,
-                        onShowEditorCountsChange = { showEditorCounts = it; preferences.edit().putBoolean(PREF_EDITOR_COUNTS, it).apply() },
+                        onShowEditorCountsChange = { showEditorCounts = it; saveBoolean(PREF_EDITOR_COUNTS, it) },
                         onResetDefaults = { resetPreferences() },
                         totalNotes = notes.size,
                         archivedNotes = notes.count { it.archived },
@@ -584,7 +605,6 @@ internal fun NestNoteApp(store: NoteStore) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (selectedView == "Home") {
-                            // Prototype parity: calm time-of-day greeting above the notes heading.
                             Text(
                                 remember { NoteText.greetingFor(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) },
                                 style = MaterialTheme.typography.titleSmall,
@@ -620,8 +640,6 @@ internal fun NestNoteApp(store: NoteStore) {
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f)
                             )
-                            // Prototype parity: direct theme toggle routed through the existing
-                            // themeMode preference state — no second persistence path.
                             if (selectedView == "Home") {
                                 IconButton(
                                     onClick = { markdownImportLauncher.launch(arrayOf("text/markdown", "text/plain", "text/x-markdown", "application/octet-stream")) },
@@ -634,7 +652,7 @@ internal fun NestNoteApp(store: NoteStore) {
                                 onClick = {
                                     val next = if (dark) ThemeMode.LIGHT else ThemeMode.DARK
                                     themeMode = next
-                                    savePreference(PREF_THEME, next.name)
+                                    saveString(PREF_THEME, next.name)
                                 }
                             ) {
                                 Icon(
@@ -656,7 +674,7 @@ internal fun NestNoteApp(store: NoteStore) {
                             IconButton(
                                 onClick = {
                                     dashboardLayout = if (dashboardLayout == DashboardLayout.GRID) DashboardLayout.LIST else DashboardLayout.GRID
-                                    savePreference(PREF_LAYOUT, dashboardLayout.name)
+                                    saveString(PREF_LAYOUT, dashboardLayout.name)
                                 }
                             ) {
                                 Icon(
@@ -667,7 +685,6 @@ internal fun NestNoteApp(store: NoteStore) {
                         }
                     }
                     if (!storageLoaded) {
-                        // Calm loading state: never flashes the empty state before decryption finishes.
                         Column(
                             Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 44.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -736,7 +753,8 @@ internal fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps, onOpen = { editorNoteId = note.id; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps,
+                                    onOpen = { editorNoteId = note.id; editorDraftId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) })
                             }
@@ -748,7 +766,8 @@ internal fun NestNoteApp(store: NoteStore) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps, onOpen = { editorNoteId = note.id; editorVisible = true },
+                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps,
+                                    onOpen = { editorNoteId = note.id; editorDraftId = note.id; editorVisible = true },
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
                                     onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) })
                             }
@@ -759,17 +778,97 @@ internal fun NestNoteApp(store: NoteStore) {
             }
         }
 
+        if (showOrphanDraftDialog && pendingOrphanDrafts.isNotEmpty()) {
+            val newest = pendingOrphanDrafts.first()
+            val count = pendingOrphanDrafts.size
+            val draftDateFormatter = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
+            val preview = newest.title.ifBlank {
+                newest.body.lineSequence().firstOrNull { it.isNotBlank() }?.take(40).orEmpty()
+            }.ifBlank { "Untitled" }
+            AlertDialog(
+                onDismissRequest = { showOrphanDraftDialog = false },
+                title = {
+                    Text(if (count == 1) "Recover unsaved note?" else "Recover unsaved notes?")
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            if (count == 1) {
+                                "A draft from ${draftDateFormatter.format(Date(newest.savedAtMillis))} was found."
+                            } else {
+                                "$count drafts from previous sessions were found. The most recent is:"
+                            }
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = colors.surfaceContainerHighest
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(preview, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    draftDateFormatter.format(Date(newest.savedAtMillis)),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val recovered = NestNote(
+                            id = newest.noteId,
+                            title = newest.title,
+                            body = newest.body,
+                            category = newest.category,
+                            color = newest.color,
+                            background = newest.background,
+                            pinned = newest.pinned,
+                            reminder = newest.reminder,
+                            wallpaperUri = newest.wallpaperUri,
+                            updated = newest.savedAtMillis,
+                            created = newest.savedAtMillis
+                        )
+                        if (persist(notes + recovered)) {
+                            runCatching { DraftStore(context).clear(newest.noteId) }
+                            pendingOrphanDrafts = pendingOrphanDrafts.drop(1)
+                            if (pendingOrphanDrafts.isEmpty()) {
+                                showOrphanDraftDialog = false
+                            }
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Draft recovered") }
+                        }
+                    }) { Text("Recover") }
+                },
+                dismissButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                        TextButton(onClick = {
+                            coroutineScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    pendingOrphanDrafts.forEach {
+                                        runCatching { DraftStore(context).clear(it.noteId) }
+                                    }
+                                }
+                            }
+                            pendingOrphanDrafts = emptyList()
+                            showOrphanDraftDialog = false
+                        }) { Text("Discard all") }
+                        TextButton(onClick = { showOrphanDraftDialog = false }) { Text("Later") }
+                    }
+                }
+            )
+        }
+
         pendingRestore?.let { incoming ->
             val restoreIncoming = NoteStore.remapDraftIdCollisionForRestore(notes, incoming, editorDraftId)
             val preview = NoteStore.merge(notes, restoreIncoming)
             val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
             AlertDialog(
                 onDismissRequest = { pendingRestore = null },
-                title = { Text("Review backup merge") },
+                title = { Text("Review backup restore") },
                 text = {
                     Text(
                         if (withinNoteLimit) {
-                            "Preview: ${preview.added} notes will be added, ${preview.updated} existing notes will be updated, and ${(incoming.size - preview.added - preview.updated).coerceAtLeast(0)} will be skipped. Matching IDs are updated only when the backup note is newer; otherwise the existing note is kept. Notes absent from the backup are never deleted. Voice recordings and audio attachments are not included."
+                            "This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Voice recordings are not included. Notes not present in the backup will not be deleted."
                         } else {
                             "This restore would exceed NESTNOTE's ${NoteStore.MAX_NOTES}-note limit. Remove notes or choose a smaller backup before restoring."
                         }
@@ -781,17 +880,12 @@ internal fun NestNoteApp(store: NoteStore) {
                         onClick = {
                             if (persist(preview.notes, allowRecovery = true)) {
                                 pendingRestore = null
-                                selectedView = "Home"
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Restore complete: ${preview.added} added, ${preview.updated} updated, ${(incoming.size - preview.added - preview.updated).coerceAtLeast(0)} skipped.")
-                                }
-                            } else {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Restore couldn't be saved. Your previous notes remain available.")
+                                    snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
                                 }
                             }
                         }
-                    ) { Text("Merge backup") }
+                    ) { Text("Restore notes") }
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
@@ -815,7 +909,6 @@ internal fun NestNoteApp(store: NoteStore) {
             )
         }
 
-        // The editor waits for storage so a restored note is never mistaken for a new draft.
         if (editorVisible && storageLoaded) {
             val closeEditor = {
                 editorHasUnsavedChanges = false
@@ -823,11 +916,10 @@ internal fun NestNoteApp(store: NoteStore) {
                 editorVisible = false
                 editorDraftId = null
                 discardVoiceChanges = {}
+                commitVoiceChanges = {}
             }
             val discardEditor: () -> Unit = {
                 discardVoiceChanges()
-                // New-note attachments are staged under the reserved draft ID. Discard
-                // removes both payloads and index entries; saved-note attachments are untouched.
                 if (editorNote == null) {
                     editorDraftId?.let { draftId ->
                         runCatching { VoiceAttachmentStore(context).deleteAll(draftId) }
@@ -848,8 +940,6 @@ internal fun NestNoteApp(store: NoteStore) {
             val dismissEditor: () -> Unit = { if (editorHasUnsavedChanges) confirmSystemDiscard = true else discardEditor() }
             val saveNote: (NestNote) -> Unit = saveNote@{ draft ->
                 val existing = editorNote
-                // Compare the editor's baseline against the latest collection, not the
-                // editor's own snapshot, which naturally remains unchanged while typing.
                 val currentSaved = existing?.let { opened -> notes.firstOrNull { it.id == opened.id } }
                 val isStale = existing != null && (
                     currentSaved == null ||
@@ -861,9 +951,6 @@ internal fun NestNoteApp(store: NoteStore) {
                     }
                 } else {
                     val savedId = existing?.id ?: editorDraftId ?: NoteStore.allocateNoteId(notes)
-                    // Never silently change identity after audio is staged against this ID.
-                    // Restore remaps colliding incoming drafts; if another writer still creates
-                    // a collision, preserve this draft and ask the user to reopen safely.
                     if (existing == null && NoteStore.hasDraftIdCollision(notes, savedId)) {
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(
@@ -877,21 +964,35 @@ internal fun NestNoteApp(store: NoteStore) {
                         if (it.id == existing.id) updated.copy(id = existing.id) else it
                     }
                     if (persist(next)) {
+                        commitVoiceChanges()
                         closeEditor()
                         coroutineScope.launch { snackbarHostState.showSnackbar("Note saved") }
                     }
                 }
             }
+            val duplicateAction: ((NestNote) -> Unit)? = if (editorNote != null) {
+                { noteState ->
+                    val duplicate = NoteDuplicate.duplicate(
+                        source = noteState,
+                        existing = notes,
+                        keepReminder = false,
+                        keepPinned = false
+                    )
+                    if (persist(notes + duplicate)) {
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Note duplicated") }
+                    }
+                }
+            } else null
             val editorDeleteAction: (() -> Unit)? = if (editorNote != null) ({
                 editorNote?.let { deleteNote(it, closeEditor = true) }
             }) else null
             when (editorMode) {
                 EditorPresentationMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorPresentationMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorPresentationMode.QUICK_DIALOG -> Dialog(
@@ -916,10 +1017,11 @@ internal fun NestNoteApp(store: NoteStore) {
                             textSize = editorTextSize,
                             showCounts = showEditorCounts,
                             onSave = saveNote,
-                            onDismiss = dismissEditor,
+                            onDismiss = discardEditor,
                             onDelete = editorDeleteAction,
+                            onDuplicate = duplicateAction,
                             onUnsavedChangesChange = { editorHasUnsavedChanges = it },
-                            onRegisterVoiceDiscard = { discardVoiceChanges = it },
+                            onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it },
                             compactDialog = true,
                             modifier = Modifier.fillMaxWidth()
                         )

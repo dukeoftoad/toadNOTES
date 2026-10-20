@@ -1,20 +1,21 @@
 package com.nestnote.app
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -47,6 +48,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
@@ -72,29 +75,37 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -114,7 +125,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -132,10 +148,10 @@ internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
  */
 private class VoiceMarkerVisualTransformation(
     private val chipBackground: Color,
-    private val chipForeground: Color
+    private val chipForeground: Color,
+    private val names: Map<String, String> = emptyMap()
 ) : VisualTransformation {
     private val markerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
-    private val label = "  🎙 Voice recording  "
 
     override fun filter(text: AnnotatedString): TransformedText {
         val matches = markerRegex.findAll(text.text).toList()
@@ -150,6 +166,7 @@ private class VoiceMarkerVisualTransformation(
             val prefix = text.text.substring(sourceCursor, match.range.first)
             output.append(prefix)
             outputCursor += prefix.length
+            val label = "  🎙 " + (names[match.groupValues[1]] ?: "Voice note").take(28) + "  "
             val transformedStart = outputCursor
             output.pushStyle(
                 SpanStyle(
@@ -211,15 +228,20 @@ private class VoiceMarkerVisualTransformation(
 /**
  * Unified create/edit note editor.
  *
- * Voice notes are anchored inline via `[[voice:<attachmentId>]]` markers in the
- * body text (see NoteText.voiceMarkers). In edit mode the marker is visible as
- * plain text at the cursor position where the user recorded. In preview mode
- * each marker is rendered as an [InlineVoicePlayer] card between text blocks.
+ * Undo/redo covers body text edits only.
  *
- * Deletion policy: when the user removes a voice note from the inline preview,
- * the marker is stripped from the body immediately but the encrypted file and
- * manifest entry are queued for deletion. The queue is flushed only when the
- * user saves, so discarding after a delete leaves the original note fully intact.
+ * Autosave writes a draft (via [DraftStore]) whenever a field changes, debounced
+ * 2 seconds, plus a periodic safety-net write every 15 seconds.
+ *
+ * Reminders: the reminder picker requests POST_NOTIFICATIONS on Android 13+ the
+ * first time it is opened, and seeds itself from the note's existing reminder if
+ * one is set (via [NoteTextParsing.parseReminderOrNull]). The parent schedules
+ * the actual alarm via [ReminderScheduler] when the note is saved.
+ *
+ * Duplicate: the More menu offers "Duplicate note" for saved notes; the parent
+ * allocates a fresh ID and saves a copy (current editor state, including
+ * unsaved changes) as a new note. The duplicate never carries a reminder, so it
+ * cannot double-fire an alarm.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -234,6 +256,8 @@ internal fun NoteEditorContent(
     onDelete: (() -> Unit)?,
     onUnsavedChangesChange: (Boolean) -> Unit = {},
     onRegisterVoiceDiscard: (() -> Unit) -> Unit = {},
+    onRegisterVoiceCommit: (() -> Unit) -> Unit = {},
+    onDuplicate: ((NestNote) -> Unit)? = null,
     fullScreen: Boolean = false,
     compactDialog: Boolean = false,
     modifier: Modifier = Modifier
@@ -244,7 +268,12 @@ internal fun NoteEditorContent(
         mutableStateOf(TextFieldValue(original?.body.orEmpty()))
     }
     val body = bodyValue.text
-    val markdownBodySize = textSize.bodySp.toFloat()
+
+    // ---- Undo/redo ----
+    val undoManager = remember(original?.id, draftNoteId) { TextUndoManager() }
+    var canUndo by remember(original?.id, draftNoteId) { mutableStateOf(false) }
+    var canRedo by remember(original?.id, draftNoteId) { mutableStateOf(false) }
+
     var category by rememberSaveable(original?.id) {
         mutableStateOf(original?.category ?: defaultNoteCategory)
     }
@@ -272,7 +301,7 @@ internal fun NoteEditorContent(
     var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     val wallpaperImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             customWallpaperUri = uri.toString()
             backgroundIndex = 0
             android.widget.Toast.makeText(context, "Wallpaper imported", android.widget.Toast.LENGTH_SHORT).show()
@@ -290,6 +319,11 @@ internal fun NoteEditorContent(
             }
         }
     }
+    // Permission request is a no-op on Android < 13 (permission doesn't exist).
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Result ignored — reminders still save, they just won't fire until granted. */ }
+
     val keyboardController = LocalSoftwareKeyboardController.current
     val editorModeViewModel: EditorModeViewModel =
         viewModel(key = "editor-mode-${original?.id ?: draftNoteId}")
@@ -312,9 +346,32 @@ internal fun NoteEditorContent(
 
     // ---- Voice playback + deletion coordination ----
     var activeVoicePlayerId by remember { mutableStateOf<String?>(null) }
-    // Pending deletion queue: marker removed immediately, file flushed on save.
     var pendingVoiceDeletion by remember { mutableStateOf<String?>(null) }
-    var pendingVoiceDeletions by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingVoiceDeletions by rememberSaveable(
+        original?.id, draftNoteId,
+        stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })
+    ) { mutableStateOf<Set<String>>(emptySet()) }
+    var sessionVoiceIds by rememberSaveable(
+        original?.id, draftNoteId,
+        stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })
+    ) { mutableStateOf<Set<String>>(emptySet()) }
+    val sessionIdSet = remember(sessionVoiceIds) {
+        object : AbstractMutableSet<String>() {
+            override val size get() = sessionVoiceIds.size
+            override fun iterator(): MutableIterator<String> =
+                sessionVoiceIds.toMutableList().iterator()
+            override fun add(element: String): Boolean {
+                if (element in sessionVoiceIds) return false
+                sessionVoiceIds = sessionVoiceIds + element; return true
+            }
+            override fun remove(element: String): Boolean {
+                if (element !in sessionVoiceIds) return false
+                sessionVoiceIds = sessionVoiceIds - element; return true
+            }
+            override fun clear() { sessionVoiceIds = emptySet() }
+        }
+    }
+    var voiceNames by remember(voiceNoteId) { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     val hasUnsavedChanges = title != original?.title.orEmpty() ||
         body != original?.body.orEmpty() ||
@@ -325,6 +382,40 @@ internal fun NoteEditorContent(
         pinned != (original?.pinned ?: false) ||
         reminder != original?.reminder.orEmpty() ||
         voiceChangesPending
+
+    // ---- Undo/redo plumbing ----
+    fun snapshotOf(value: TextFieldValue) = TextUndoManager.Snapshot(
+        text = value.text,
+        selectionStart = value.selection.start,
+        selectionEnd = value.selection.end
+    )
+
+    fun setBody(newValue: TextFieldValue, undoable: Boolean = true) {
+        if (undoable) undoManager.push(snapshotOf(bodyValue))
+        bodyValue = newValue
+        canUndo = undoManager.canUndo()
+        canRedo = undoManager.canRedo()
+    }
+
+    fun performUndo() {
+        val restored = undoManager.undo(snapshotOf(bodyValue)) ?: return
+        bodyValue = TextFieldValue(
+            text = restored.text,
+            selection = TextRange(restored.selectionStart, restored.selectionEnd)
+        )
+        canUndo = undoManager.canUndo()
+        canRedo = undoManager.canRedo()
+    }
+
+    fun performRedo() {
+        val restored = undoManager.redo(snapshotOf(bodyValue)) ?: return
+        bodyValue = TextFieldValue(
+            text = restored.text,
+            selection = TextRange(restored.selectionStart, restored.selectionEnd)
+        )
+        canUndo = undoManager.canUndo()
+        canRedo = undoManager.canRedo()
+    }
 
     fun requestDismiss() {
         if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
@@ -349,22 +440,35 @@ internal fun NoteEditorContent(
     }
 
     fun pickReminder() {
-        val now = Calendar.getInstance()
+        // Android 13+ needs explicit POST_NOTIFICATIONS permission. Request it here
+        // rather than on app launch — this is the moment the user signals they want
+        // a reminder, so the prompt is contextual and likely to be accepted.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        // Seed the picker from the existing reminder when there is one. Users
+        // expecting "edit reminder" should not have to re-scroll to the same date.
+        val seed = NoteTextParsing.parseReminderOrNull(reminder) ?: Calendar.getInstance()
         DatePickerDialog(context, { _, year, month, day ->
             TimePickerDialog(context, { _, hour, minute ->
                 val picked = Calendar.getInstance().apply { set(year, month, day, hour, minute, 0) }
                 reminder = NoteText.formatReminder(picked)
-            }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show()
-        }, now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH)).show()
+            }, seed.get(Calendar.HOUR_OF_DAY), seed.get(Calendar.MINUTE), true).show()
+        }, seed.get(Calendar.YEAR), seed.get(Calendar.MONTH), seed.get(Calendar.DAY_OF_MONTH)).show()
     }
 
     fun onBodyChange(next: TextFieldValue) {
         val continued = if (next.selection.collapsed) {
             NoteText.continueList(bodyValue.text, next.text, next.selection.start)
         } else null
-        bodyValue = if (continued != null) {
-            TextFieldValue(continued.first, TextRange(continued.second))
-        } else next
+        setBody(
+            if (continued != null) TextFieldValue(continued.first, TextRange(continued.second))
+            else next
+        )
     }
 
     fun applyLineEdit(transform: (String, Int) -> Pair<String, Int>) {
@@ -377,7 +481,7 @@ internal fun NoteEditorContent(
             selectionEnd = oldValue.selection.end,
             newCursor = cursor
         )
-        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+        setBody(TextFieldValue(text, TextRange(selectionStart, selectionEnd)))
     }
 
     fun applyMarkdownLink() {
@@ -385,7 +489,7 @@ internal fun NoteEditorContent(
         val (text, selectionStart, selectionEnd) = NoteText.insertMarkdownLink(
             oldValue.text, oldValue.selection.start, oldValue.selection.end
         )
-        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+        setBody(TextFieldValue(text, TextRange(selectionStart, selectionEnd)))
     }
 
     fun applyInlineEdit(marker: String) {
@@ -393,7 +497,7 @@ internal fun NoteEditorContent(
         val (text, selectionStart, selectionEnd) = NoteText.toggleInlineFormat(
             oldValue.text, oldValue.selection.start, oldValue.selection.end, marker
         )
-        bodyValue = TextFieldValue(text, TextRange(selectionStart, selectionEnd))
+        setBody(TextFieldValue(text, TextRange(selectionStart, selectionEnd)))
     }
 
     fun shareNote() {
@@ -415,19 +519,16 @@ internal fun NoteEditorContent(
         ).show()
     }
 
-    /**
-     * Removes the marker from the body right away and queues the file + manifest
-     * entry for deletion on the next save. If the user discards instead of saving,
-     * the original body (with marker) is preserved and the file is untouched.
-     */
     fun deleteInlineVoice(attachmentId: String) {
         val newBody = NoteText.removeVoiceMarker(bodyValue.text, attachmentId)
         if (newBody != bodyValue.text) {
-            bodyValue = bodyValue.copy(
-                text = newBody,
-                selection = TextRange(
-                    bodyValue.selection.start.coerceIn(0, newBody.length),
-                    bodyValue.selection.end.coerceIn(0, newBody.length)
+            setBody(
+                bodyValue.copy(
+                    text = newBody,
+                    selection = TextRange(
+                        bodyValue.selection.start.coerceIn(0, newBody.length),
+                        bodyValue.selection.end.coerceIn(0, newBody.length)
+                    )
                 )
             )
             pendingVoiceDeletions = pendingVoiceDeletions + attachmentId
@@ -435,55 +536,129 @@ internal fun NoteEditorContent(
         if (activeVoicePlayerId == attachmentId) activeVoicePlayerId = null
     }
 
-    /**
-     * Flushes deferred voice deletions and hands the note off to the parent. Deletions
-     * run before [onSave] so the composable is still alive and can execute them; if
-     * [onSave] throws, the caller can reopen the note and see missing-attachment cards
-     * for cleanup, which is preferable to silently orphaning files.
-     */
     fun performSave(note: NestNote) {
-        if (pendingVoiceDeletions.isNotEmpty()) {
+        onSave(note)
+    }
+
+    // ---- Autosave ----
+    val currentHasUnsavedChanges by rememberUpdatedState(hasUnsavedChanges)
+    fun writeDraftNow() {
+        if (!currentHasUnsavedChanges) return
+        if (original == null && title.isBlank() && bodyValue.text.isBlank()) return
+        runCatching {
+            DraftStore(context).write(
+                DraftStore.Draft(
+                    noteId = voiceNoteId,
+                    title = title,
+                    body = bodyValue.text,
+                    category = category,
+                    color = colorIndex,
+                    background = backgroundIndex,
+                    pinned = pinned,
+                    reminder = reminder,
+                    wallpaperUri = customWallpaperUri,
+                    savedAtMillis = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(
+        title, bodyValue.text, category, colorIndex, backgroundIndex,
+        pinned, reminder, customWallpaperUri
+    ) {
+        delay(2_000L)
+        writeDraftNow()
+    }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            delay(15_000L)
+            writeDraftNow()
+        }
+    }
+
+    // ---- Draft recovery (for existing notes — new-note orphans are Phase 7b) ----
+    var pendingDraft by remember { mutableStateOf<DraftStore.Draft?>(null) }
+    var showDraftRecoveryDialog by remember { mutableStateOf(false) }
+    val draftTimeFormatter = remember {
+        SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+    }
+
+    LaunchedEffect(voiceNoteId) {
+        val existing = original ?: return@LaunchedEffect
+        val draft = withContext(Dispatchers.IO) { DraftStore(context).read(existing.id) }
+        if (draft != null && draft.savedAtMillis > existing.updated) {
+            pendingDraft = draft
+            showDraftRecoveryDialog = true
+        }
+    }
+
+    DisposableEffect(voiceNoteId) {
+        onRegisterVoiceCommit {
             val store = VoiceAttachmentStore(context)
             val manifest = VoiceAttachmentManifest(context)
-            pendingVoiceDeletions.forEach { id ->
+            val anchored = NoteText.voiceMarkers(bodyValue.text).map { it.attachmentId }.toSet()
+            (pendingVoiceDeletions + sessionVoiceIds).filter { it !in anchored }.forEach { id ->
                 runCatching { store.delete(voiceNoteId, id) }
                 runCatching { manifest.remove(voiceNoteId, id) }
             }
             pendingVoiceDeletions = emptySet()
+            sessionVoiceIds = emptySet()
+            voiceChangesPending = false
+            runCatching { DraftStore(context).clear(voiceNoteId) }
         }
-        voiceChangesPending = false
-        onSave(note)
+        onRegisterVoiceDiscard {
+            val store = VoiceAttachmentStore(context)
+            val manifest = VoiceAttachmentManifest(context)
+            val ids = sessionVoiceIds
+            sessionVoiceIds = emptySet()
+            pendingVoiceDeletions = emptySet()
+            ids.forEach { id ->
+                runCatching { store.delete(voiceNoteId, id) }
+                runCatching { manifest.remove(voiceNoteId, id) }
+            }
+            runCatching { DraftStore(context).clear(voiceNoteId) }
+        }
+        onDispose { }
     }
 
-    LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
-    // A brand-new note opens ready to type.
-    LaunchedEffect(Unit) { if (original == null) runCatching { titleFocus.requestFocus() } }
-
-    // One-time migration: any voice attachment on disk without a marker in the body
-    // is anchored at the end of the note. Idempotent — re-runs are no-ops.
-    LaunchedEffect(voiceNoteId) {
-        val store = VoiceAttachmentStore(context)
-        val existingIds = runCatching { store.list(voiceNoteId).map { it.attachmentId } }
-            .getOrDefault(emptyList())
-        if (existingIds.isNotEmpty()) {
-            val migrated = NoteText.migrateOrphanAttachments(bodyValue.text, existingIds)
-            if (migrated != bodyValue.text) {
-                bodyValue = bodyValue.copy(text = migrated)
+    val markerIds = remember(body) { NoteText.voiceMarkers(body).map { it.attachmentId }.distinct() }
+    LaunchedEffect(voiceNoteId, markerIds) {
+        if (markerIds.isNotEmpty()) {
+            voiceNames = withContext(Dispatchers.IO) {
+                runCatching {
+                    VoiceAttachmentManifest(context).list(voiceNoteId, VoiceAttachmentStore(context))
+                        .associate { it.attachmentId to it.displayName }
+                }.getOrDefault(emptyMap())
             }
         }
     }
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        unfocusedContainerColor = Color.Transparent,
-        focusedContainerColor = Color.Transparent,
-        unfocusedBorderColor = Color.Transparent,
-        focusedBorderColor = Color.Transparent,
-        unfocusedTextColor = ink,
-        focusedTextColor = ink,
-        cursorColor = accent,
-        unfocusedPlaceholderColor = muted,
-        focusedPlaceholderColor = muted
-    )
+    LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
+    LaunchedEffect(Unit) { if (original == null) runCatching { titleFocus.requestFocus() } }
+
+    LaunchedEffect(voiceNoteId) {
+        val store = VoiceAttachmentStore(context)
+        val existingIds = runCatching { store.list(voiceNoteId).map { it.attachmentId } }
+            .getOrDefault(emptyList())
+            .filter { it !in pendingVoiceDeletions && it !in sessionVoiceIds }
+        if (existingIds.isNotEmpty()) {
+            val migrated = NoteText.migrateOrphanAttachments(bodyValue.text, existingIds)
+            if (migrated != bodyValue.text) {
+                setBody(
+                    bodyValue.copy(
+                        text = migrated,
+                        selection = TextRange(
+                            bodyValue.selection.start.coerceIn(0, migrated.length),
+                            bodyValue.selection.end.coerceIn(0, migrated.length)
+                        )
+                    ),
+                    undoable = false
+                )
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -495,6 +670,22 @@ internal fun NoteEditorContent(
                 }
             )
             .background(editorCanvas)
+            .onPreviewKeyEvent { event ->
+                if (editorMode != EditorMode.Editing) return@onPreviewKeyEvent false
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (!event.isCtrlPressed) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.Z -> {
+                        if (event.isShiftPressed) performRedo() else performUndo()
+                        true
+                    }
+                    Key.Y -> {
+                        performRedo()
+                        true
+                    }
+                    else -> false
+                }
+            }
     ) {
         if (customWallpaperUri.isNotBlank()) {
             NoteCustomWallpaper(customWallpaperUri, Modifier.fillMaxSize())
@@ -642,6 +833,18 @@ internal fun NoteEditorContent(
                                         },
                                         leadingIcon = { Icon(Icons.Default.Archive, null) }
                                     )
+                                    // Duplicate — captures the current editor state,
+                                    // including unsaved edits, as a new note.
+                                    if (onDuplicate != null) {
+                                        DropdownMenuItem(
+                                            text = { Text("Duplicate note") },
+                                            onClick = {
+                                                moreMenu = false
+                                                onDuplicate.invoke(buildNote())
+                                            },
+                                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
+                                        )
+                                    }
                                 }
                                 DropdownMenuItem(
                                     text = { Text("Share note") },
@@ -732,24 +935,24 @@ internal fun NoteEditorContent(
                                 } else {
                                     (fadeIn(
                                         animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessMediumLow
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium
                                         )
                                     ) + slideInVertically(
                                         animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessMediumLow
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium
                                         )
                                     ) { it / 4 }) togetherWith
                                         (fadeOut(
                                             animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMedium
                                             )
                                         ) + slideOutVertically(
                                             animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMedium
                                             )
                                         ) { -it / 4 })
                                 }
@@ -759,12 +962,14 @@ internal fun NoteEditorContent(
                             TextButton(
                                 onClick = {
                                     if (mode == EditorMode.Editing) {
-                                        if (title.isNotBlank()) performSave(buildNote())
+                                        if (title.isNotBlank() || body.isNotBlank()) {
+                                            performSave(buildNote())
+                                        }
                                     } else {
                                         requestDismiss()
                                     }
                                 },
-                                enabled = mode == EditorMode.Locked || title.isNotBlank()
+                                enabled = mode == EditorMode.Locked || title.isNotBlank() || body.isNotBlank()
                             ) { Text(if (mode == EditorMode.Editing) "Save" else "Done") }
                         }
                     }
@@ -785,12 +990,12 @@ internal fun NoteEditorContent(
                     }
                 ) {
                     Column(Modifier.imePadding()) {
-                        if (showCounts) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (showCounts) {
                                 val words = remember(body) { NoteText.wordCount(body) }
                                 val minutes = NoteText.readingMinutes(words)
                                 Text(
@@ -799,11 +1004,24 @@ internal fun NoteEditorContent(
                                         append(" · ${body.length} characters")
                                         if (minutes > 0) append(" · $minutes min read")
                                     },
+                                    modifier = Modifier.weight(1f).padding(start = 8.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = muted,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                            if (canUndo) {
+                                IconButton(onClick = { performUndo() }) {
+                                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
+                                }
+                            }
+                            if (canRedo) {
+                                IconButton(onClick = { performRedo() }) {
+                                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
+                                }
                             }
                         }
                     }
@@ -819,7 +1037,6 @@ internal fun NoteEditorContent(
                 ) {
                     Spacer(Modifier.height(if (compactDialog) 8.dp else 18.dp))
 
-                    // ---- Title ----
                     BasicTextField(
                         value = title,
                         onValueChange = { if (editorMode == EditorMode.Editing) title = it },
@@ -866,7 +1083,6 @@ internal fun NoteEditorContent(
                         )
                     }
 
-                    // ---- Checklist helpers ----
                     val checklistItems = remember(bodyValue.text) {
                         NoteText.checklistItems(bodyValue.text)
                     }
@@ -893,18 +1109,18 @@ internal fun NoteEditorContent(
                                             checked = item.checked,
                                             modifier = Modifier.semantics {
                                                 contentDescription = buildString {
-                                                    append(
-                                                        item.text.ifBlank { "Empty checklist item" }
-                                                    )
+                                                    append(item.text.ifBlank { "Empty checklist item" })
                                                     append(", ")
                                                     append(if (item.checked) "completed" else "not completed")
                                                 }
                                             },
                                             enabled = editorMode == EditorMode.Editing,
                                             onCheckedChange = { checked ->
-                                                bodyValue = bodyValue.copy(
-                                                    text = NoteText.setChecklistItemChecked(
-                                                        bodyValue.text, item.lineIndex, checked
+                                                setBody(
+                                                    bodyValue.copy(
+                                                        text = NoteText.setChecklistItemChecked(
+                                                            bodyValue.text, item.lineIndex, checked
+                                                        )
                                                     )
                                                 )
                                             }
@@ -914,11 +1130,13 @@ internal fun NoteEditorContent(
                                             modifier = Modifier.weight(1f).clickable(
                                                 enabled = editorMode == EditorMode.Editing
                                             ) {
-                                                bodyValue = bodyValue.copy(
-                                                    text = NoteText.setChecklistItemChecked(
-                                                        bodyValue.text,
-                                                        item.lineIndex,
-                                                        !item.checked
+                                                setBody(
+                                                    bodyValue.copy(
+                                                        text = NoteText.setChecklistItemChecked(
+                                                            bodyValue.text,
+                                                            item.lineIndex,
+                                                            !item.checked
+                                                        )
                                                     )
                                                 )
                                             },
@@ -937,7 +1155,6 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    // ---- Preview toggle ----
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -948,7 +1165,6 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    // ---- Body: preview or edit ----
                     if (previewVisible) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f),
@@ -984,7 +1200,7 @@ internal fun NoteEditorContent(
                             },
                             readOnly = editorMode == EditorMode.Locked,
                             visualTransformation = if (editorMode == EditorMode.Editing) {
-                                VoiceMarkerVisualTransformation(colors.primaryContainer, colors.onPrimaryContainer)
+                                VoiceMarkerVisualTransformation(colors.primaryContainer, colors.onPrimaryContainer, voiceNames)
                             } else {
                                 VisualTransformation.None
                             },
@@ -1015,7 +1231,6 @@ internal fun NoteEditorContent(
 
                     Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
 
-                    // ---- Category chip ----
                     Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                         AssistChip(
                             onClick = { if (editorMode == EditorMode.Editing) categoryMenu = true },
@@ -1044,7 +1259,6 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    // ---- Reminder chip ----
                     if (reminder.isNotBlank()) {
                         Surface(
                             onClick = { pickReminder() },
@@ -1069,7 +1283,7 @@ internal fun NoteEditorContent(
                                         color = ink
                                     )
                                     Text(
-                                        "Saved as a reminder time only — notifications aren't enabled yet.",
+                                        "You'll be notified at this time.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = muted
                                     )
@@ -1085,7 +1299,6 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    // ---- Edit timestamps ----
                     if (original != null) {
                         val format = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
                         Text(
@@ -1155,7 +1368,6 @@ internal fun NoteEditorContent(
         }
     )
 
-    // ---- Delete note dialog ----
     if (deleteConfirmation && onDelete != null) {
         AlertDialog(
             onDismissRequest = { deleteConfirmation = false },
@@ -1178,7 +1390,6 @@ internal fun NoteEditorContent(
         )
     }
 
-    // ---- Discard note dialog ----
     if (discardConfirmation) {
         AlertDialog(
             onDismissRequest = { discardConfirmation = false },
@@ -1196,12 +1407,65 @@ internal fun NoteEditorContent(
         )
     }
 
-    // ---- Voice note dialog (opened from the editor More menu) ----
-    if (voiceNoteDialog && editorMode == EditorMode.Editing) {
+    // Existing-note draft recovery dialog (Phase 7a). Orphaned new-note drafts are
+    // handled by NestNoteApp on app start (Phase 7b).
+    if (showDraftRecoveryDialog && pendingDraft != null) {
+        val draft = pendingDraft!!
         AlertDialog(
-            onDismissRequest = { voiceNoteDialog = false },
-            title = { Text("Voice note") },
+            onDismissRequest = {
+                showDraftRecoveryDialog = false
+                pendingDraft = null
+            },
+            title = { Text("Recover unsaved changes?") },
             text = {
+                Text(
+                    "A draft from ${draftTimeFormatter.format(Date(draft.savedAtMillis))} " +
+                        "was found. Recover it?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    title = draft.title
+                    bodyValue = TextFieldValue(
+                        text = draft.body,
+                        selection = TextRange(draft.body.length)
+                    )
+                    category = draft.category
+                    colorIndex = draft.color.coerceIn(0, noteAccents.lastIndex)
+                    backgroundIndex = draft.background.coerceIn(0, 9)
+                    pinned = draft.pinned
+                    reminder = draft.reminder
+                    customWallpaperUri = draft.wallpaperUri
+                    undoManager.clear()
+                    canUndo = false
+                    canRedo = false
+                    showDraftRecoveryDialog = false
+                    pendingDraft = null
+                }) { Text("Recover") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    runCatching { DraftStore(context).clear(voiceNoteId) }
+                    showDraftRecoveryDialog = false
+                    pendingDraft = null
+                }) { Text("Discard draft") }
+            }
+        )
+    }
+
+    if (voiceNoteDialog && editorMode == EditorMode.Editing) {
+        ModalBottomSheet(
+            onDismissRequest = { voiceNoteDialog = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 28.dp)) {
+                Text("Voice note", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Recorded and stored encrypted on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
+                )
                 VoiceNoteControls(
                     noteId = voiceNoteId,
                     cursorAtRecordStart = { bodyValue.selection.start },
@@ -1209,19 +1473,16 @@ internal fun NoteEditorContent(
                         val (newText, newCursor) = NoteText.insertVoiceMarker(
                             bodyValue.text, cursor, attachmentId
                         )
-                        bodyValue = TextFieldValue(newText, TextRange(newCursor))
+                        setBody(TextFieldValue(newText, TextRange(newCursor)))
                         voiceChangesPending = true
+                        voiceNoteDialog = false
                     },
-                    onDiscardHandlerReady = onRegisterVoiceDiscard
+                    addedThisSession = sessionIdSet
                 )
-            },
-            confirmButton = {
-                TextButton(onClick = { voiceNoteDialog = false }) { Text("Done") }
             }
-        )
+        }
     }
 
-    // ---- Delete voice note dialog ----
     if (pendingVoiceDeletion != null) {
         AlertDialog(
             onDismissRequest = { pendingVoiceDeletion = null },
@@ -1246,11 +1507,6 @@ internal fun NoteEditorContent(
     }
 }
 
-/**
- * Renders the note body as alternating text and inline voice players.
- * Text segments use the existing MarkdownPreview renderer; voice segments
- * use [InlineVoicePlayer] at each marker's position.
- */
 @Composable
 private fun PreviewWithInlineVoice(
     body: String,
@@ -1277,10 +1533,7 @@ private fun PreviewWithInlineVoice(
                         factory = { viewContext ->
                             TextView(viewContext).apply {
                                 setTextColor(ink.toArgb())
-                                setTextSize(
-                                    android.util.TypedValue.COMPLEX_UNIT_SP,
-                                    bodySp
-                                )
+                                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, bodySp)
                                 setTextIsSelectable(true)
                                 movementMethod = LinkMovementMethod.getInstance()
                             }
