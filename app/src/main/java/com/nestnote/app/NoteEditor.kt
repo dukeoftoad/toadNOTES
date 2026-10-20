@@ -295,6 +295,7 @@ internal fun NoteEditorContent(
     var noteFormat by rememberSaveable(original?.id) { mutableStateOf(original?.format ?: "plain") }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
+    var appearanceStartWallpaperUri by remember { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     var discardConfirmation by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf(false) }
     var reminderMenu by remember { mutableStateOf(false) }
@@ -727,6 +728,7 @@ internal fun NoteEditorContent(
                                 onClick = {
                                     appearanceStartColor = colorIndex
                                     appearanceStartBackground = backgroundIndex
+                                    appearanceStartWallpaperUri = customWallpaperUri
                                     toolRailTab = ToolRailTab.Colour
                                     toolRailVisible = true
                                 },
@@ -742,6 +744,7 @@ internal fun NoteEditorContent(
                                 onClick = {
                                     appearanceStartColor = colorIndex
                                     appearanceStartBackground = backgroundIndex
+                                    appearanceStartWallpaperUri = customWallpaperUri
                                     toolRailTab = ToolRailTab.Format
                                     toolRailVisible = true
                                 },
@@ -1348,6 +1351,7 @@ internal fun NoteEditorContent(
         if (discardDraft) {
             colorIndex = appearanceStartColor
             backgroundIndex = appearanceStartBackground
+            customWallpaperUri = appearanceStartWallpaperUri
         }
         toolRailVisible = false
     }
@@ -1360,7 +1364,11 @@ internal fun NoteEditorContent(
         backgroundIndex = backgroundIndex,
         onColorSelected = { colorIndex = it },
         onImportWallpaper = { wallpaperImportLauncher.launch(arrayOf("image/*")) },
-        onBackgroundSelected = { backgroundIndex = it },
+        // A selected preset must replace the imported image, which otherwise takes precedence.
+        onBackgroundSelected = {
+            backgroundIndex = it
+            customWallpaperUri = ""
+        },
         onApply = { dismissToolRail(discardDraft = false) },
         onCancel = { dismissToolRail(discardDraft = true) },
         onFormat = { action ->
