@@ -479,6 +479,7 @@ internal fun NestNoteApp(store: NoteStore) {
                     BackupRestoreScreen(
                         totalNotes = notes.size,
                         archivedNotes = notes.count { it.archived },
+                        pinnedNotes = notes.count { it.pinned && !it.archived },
                         onExportNotes = { exportLauncher.launch("nestnote-backup.json") },
                         onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
                     )
