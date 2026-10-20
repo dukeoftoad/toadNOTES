@@ -1,4 +1,4 @@
-name: Android UI Tests (API 36)
+name: Android Emulator UI Tests (ReactiveCircus)
 on:
   workflow_dispatch:
 permissions:
@@ -25,8 +25,8 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" "emulator"
-      - name: Run emulator UI tests
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Run emulator UI tests with ReactiveCircus
+        uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 36
           target: google_apis
@@ -35,7 +35,7 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect
           emulator-boot-timeout: 900
           disable-animations: true
-          script: gradle --no-daemon connectedDebugAndroidTest
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
