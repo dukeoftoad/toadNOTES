@@ -7,6 +7,21 @@
 - Remove hardcoded local Java 17 paths from `gradle.properties` so CI uses the Java installation configured on the runner.
 - Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
 
+### Added (Backup & restore)
+- Added optional scheduled automatic backups using Android background work, with a visible last-run status and an approximate next-run window.
+- Added a versioned JSON backup format with format identification, schema version, and creation timestamp.
+- Improved restore safety with backup validation, unsupported-schema rejection, and a preview of notes to add, update, or skip before confirmation.
+
+### Improved (Backup & restore)
+- Automatic backups use app-private storage; Android may delay background execution, and app-private backups can be lost when the app is uninstalled.
+- Manual exports let users choose a destination through Android's save flow. Exporting a file does not automatically upload it to cloud storage.
+- Restore remains merge-oriented rather than destructively replacing the current notes. Audio attachments remain excluded from the current backup format.
+
+### Privacy and portability notes
+- Password-protected backup files are not implemented in this version.
+- Users should keep exported backup files in a secure location; exported JSON contains note data.
+- The versioned format is intended to support validation and future migration across app versions.
+
 ### Testing and release readiness
 - CI configuration fixes address Gradle provisioning and Java-home failures; confirm a complete green workflow run before release.
 - Device-only gesture interruption, predictive-back cancellation, and editor integration checks remain pending.
