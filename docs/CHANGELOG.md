@@ -1,5 +1,13 @@
 # NESTNOTE Changelog
 
+## Unreleased
+
+### Fixed
+- Voice-note playback cards now stack their title/waveform and seek controls vertically, preventing the seek bar from overlapping the voice-note label.
+- Voice attachment markers render as readable chips in both edit and read-only modes instead of exposing internal attachment IDs.
+- Added regression coverage for inline and adjacent voice markers, text preservation, and marker removal.
+
+
 
 ---
 
