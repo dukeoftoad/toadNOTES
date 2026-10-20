@@ -1,11 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Existing: voice recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Phase C: reminders -->
+    <!-- SCHEDULE_EXACT_ALARM — auto-granted on Android 12, revocable on 12+,
+         denied by default on Android 14+. ReminderScheduler falls back to
+         inexact setAndAllowWhileIdle when this is denied, so reminders still
+         fire (possibly a minute or two late). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- RECEIVE_BOOT_COMPLETED — normal permission, granted at install.
+         BootReceiver uses it to re-register alarms after device reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- POST_NOTIFICATIONS — runtime permission on Android 13+.
+         Requested contextually when the user first opens the reminder picker. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="false"
         android:label="NESTNOTE"
         android:icon="@drawable/nestnote_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -15,5 +35,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Phase C: fires when a reminder alarm goes off. Explicit intent from
+             ReminderScheduler; exported=false prevents external apps from
+             posting fake reminders to this receiver. -->
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false" />
+
+        <!-- Phase C: re-registers alarms after reboot. BOOT_COMPLETED is a
+             protected system broadcast (only the OS can send it); the system
+             still delivers to a non-exported receiver, so exported=false is
+             correct and stricter than the default. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>

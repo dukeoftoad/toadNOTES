@@ -58,7 +58,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -263,7 +262,7 @@ private class EncryptedPcmRecording(
  *    Record or Attach WAV. The parent uses it to insert a marker at that position.
  *  - [onRecordingAttached] fires once per completed attachment, passing the id and
  *    the cursor at record-start. The parent should insert `[[voice:id]]` at that cursor.
- *  - [onDiscardHandlerReady] receives a callback the parent invokes when the user
+ *  - [addedThisSession] is owned by the editor; it removes unattached ids on save and all ids on discard.
  *    discards the whole editor session. All attachments created during this session
  *    are removed, any in-flight recording is discarded, and any pending review is
  *    deleted. Pre-existing attachments are never touched.
@@ -273,7 +272,7 @@ internal fun VoiceNoteControls(
     noteId: Long,
     cursorAtRecordStart: () -> Int,
     onRecordingAttached: (attachmentId: String, cursorAtRecordStart: Int) -> Unit,
-    onDiscardHandlerReady: (() -> Unit) -> Unit
+    addedThisSession: MutableSet<String>
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -294,7 +293,7 @@ internal fun VoiceNoteControls(
 
     // Review state (finished recording, not yet attached)
     var pendingReviewId by remember(noteId) { mutableStateOf<String?>(null) }
-    var pendingReviewName by remember(noteId) { mutableStateOf("Voice recording") }
+    var pendingReviewName by remember(noteId) { mutableStateOf(defaultVoiceName()) }
     var pendingReviewDurationMs by remember(noteId) { mutableIntStateOf(0) }
     var pendingReviewCursor by remember(noteId) { mutableIntStateOf(0) }
     var confirmDiscardReview by remember { mutableStateOf(false) }
@@ -322,8 +321,6 @@ internal fun VoiceNoteControls(
         mutableStateOf<AudioManager.OnAudioFocusChangeListener?>(null)
     }
 
-    // Attachments created during this editing session. Removed from disk on discard.
-    val addedThisSession = remember(noteId) { mutableSetOf<String>() }
 
     var status by remember { mutableStateOf("") }
 
@@ -351,7 +348,7 @@ internal fun VoiceNoteControls(
                     attachmentManifest.put(
                         VoiceAttachmentMetadata(
                             noteId, id, System.currentTimeMillis(), duration,
-                            saved.encryptedSizeBytes, "Imported audio"
+                            saved.encryptedSizeBytes, defaultVoiceName()
                         ),
                         attachmentStore
                     )
@@ -528,7 +525,7 @@ internal fun VoiceNoteControls(
             audioFocusListener = null
             if (payload != null) {
                 pendingReviewId = id
-                pendingReviewName = "Voice recording"
+                pendingReviewName = defaultVoiceName()
                 pendingReviewDurationMs = (
                     ((payload.encryptedSizeBytes - 32L).coerceAtLeast(0L) * 1000L) /
                         (VOICE_SAMPLE_RATE * 2L)
@@ -568,60 +565,6 @@ internal fun VoiceNoteControls(
             recordingSession?.stop()
             reviewSession?.stop()
             if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
-        }
-    }
-
-    // Register the discard handler with the parent (whole-editor discard).
-    SideEffect {
-        onDiscardHandlerReady {
-            // Snapshot before clearing so files can be deleted after the recording
-            // session has fully drained its worker threads.
-            val idsToClean = addedThisSession.toList()
-            addedThisSession.clear()
-
-            // 1. Stop any review playback.
-            reviewSession?.stop()
-            reviewSession = null
-            previewingReview = false
-            reviewPlaying = false
-            reviewPaused = false
-            reviewPositionMs = 0
-            reviewDurationMs = 0
-
-            // 2. Clear review UI state. The pending-review file (if any) is in
-            //    idsToClean and will be deleted below.
-            pendingReviewId = null
-            pendingReviewName = "Voice recording"
-            pendingReviewDurationMs = 0
-            pendingReviewCursor = 0
-            confirmDiscardReview = false
-
-            // 3. Discard any in-flight recording session. discardAndWait() blocks
-            //    until the recorder and storage threads exit; queued completion
-            //    callbacks become no-ops because addedThisSession is already empty.
-            val session = recordingSession
-            recordingSession = null
-            session?.discardAndWait()
-
-            // 4. Delete every attachment created during this editing session.
-            //    Pre-existing attachments (opened from the original note) are never
-            //    in idsToClean and remain on disk.
-            idsToClean.forEach { id ->
-                runCatching { attachmentStore.delete(noteId, id) }
-                runCatching { attachmentManifest.remove(noteId, id) }
-            }
-
-            // 5. Reset recording UI.
-            startingRecording = false
-            recording = false
-            recordingPaused = false
-            elapsedRecordingSeconds = 0
-            importingAudio = false
-
-            // 6. Release audio focus.
-            if (requestedAudioFocus) abandonVoiceAudioFocus(audioManager, audioFocusListener)
-            requestedAudioFocus = false
-            audioFocusListener = null
         }
     }
 
@@ -932,6 +875,7 @@ internal fun VoiceNoteControls(
             )
         }
         if (showPermissionSettings) {
+            TextButton(onClick = { beginRecordingFlow() }) { Text("Try again") }
             OutlinedButton(onClick = {
                 showPermissionSettings = false
                 runCatching {
@@ -965,7 +909,7 @@ internal fun VoiceNoteControls(
                         runCatching { attachmentManifest.remove(noteId, id) }
                     }
                     pendingReviewId = null
-                    pendingReviewName = "Voice recording"
+                    pendingReviewName = defaultVoiceName()
                     pendingReviewDurationMs = 0
                     pendingReviewCursor = 0
                     status = "Recording discarded. You can record again at any time."
@@ -1048,7 +992,7 @@ internal fun requestVoiceAudioFocus(
     onInterrupted: () -> Unit
 ): AudioManager.OnAudioFocusChangeListener? {
     val listener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change <= AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) onInterrupted()
+        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) onInterrupted()
     }
     val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
         .setAudioAttributes(
@@ -1157,3 +1101,6 @@ private fun RecordingDot(active: Boolean, reducedMotion: Boolean) {
             .background(MaterialTheme.colorScheme.error.copy(alpha = alpha))
     )
 }
+/** e.g. "Voice note · Oct 20, 3:42 PM". Editable in the review step and stored in the manifest. */
+internal fun defaultVoiceName(): String =
+    "Voice note \u00b7 " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date())

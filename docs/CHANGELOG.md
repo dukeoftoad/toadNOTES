@@ -1,6 +1,49 @@
 # NESTNOTE Changelog
 
-## v1.3.2 — Upcoming
+
+---
+
+## 3. Release notes for `v1.3.1`
+
+Create `CHANGELOG.md` entry or append to the top (match your existing format — you have a `CHANGELOG.md` in the tree):
+
+```markdown
+## v1.3.1 — 2026-10-20
+
+Bug-fix release. No new features, no data migration. Safe drop-in upgrade from
+v1.3.0.
+
+### Fixed
+
+- **Draft recovery reliability** — In-progress drafts are now serialized with a
+  format that survives both on-device and in unit tests. Fixes a bug where the
+  draft store could fail silently on certain note sizes, leaving crash recovery
+  unreliable.
+- **Voice note state preserved across UI updates** — When editing an existing
+  note, voice recordings made during the session are no longer lost if the app
+  is backgrounded, rotated, or a snackbar appears. Previously the editor could
+  silently discard pending voice state under specific recomposition sequences.
+- **Orphan draft recovery survives rotation** — If the app was killed while
+  editing a brand-new note, the "Recover unsaved note?" dialog now re-appears
+  correctly after device rotation. Before, the dialog could be dismissed
+  implicitly when the screen rotated mid-recovery.
+- **Reminder scheduling moved off the main thread** — Setting or removing a
+  reminder on a device with many reminder-enabled notes no longer causes a brief
+  UI pause. Alarm scheduling now happens on a background dispatcher.
+
+### Internal
+
+- Replaced `org.json` with `java.util.Properties` in `DraftStore`. Eliminates
+  the JVM/Android classpath asymmetry that was blocking unit tests.
+- Test suite: 207 tests, all passing (was 201/207).
+
+### Known issues
+
+See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for the current list.
+Remaining open items are all low-priority UX gaps.
+
+
+## v1.3.2
 
 ### Fixed (Android CI)
 - Show the inline voice-note seek slider for short recordings as well as long clips; previously, seeking was hidden for every clip shorter than 60 seconds.
