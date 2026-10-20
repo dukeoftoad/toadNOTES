@@ -53,10 +53,6 @@ internal fun MoreScreen(
             MoreRow(Icons.Default.Archive, "Archived notes", "$archivedCount notes kept out of your main lists", true) { onOpen("Archived") }
             MoreRow(Icons.Default.Category, "Categories", "$categoryCount categories", true) { onOpen("Categories") }
         }
-        MoreGroup("Data") {
-            // Opens the backup section of Settings directly; the Preferences group keeps general Settings.
-            MoreRow(Icons.Default.Backup, "Backup & restore", "Save a JSON backup or merge-restore one", false) { onOpen("Backup") }
-        }
         MoreGroup("Preferences") {
             MoreRow(Icons.Default.Settings, "Settings", "Appearance, layout, editor and note behaviour", false) { onOpen("Settings") }
             // Prototype parity: the Preferences group ends with About & help
