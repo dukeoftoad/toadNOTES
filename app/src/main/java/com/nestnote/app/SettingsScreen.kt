@@ -573,3 +573,67 @@ internal fun OverviewTile(
         }
     }
 }
+/** Dedicated data-management destination, kept separate from general preferences. */
+@Composable
+internal fun BackupRestoreScreen(
+    totalNotes: Int,
+    archivedNotes: Int,
+    onExportNotes: () -> Unit,
+    onImportNotes: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text("Your notes, in your control", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "Create a backup file or restore notes from one whenever you need to move or protect your data.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant
+        )
+        SettingsSection(title = "Backup & restore", subtitle = "Stored locally, shared only when you choose") {
+            Text(
+                "$" + "{totalNotes} notes on this device · $" + "{archivedNotes} archived",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "Backups include note text and note settings. Voice recordings and audio attachments are not included.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+            FilledTonalButton(
+                onClick = onExportNotes,
+                modifier = Modifier.fillMaxWidth().testTag("settings_backup")
+            ) {
+                Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Back up notes")
+            }
+            OutlinedButton(
+                onClick = onImportNotes,
+                modifier = Modifier.fillMaxWidth().testTag("settings_restore")
+            ) {
+                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Restore backup")
+            }
+            Text(
+                "Restore merges notes instead of deleting your existing notes. When the same note exists in both places, the most recently edited copy is kept.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        }
+        SettingsSection(title = "More data tools", subtitle = "Room for future features") {
+            Text(
+                "Additional options such as backup reminders, backup history, and data-management tools can live here as they are added.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant
+            )
+        }
+    }
+}
