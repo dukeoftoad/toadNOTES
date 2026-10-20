@@ -147,6 +147,8 @@ internal fun NestNoteApp(store: NoteStore) {
     // failed load can never overwrite real data with an empty collection.
     var notes by remember { mutableStateOf<List<NestNote>>(emptyList()) }
     var storageLoaded by remember { mutableStateOf(false) }
+    var lastBackupAt by remember { mutableLongStateOf(preferences.getLong("backup_last_success_at", 0L)) }
+    var backupStatus by remember { mutableStateOf(preferences.getString("backup_last_status", "Not yet backed up") ?: "Not yet backed up") }
     var storageRecoveryRequired by remember { mutableStateOf(false) }
     var showStorageRecoveryDialog by remember { mutableStateOf(false) }
     LaunchedEffect(store) {
@@ -286,13 +288,24 @@ internal fun NestNoteApp(store: NoteStore) {
             }
         }
     }
+    var exportArchivedNotes by remember { mutableStateOf(true) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
+            val exportNotes = if (exportArchivedNotes) notes else notes.filterNot { it.archived }
             val saved = runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(NoteStore.encodeBackup(notes).toByteArray(Charsets.UTF_8)) } != null
+                val payload = NoteStore.encodeBackup(exportNotes).toByteArray(Charsets.UTF_8)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(payload) } != null
             }.getOrDefault(false)
+            if (saved) {
+                lastBackupAt = System.currentTimeMillis()
+                backupStatus = "Success"
+                preferences.edit().putLong("backup_last_success_at", lastBackupAt).putString("backup_last_status", backupStatus).apply()
+            } else {
+                backupStatus = "Failed"
+                preferences.edit().putString("backup_last_status", backupStatus).apply()
+            }
             coroutineScope.launch {
-                snackbarHostState.showSnackbar(if (saved) "Notes backup saved (${notes.size} notes). Voice recordings are not included." else "Couldn't save the backup")
+                snackbarHostState.showSnackbar(if (saved) "Backup saved (" + exportNotes.size + " notes). Voice recordings are not included." else "Backup could not be saved. Your notes were not changed.")
             }
         }
     }
@@ -480,7 +493,12 @@ internal fun NestNoteApp(store: NoteStore) {
                         totalNotes = notes.size,
                         archivedNotes = notes.count { it.archived },
                         pinnedNotes = notes.count { it.pinned && !it.archived },
-                        onExportNotes = { exportLauncher.launch("nestnote-backup.json") },
+                        lastBackupAt = lastBackupAt,
+                        backupStatus = backupStatus,
+                        onExportNotes = { includeArchived ->
+                            exportArchivedNotes = includeArchived
+                            exportLauncher.launch("nestnote-backup.json")
+                        },
                         onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
                     )
                 } else if (selectedView == "Settings") {
