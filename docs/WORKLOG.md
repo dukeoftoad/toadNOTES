@@ -1,5 +1,12 @@
 # NESTNOTE Work Log
 
+## 2026-10-21 — v1.3.9 release documentation draft
+
+- Added a v1.3.9 draft section at the top of `docs/CHANGELOG.md` and a versioned release-note draft at `docs/release-notes/v1.3.9.md`.
+- Release notes cover voice-player layout/accessibility and note-format fixes, and explicitly exclude encrypted link/QR sharing until PRs are merged and validated.
+- F-Droid metadata already points to the canonical raw changelog at `https://raw.githubusercontent.com/dukeoftoad/toadNOTES/main/docs/CHANGELOG.md`; source code and issue-tracker links are already present. No speculative website URL or unverified version code was added.
+- Validation status: documentation only; no Android build, CI, device checks, production APK signature verification, GitHub Release publication, or GitHub Pages deployment was performed. Release remains a draft pending the checklist gates.
+
 Last updated: 2026-10-12
 
 > Maintenance rule: update this log in the same commit as every implementation commit, including the commit SHA, summary, and validation status. If a separate commit is unavoidable, update the log immediately afterward.  
