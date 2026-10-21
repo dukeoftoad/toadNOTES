@@ -280,7 +280,7 @@ internal fun InlineVoicePlayer(
                 InlineVoiceWaveform(
                     playing = isActive && !paused,
                     reducedMotion = reducedMotion,
-                    modifier = Modifier.width(40.dp).height(24.dp)
+                    modifier = Modifier.width(64.dp).height(24.dp)
                 )
                 Text(
                     if (isActive) formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
@@ -522,10 +522,10 @@ private fun InlinePlayingEqualizer(reducedMotion: Boolean) {
 @Composable
 private fun InlineVoiceWaveform(playing: Boolean, reducedMotion: Boolean, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "voice-waveform")
-    val levels = listOf(0.28f, 0.62f, 0.42f, 0.9f, 0.5f, 0.74f, 0.34f, 0.82f, 0.46f, 0.68f, 0.3f, 0.58f, 0.4f, 0.76f, 0.36f, 0.64f, 0.48f, 0.86f, 0.32f, 0.56f)
+    val levels = listOf(0.28f, 0.62f, 0.42f, 0.9f, 0.5f, 0.74f, 0.34f, 0.82f, 0.46f, 0.68f, 0.3f, 0.58f)
     Row(
         modifier = modifier.height(22.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         levels.forEachIndexed { index, level ->

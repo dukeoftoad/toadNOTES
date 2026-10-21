@@ -78,16 +78,26 @@ class VoiceNotePreviewRegressionTest {
         assertFalse(result.text.contains(first))
         assertFalse(result.text.contains(second))
         assertEquals(2, Regex("Voice note").findAll(result.text).count())
+        // Editable markers use a static text motif; the preview player owns animation.
+        assertEquals(2, Regex("▂▄▆█▆▄").findAll(result.text).count())
 
         val firstStart = body.indexOf("[[voice:")
         val firstEnd = firstStart + "[[voice:$first]]".length
         val secondStart = body.indexOf("[[voice:", firstStart + 1)
         val secondEnd = secondStart + "[[voice:$second]]".length
-        val firstLabelStart = result.text.indexOf("  🎙 Voice note  ")
-        val firstLabelEnd = firstLabelStart + "  🎙 Voice note  ".length
-        val secondLabelStart = result.text.indexOf("  🎙 Voice note  ", firstLabelEnd)
 
-        assertEquals(firstLabelStart, mapping.originalToTransformed(firstStart))
+        // Derive transformed boundaries from the mapping instead of hard-coding
+        // the chip's icon/glyph and padding. This keeps the regression valid if
+        // the visual marker changes while still checking adjacent-marker offsets.
+        val firstLabelStart = mapping.originalToTransformed(firstStart)
+        val firstLabelEnd = mapping.originalToTransformed(firstEnd)
+        val secondLabelStart = mapping.originalToTransformed(secondStart)
+        val secondLabelEnd = mapping.originalToTransformed(secondEnd)
+
+        val firstNameStart = result.text.indexOf("Voice note")
+        val secondNameStart = result.text.indexOf("Voice note", firstNameStart + 1)
+        assertTrue(firstNameStart in firstLabelStart until firstLabelEnd)
+        assertTrue(secondNameStart in secondLabelStart until secondLabelEnd)
         // The original offset between adjacent markers is shared by both
         // markers, so it maps to the end of the first label. The next source
         // offset is inside the second marker and maps to the second label start.
@@ -111,7 +121,7 @@ class VoiceNotePreviewRegressionTest {
             )
         }
         assertEquals(firstEnd, mapping.transformedToOriginal(firstLabelEnd))
-        assertEquals(secondEnd, mapping.transformedToOriginal(secondLabelStart + "  🎙 Voice note  ".length))
+        assertEquals(secondEnd, mapping.transformedToOriginal(secondLabelEnd))
     }
 
 
