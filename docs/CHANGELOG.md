@@ -1,5 +1,29 @@
 # NESTNOTE Changelog
 
+## v1.3.9 — 2026-10-21 (release notes draft)
+
+This draft consolidates recent voice-note/editor fixes and release-facing changes. Publish it as the final v1.3.9 changelog only after the release candidate, CI, and required device checks are confirmed.
+
+### Improved
+- Keep voice-note playback inline with the note instead of opening a separate player or covering the page.
+- Make voice-note cards easier to identify and operate, with recording labels, waveform/player controls, and clearer accessibility descriptions.
+- Improve editor handling of voice-note markers so internal attachment identifiers are not exposed as ordinary note text.
+- Preserve the existing note text and note-format behavior while working with voice attachments.
+
+### Fixed
+- Correct voice-player layout so labels, waveform, and seek controls do not overlap.
+- Fix note-format menu compilation by removing a reference to an unavailable Material icon.
+- Persist plain-text versus Markdown note format and safely default older notes to plain text.
+- Add regression coverage for inline/adjacent voice markers, text preservation, and marker removal.
+
+### Release validation
+- Do not treat inline playback while actively editing as complete until it is verified on a real device; the current audit records this as outstanding.
+- Confirm wallpaper import is fully integrated into the editor and covered by tests before listing it as a shipped v1.3.9 feature.
+- Encrypted unique-link sharing and QR-code sharing are not included in these release notes until their implementation PRs are merged and validated.
+- Verify the exact release-tag CI, production APK signature, install/upgrade behavior, and applicable device checks before publishing.
+
+---
+
 ## Unreleased
 
 ### Changed
