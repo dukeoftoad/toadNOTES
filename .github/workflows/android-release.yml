@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   # Do not cancel a release midway through signing or publishing.
-  group: android-release-${{ inputs.release_tag || github.ref }}
+  group: android-release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
