@@ -13,10 +13,21 @@ import com.nestnote.app.opensource.GsSimpleMarkdownParser
  */
 internal object MarkdownPreview {
     fun toSpanned(markdown: String): Spanned {
-        // Escape HTML-opening characters, but leave Markdown's '>' syntax intact so
-        // the parser can recognize blockquote prefixes. Escaping every '>' turned quote
-        // prefixes into literal text before Markdown parsing ever began.
-        val escaped = markdown
+        // This small upstream parser doesn't implement blockquotes, so remove only
+        // Markdown quote prefixes at the beginning of lines before parsing. HTML-like
+        // content is still escaped and remains inert.
+        val quotePrefix = Regex("""^\s*>\s?(.*)$""")
+        val quoteLines = mutableListOf<String>()
+        val markdownWithoutQuotePrefixes = markdown.lineSequence().joinToString("\n") { line ->
+            val match = quotePrefix.matchEntire(line)
+            if (match != null) {
+                quoteLines += match.groupValues[1]
+                match.groupValues[1]
+            } else {
+                line
+            }
+        }
+        val escaped = markdownWithoutQuotePrefixes
             .replace("&", "&amp;")
             .replace("<", "&lt;")
         val html = GsSimpleMarkdownParser()
@@ -24,15 +35,12 @@ internal object MarkdownPreview {
             .html
         val parsed = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT)
 
-        // The lightweight upstream parser strips quote markers inconsistently and does
-        // not expose blockquote styling. Apply a native QuoteSpan to the corresponding
-        // rendered text ranges so quotes remain visually distinguishable.
+        // Add native quote styling to the matching rendered ranges because the
+        // upstream parser has no blockquote support.
         val result = SpannableStringBuilder(parsed)
         var searchFrom = 0
-        markdown.lineSequence().forEach { line ->
-            val quote = Regex("""^\s*>\s?(.*)$""").matchEntire(line)
-            val quotedText = quote?.groupValues?.get(1).orEmpty()
-            if (quote != null && quotedText.isNotEmpty()) {
+        quoteLines.forEach { quotedText ->
+            if (quotedText.isNotEmpty()) {
                 val start = result.toString().indexOf(quotedText, searchFrom)
                 if (start >= 0) {
                     val end = start + quotedText.length
