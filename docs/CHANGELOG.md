@@ -33,6 +33,8 @@ This draft consolidates recent voice-note/editor fixes and release-facing change
 
 ### Fixed
 - Voice-note playback cards stack their title/waveform and seek controls vertically, preventing the seek bar from overlapping the voice-note label.
+- Inline voice-player play/pause controls include the recording name in their accessible labels, and the seek slider exposes its current position and total duration.
+- Added Compose instrumentation assertions for accessible names on missing inline voice-attachment cards.
 - Voice attachment markers render as readable labels instead of exposing internal attachment IDs.
 - Note format is persisted as plain text or Markdown, with older notes defaulting safely to plain text.
 - The note format menu no longer references an unavailable Material icon, fixing the Android CI compilation failure.
