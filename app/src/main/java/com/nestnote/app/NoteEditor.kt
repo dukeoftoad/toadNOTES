@@ -307,10 +307,32 @@ internal fun NoteEditorContent(
     var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     val wallpaperImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            customWallpaperUri = uri.toString()
-            backgroundIndex = 0
-            android.widget.Toast.makeText(context, "Wallpaper imported", android.widget.Toast.LENGTH_SHORT).show()
+            val importResult = runCatching {
+                val resolver = context.contentResolver
+                require(resolver.getType(uri)?.startsWith("image/") == true) {
+                    "Please choose an image file"
+                }
+                // Verify the provider can actually read and decode this image before
+                // changing the draft; otherwise the picker appears successful but the
+                // wallpaper can disappear after the document provider/app restarts.
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                resolver.openInputStream(uri)?.use { stream ->
+                    android.graphics.BitmapFactory.decodeStream(stream, null, bounds)
+                } ?: error("Unable to open selected image")
+                require(bounds.outWidth > 0 && bounds.outHeight > 0) { "The selected file is not a readable image" }
+                resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            importResult.onSuccess {
+                customWallpaperUri = uri.toString()
+                backgroundIndex = 0
+                android.widget.Toast.makeText(context, "Wallpaper imported", android.widget.Toast.LENGTH_SHORT).show()
+            }.onFailure { error ->
+                android.widget.Toast.makeText(
+                    context,
+                    error.message?.takeIf { it.isNotBlank() } ?: "Could not import wallpaper. Please choose another image.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
     val markdownExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
