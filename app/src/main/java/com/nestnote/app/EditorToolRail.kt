@@ -89,6 +89,7 @@ internal fun EditorToolRail(
     onTabChange: (ToolRailTab) -> Unit,
     colorIndex: Int,
     backgroundIndex: Int,
+    customWallpaperUri: String = "",
     onColorSelected: (Int) -> Unit,
     onImportWallpaper: () -> Unit,
     onBackgroundSelected: (Int) -> Unit,
@@ -165,6 +166,26 @@ internal fun EditorToolRail(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, tint = colors.onSecondaryContainer)
+                                }
+                                if (customWallpaperUri.isNotBlank()) {
+                                    Box(
+                                        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                                            .border(3.dp, colors.primary, RoundedCornerShape(12.dp))
+                                            .semantics {
+                                                contentDescription = "Imported wallpaper, selected"
+                                                selected = true
+                                            }
+                                            .testTag("custom_wallpaper_selected")
+                                    ) {
+                                        NoteCustomWallpaper(customWallpaperUri, Modifier.fillMaxSize())
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = colors.primary,
+                                            modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).size(14.dp)
+                                                .background(colors.surface, CircleShape)
+                                        )
+                                    }
                                 }
                                 backgroundNames.forEachIndexed { index, name ->
                                 val isSelected = index == backgroundIndex
