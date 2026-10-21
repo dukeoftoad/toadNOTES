@@ -154,11 +154,19 @@ internal fun EditorToolRail(
                                     contentAlignment = Alignment.Center
                                 ) { if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF383044)) }
                                 }
-                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(colors.secondaryContainer).clickable(onClick = onImportWallpaper).testTag("import_wallpaper_button"), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Add, contentDescription = "Import wallpaper image", tint = colors.onSecondaryContainer)
-                                }
                             }
-                            ToolRailTab.Background -> backgroundNames.forEachIndexed { index, name ->
+                            ToolRailTab.Background -> {
+                                Box(
+                                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                                        .background(colors.secondaryContainer)
+                                        .clickable(role = Role.Button, onClick = onImportWallpaper)
+                                        .semantics { contentDescription = "Import wallpaper image" }
+                                        .testTag("import_wallpaper_button"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, tint = colors.onSecondaryContainer)
+                                }
+                                backgroundNames.forEachIndexed { index, name ->
                                 val isSelected = index == backgroundIndex
                                 Box(
                                     Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
@@ -169,6 +177,7 @@ internal fun EditorToolRail(
                                 ) {
                                     if (index == 0) Box(Modifier.fillMaxSize().background(noteTints[colorIndex]))
                                     else NoteWallpaperArtwork(index, Modifier.fillMaxSize())
+                                }
                                 }
                             }
                             ToolRailTab.Format -> FormatAction.values().forEach { action ->
