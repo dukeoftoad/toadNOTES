@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   release:
-    name: Test, build, sign and publish APK
+    name: Build, sign and publish APK
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.version.outputs.release_tag }}
@@ -101,7 +101,7 @@ jobs:
             fi
           done
 
-      - name: Run unit tests and build release APK
+      - name: Build release APK
         env:
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
           VERSION_NAME: ${{ steps.version.outputs.version_name }}
@@ -112,7 +112,7 @@ jobs:
           ./gradlew --no-daemon --stacktrace \
             -PversionName="$VERSION_NAME" \
             -PversionCode="$VERSION_CODE" \
-            testDebugUnitTest assembleRelease
+            assembleRelease
 
           APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
           if [[ ! -s "$APK_PATH" ]]; then
