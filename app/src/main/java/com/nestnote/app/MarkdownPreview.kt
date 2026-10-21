@@ -37,7 +37,7 @@ internal object MarkdownPreview {
                 if (start >= 0) {
                     val end = start + quotedText.length
                     result.setSpan(
-                        QuoteSpan(0xFF8A80C8.toInt(), 2, 8),
+                        QuoteSpan(0xFF8A80C8.toInt()),
                         start,
                         end,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
