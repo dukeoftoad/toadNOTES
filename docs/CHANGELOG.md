@@ -2,6 +2,8 @@
 
 ## v1.3.9 — 2026-10-21 (release notes draft)
 
+Versioned notes: [docs/release-notes/v1.3.9.md](release-notes/v1.3.9.md).
+
 This draft consolidates recent voice-note/editor fixes and release-facing changes. Publish it as the final v1.3.9 changelog only after the release candidate, CI, and required device checks are confirmed.
 
 ### Improved
