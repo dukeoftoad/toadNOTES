@@ -3,6 +3,7 @@ package com.nestnote.app
 import android.graphics.Color
 import android.text.style.ForegroundColorSpan
 import android.text.style.ImageSpan
+import android.text.style.LineBackgroundSpan
 import android.text.style.QuoteSpan
 import android.text.style.URLSpan
 import org.junit.Assert.assertEquals
@@ -42,6 +43,23 @@ class MarkdownPreviewTest {
         val spans = result.getSpans(0, result.length, ForegroundColorSpan::class.java)
         assertTrue(spans.isNotEmpty())
         assertTrue(spans.all { it.foregroundColor == Color.WHITE })
+    }
+
+    @Test
+    fun horizontalRulesRenderAsThematicBreaks() {
+        val result = MarkdownPreview.toSpanned("before\n---\nafter\n\n___\nend", Color.WHITE)
+
+        assertFalse(result.toString().contains("---"))
+        assertFalse(result.toString().contains("___"))
+        assertTrue(result.getSpans(0, result.length, LineBackgroundSpan::class.java).isNotEmpty())
+    }
+
+    @Test
+    fun horizontalRuleLikeTextInsideFencedCodeIsNotConverted() {
+        val result = MarkdownPreview.toSpanned("```text\n---\n```")
+
+        assertTrue(result.toString().contains("---"))
+        assertTrue(result.getSpans(0, result.length, LineBackgroundSpan::class.java).isEmpty())
     }
 
     @Test
