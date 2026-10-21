@@ -297,6 +297,7 @@ internal fun NoteEditorContent(
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
     var categoryMenu by remember { mutableStateOf(false) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
+    var editVoiceText by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
     var noteFormat by rememberSaveable(original?.id) { mutableStateOf(original?.format ?: "plain") }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
@@ -1139,23 +1140,6 @@ internal fun NoteEditorContent(
                         }
                     )
 
-                    // Keep voice playback available while editing, without switching to Preview.
-                    // Players are siblings of BasicTextField so audio controls never interfere
-                    // with text selection, IME composition, or cursor offsets.
-                    if (editorMode == EditorMode.Editing &&
-                        NoteText.voiceSegments(body).any { it.attachmentId != null }
-                    ) {
-                        InlineVoicePlayersForBody(
-                            body = body,
-                            noteId = voiceNoteId,
-                            activePlayerId = activeVoicePlayerId,
-                            onPlayRequested = { id -> activeVoicePlayerId = id },
-                            onStopRequested = { activeVoicePlayerId = null },
-                            onDeleteRequested = { id -> pendingVoiceDeletion = id },
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 176.dp)
-                        )
-                    }
-
                     if (pinned) {
                         AssistChip(
                             onClick = { if (editorMode == EditorMode.Editing) pinned = false },
@@ -1247,19 +1231,32 @@ internal fun NoteEditorContent(
                     // Reading mode renders the real inline voice players by default.
                     // Markdown preview remains an optional editing aid, not a prerequisite
                     // for playing attachments from a saved note.
-                    if (editorMode == EditorMode.Editing && noteFormat == "markdown") {
+                    val hasInlineVoiceNotes = remember(body) {
+                        NoteText.voiceSegments(body).any { it.attachmentId != null }
+                    }
+                    if (editorMode == EditorMode.Editing && (noteFormat == "markdown" || hasInlineVoiceNotes)) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.End
                         ) {
-                            TextButton(onClick = { previewVisible = !previewVisible }) {
-                                Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
+                            if (hasInlineVoiceNotes) {
+                                TextButton(onClick = { editVoiceText = !editVoiceText }) {
+                                    Text(if (editVoiceText) "Play voice notes inline" else "Edit note text")
+                                }
+                            }
+                            if (noteFormat == "markdown") {
+                                TextButton(onClick = { previewVisible = !previewVisible }) {
+                                    Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
+                                }
                             }
                         }
                     }
 
-                    if ((noteFormat == "markdown" && (previewVisible || editorMode == EditorMode.Locked)) ||
+                    val showInlineVoicePreview = hasInlineVoiceNotes &&
+                        (editorMode == EditorMode.Locked || !editVoiceText)
+                    if (showInlineVoicePreview ||
+                        (noteFormat == "markdown" && (previewVisible || editorMode == EditorMode.Locked)) ||
                         (editorMode == EditorMode.Locked && noteFormat != "markdown")) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f),
@@ -1301,11 +1298,11 @@ internal fun NoteEditorContent(
                             readOnly = editorMode == EditorMode.Locked,
                             // Keep attachment IDs out of both editable and read-only
                             // views. The stored body remains the canonical marker text.
-                            visualTransformation = if (noteFormat == "markdown") VoiceMarkerVisualTransformation(
+                            visualTransformation = VoiceMarkerVisualTransformation(
                                 colors.primaryContainer,
                                 colors.onPrimaryContainer,
                                 voiceNames
-                            ) else VisualTransformation.None,
+                            ),
                             modifier = Modifier.fillMaxWidth()
                                 .weight(1f)
                                 .padding(top = 3.dp),

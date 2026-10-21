@@ -237,136 +237,197 @@ internal fun InlineVoicePlayer(
     val displayName = metadata?.displayName?.takeIf { it.isNotBlank() } ?: "Voice recording"
     var selected by remember(attachmentId) { mutableStateOf(false) }
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
+    val compactPlayer = remember(context) {
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            .getBoolean(PREF_VOICE_PLAYER_COMPACT, true)
+    }
+    if (compactPlayer) {
+        Surface(
+            modifier = modifier.fillMaxWidth().combinedClickable(
                 onClick = { if (selected) selected = false },
                 onLongClick = { selected = !selected }
-            )
-            .semantics { contentDescription = "Voice note: $displayName" },
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        // Surface content is a Box by default. Stack the header and seek row in a
-        // Column so the slider never paints over the title, waveform, or timestamps.
-        Column {
+            ).semantics { contentDescription = "Voice note: $displayName" },
+            shape = RoundedCornerShape(50),
+            color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-            FilledIconButton(
-                onClick = {
-                    if (isActive) {
-                        if (paused) {
-                            runCatching { player?.resume() }.onSuccess { paused = false }
-                        } else {
-                            runCatching { player?.pause() }.onSuccess { paused = true }
-                        }
-                    } else {
-                        onPlayRequested(attachmentId)
-                    }
-                },
-                modifier = Modifier.size(44.dp).semantics {
-                    contentDescription = when {
-                        !isActive -> "Play voice note"
-                        paused -> "Resume voice note"
-                        else -> "Pause voice note"
-                    }
-                }
-            ) {
-                Icon(
-                    when {
-                        isActive && !paused -> Icons.Default.Pause
-                        else -> Icons.Default.PlayArrow
-                    },
-                    contentDescription = null
-                )
-            }
-
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        displayName,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
+                FilledIconButton(
+                    onClick = {
                         if (isActive) {
-                            formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
-                        } else {
-                            formatInlineTime(fallbackDurationMs)
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            if (paused) runCatching { player?.resume() }.onSuccess { paused = false }
+                            else runCatching { player?.pause() }.onSuccess { paused = true }
+                        } else onPlayRequested(attachmentId)
+                    },
+                    modifier = Modifier.size(36.dp).semantics {
+                        contentDescription = when {
+                            !isActive -> "Play $displayName"
+                            paused -> "Resume $displayName"
+                            else -> "Pause $displayName"
+                        }
+                    }
+                ) {
+                    Icon(
+                        if (isActive && !paused) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = null
                     )
                 }
-                InlineVoiceWaveform(playing = isActive && !paused, reducedMotion = reducedMotion)
-            }
-
-            if (selected) {
-                IconButton(
-                    onClick = { onDeleteRequested(attachmentId) },
-                    modifier = Modifier.semantics { contentDescription = "Delete voice note" }
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                InlineVoiceWaveform(
+                    playing = isActive && !paused,
+                    reducedMotion = reducedMotion,
+                    modifier = Modifier.width(40.dp).height(24.dp)
+                )
+                Text(
+                    if (isActive) formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
+                    else formatInlineTime(fallbackDurationMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+                if (selected) {
+                    IconButton(onClick = { onDeleteRequested(attachmentId) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete voice note",
+                            tint = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
-            // Seeking must be available for short clips too; hiding the slider below
-            // one minute made recordings under 60 seconds impossible to scrub.
-            if (shownDuration > 0) {
+    } else {
+        Surface(
+            modifier = modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { if (selected) selected = false },
+                    onLongClick = { selected = !selected }
+                )
+                .semantics { contentDescription = "Voice note: $displayName" },
+            shape = RoundedCornerShape(18.dp),
+            color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            // Surface content is a Box by default. Stack the header and seek row in a
+            // Column so the slider never paints over the title, waveform, or timestamps.
+            Column {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    formatInlineTime(if (isActive) positionMs else 0),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Slider(
-                    value = if (isActive) pendingSeekMs.coerceIn(0, shownDuration).toFloat() else 0f,
-                    onValueChange = { value ->
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                FilledIconButton(
+                    onClick = {
                         if (isActive) {
-                            seekingPlayback = true
-                            pendingSeekMs = value.toInt()
+                            if (paused) {
+                                runCatching { player?.resume() }.onSuccess { paused = false }
+                            } else {
+                                runCatching { player?.pause() }.onSuccess { paused = true }
+                            }
+                        } else {
+                            onPlayRequested(attachmentId)
                         }
                     },
-                    onValueChangeFinished = {
-                        if (isActive) {
-                            positionMs = pendingSeekMs
-                            runCatching { player?.seekTo(pendingSeekMs.toLong()) }
+                    modifier = Modifier.size(44.dp).semantics {
+                        contentDescription = when {
+                            !isActive -> "Play voice note"
+                            paused -> "Resume voice note"
+                            else -> "Pause voice note"
                         }
-                        seekingPlayback = false
-                    },
-                    valueRange = 0f..shownDuration.coerceAtLeast(1).toFloat(),
-                    enabled = isActive && shownDuration > 0,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
-                    ),
-                    modifier = Modifier.weight(1f).height(28.dp).semantics {
-                        contentDescription = "Seek voice note"
                     }
-                )
-                Text(
-                    formatInlineTime(shownDuration),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ) {
+                    Icon(
+                        when {
+                            isActive && !paused -> Icons.Default.Pause
+                            else -> Icons.Default.PlayArrow
+                        },
+                        contentDescription = null
+                    )
+                }
+    
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            displayName,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            if (isActive) {
+                                formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
+                            } else {
+                                formatInlineTime(fallbackDurationMs)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    InlineVoiceWaveform(playing = isActive && !paused, reducedMotion = reducedMotion)
+                }
+    
+                if (selected) {
+                    IconButton(
+                        onClick = { onDeleteRequested(attachmentId) },
+                        modifier = Modifier.semantics { contentDescription = "Delete voice note" }
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+                // Seeking must be available for short clips too; hiding the slider below
+                // one minute made recordings under 60 seconds impossible to scrub.
+                if (shownDuration > 0) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        formatInlineTime(if (isActive) positionMs else 0),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = if (isActive) pendingSeekMs.coerceIn(0, shownDuration).toFloat() else 0f,
+                        onValueChange = { value ->
+                            if (isActive) {
+                                seekingPlayback = true
+                                pendingSeekMs = value.toInt()
+                            }
+                        },
+                        onValueChangeFinished = {
+                            if (isActive) {
+                                positionMs = pendingSeekMs
+                                runCatching { player?.seekTo(pendingSeekMs.toLong()) }
+                            }
+                            seekingPlayback = false
+                        },
+                        valueRange = 0f..shownDuration.coerceAtLeast(1).toFloat(),
+                        enabled = isActive && shownDuration > 0,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.weight(1f).height(28.dp).semantics {
+                            contentDescription = "Seek voice note"
+                        }
+                    )
+                    Text(
+                        formatInlineTime(shownDuration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    }
                 }
             }
         }
     }
-}
+    }
 
 /**
  * Shown when a marker is present but the encrypted file for it is gone. The
@@ -457,11 +518,11 @@ private fun InlinePlayingEqualizer(reducedMotion: Boolean) {
 
 /** Minimal Material-themed waveform; bars animate only while playback is active. */
 @Composable
-private fun InlineVoiceWaveform(playing: Boolean, reducedMotion: Boolean) {
+private fun InlineVoiceWaveform(playing: Boolean, reducedMotion: Boolean, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "voice-waveform")
     val levels = listOf(0.28f, 0.62f, 0.42f, 0.9f, 0.5f, 0.74f, 0.34f, 0.82f, 0.46f, 0.68f, 0.3f, 0.58f, 0.4f, 0.76f, 0.36f, 0.64f, 0.48f, 0.86f, 0.32f, 0.56f)
     Row(
-        modifier = Modifier.fillMaxWidth().height(22.dp),
+        modifier = modifier.height(22.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

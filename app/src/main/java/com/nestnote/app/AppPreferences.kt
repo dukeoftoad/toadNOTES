@@ -17,6 +17,7 @@ internal const val PREF_NOTE_TIMESTAMPS = "show_note_timestamps"
 internal const val PREF_DEFAULT_CATEGORY = "default_note_category"
 internal const val PREF_TEXT_SIZE = "editor_text_size"
 internal const val PREF_EDITOR_COUNTS = "editor_show_counts"
+internal const val PREF_VOICE_PLAYER_COMPACT = "voice_player_compact"
 
 // Backup keys. The string values match what NestNoteApp already writes, so existing
 // user preferences keep working. The worker reads these same names — sharing them
