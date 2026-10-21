@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: fdroid-repository
@@ -156,22 +157,91 @@ jobs:
           test -s repo/index.jar || test -s repo/index-v1.jar
           test -s "repo/$APK_NAME"
 
-      - name: Publish repository to GitHub Pages
+      # Fetch the current website source independently of the release tag. A
+      # release tag may predate the website, so deploy the current main version.
+      - name: Check out GitHub Pages website source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: website-source
+          persist-credentials: false
+
+      - name: Assemble and publish complete GitHub Pages tree
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/fdroid-pages/fdroid"
-          cp -a fdroid/repo "$RUNNER_TEMP/fdroid-pages/fdroid/repo"
+          PUBLISH_DIR="$RUNNER_TEMP/fdroid-pages"
+          mkdir -p "$PUBLISH_DIR/fdroid"
+
+          # Publish the website at the Pages root and F-Droid below /fdroid/repo.
+          for file in index.html styles.css app.js site.webmanifest; do
+            test -s "website-source/$file" || {
+              echo "::error::Required website file is missing: $file"
+              exit 1
+            }
+            install -m 644 "website-source/$file" "$PUBLISH_DIR/$file"
+          done
+          test -d website-source/assets || {
+            echo "::error::Website assets directory is missing."
+            exit 1
+          }
+          cp -a website-source/assets "$PUBLISH_DIR/assets"
+          touch "$PUBLISH_DIR/.nojekyll"
+
+          # Preserve the F-Droid repository under its existing public path.
+          cp -a fdroid/repo "$PUBLISH_DIR/fdroid/repo"
+          test -s "$PUBLISH_DIR/fdroid/repo/index.jar" || test -s "$PUBLISH_DIR/fdroid/repo/index-v1.jar"
+
           rm -f fdroid/keystore.p12
-          cd "$RUNNER_TEMP/fdroid-pages"
+          cd "$PUBLISH_DIR"
           git init
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b gh-pages
           git add -A
-          git commit -m "Publish NESTNOTE F-Droid repository for $RELEASE_TAG"
+          git commit -m "Publish website and F-Droid repository for $RELEASE_TAG"
           git push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" HEAD:gh-pages
+
+      # GITHUB_TOKEN pushes do not automatically trigger a branch-based Pages
+      # build. Explicitly request one so a missing/stale site can recover.
+      - name: Request GitHub Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+
+      - name: Verify published website is publicly readable
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE_BASE="https://dukeoftoad.github.io/toadNOTES"
+          for path in "/" "/styles.css" "/app.js" "/site.webmanifest" "/assets/nestnote-icon.svg"; do
+            url="$SITE_BASE$path"
+            output="$RUNNER_TEMP/pages-check"
+            if [[ "$path" == "/" ]]; then
+              output="$RUNNER_TEMP/pages-home.html"
+            fi
+            ok=false
+            # Branch-based Pages builds can take several minutes to publish.
+            for attempt in {1..60}; do
+              if curl --fail --silent --show-error --location "$url?verify=$GITHUB_RUN_ID-$attempt" -o "$output"; then
+                ok=true
+                break
+              fi
+              sleep 10
+            done
+            if [[ "$ok" != true ]]; then
+              echo "::error::GitHub Pages website resource did not become publicly readable: $url"
+              exit 1
+            fi
+          done
+          grep -qi "NESTNOTE" "$RUNNER_TEMP/pages-home.html" || {
+            echo "::error::Published homepage does not contain expected NESTNOTE content."
+            exit 1
+          }
 
       - name: Verify published repository is publicly readable
         run: |
