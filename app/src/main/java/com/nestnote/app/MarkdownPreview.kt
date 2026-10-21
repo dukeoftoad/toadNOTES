@@ -2,6 +2,9 @@ package com.nestnote.app
 
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.text.style.LineBackgroundSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.QuoteSpan
 import androidx.core.text.HtmlCompat
@@ -13,22 +16,58 @@ import com.nestnote.app.opensource.GsSimpleMarkdownParser
  * The upstream parser supports common inline formatting and simple headings/lists only.
  */
 internal object MarkdownPreview {
+    private const val HORIZONTAL_RULE_MARKER = "\u200B"
+
+    private class HorizontalRuleSpan(private val color: Int) : LineBackgroundSpan {
+        override fun drawBackground(
+            canvas: Canvas,
+            paint: Paint,
+            left: Int,
+            right: Int,
+            top: Int,
+            baseline: Int,
+            bottom: Int,
+            text: CharSequence,
+            start: Int,
+            end: Int,
+            lineNumber: Int
+        ) {
+            val oldColor = paint.color
+            val oldStyle = paint.style
+            val oldStrokeWidth = paint.strokeWidth
+            paint.color = color
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f
+            val y = (top + bottom) / 2f
+            canvas.drawLine(left.toFloat(), y, right.toFloat(), y, paint)
+            paint.color = oldColor
+            paint.style = oldStyle
+            paint.strokeWidth = oldStrokeWidth
+        }
+    }
     fun toSpanned(markdown: String, foregroundColor: Int = android.graphics.Color.BLACK): Spanned {
         // This small upstream parser doesn't implement blockquotes, so remove only
         // Markdown quote prefixes at the beginning of lines before parsing. HTML-like
         // content is still escaped and remains inert.
         val quotePrefix = Regex("""^\s*>\s?(.*)$""")
+        val horizontalRule = Regex("""^\s*(?:-{3,}|_{3,})\s*$""")
         val quoteLines = mutableListOf<String>()
-        val markdownWithoutQuotePrefixes = markdown.lineSequence().joinToString("\n") { line ->
-            val match = quotePrefix.matchEntire(line)
-            if (match != null) {
-                quoteLines += match.groupValues[1]
-                match.groupValues[1]
-            } else {
-                line
+        val markdownWithoutBlockMarkers = buildString {
+            var inFence = false
+            markdown.lineSequence().forEachIndexed { index, line ->
+                val trimmed = line.trimStart()
+                if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) inFence = !inFence
+                val quoteMatch = if (!inFence) quotePrefix.matchEntire(line) else null
+                val normalizedLine = when {
+                    !inFence && horizontalRule.matches(line) -> HORIZONTAL_RULE_MARKER
+                    quoteMatch != null -> quoteMatch.groupValues[1].also(quoteLines::add)
+                    else -> line
+                }
+                if (index > 0) append("\n")
+                append(normalizedLine)
             }
         }
-        val escaped = markdownWithoutQuotePrefixes
+        val escaped = markdownWithoutBlockMarkers
             .replace("&", "&amp;")
             .replace("<", "&lt;")
         val html = GsSimpleMarkdownParser()
@@ -52,9 +91,24 @@ internal object MarkdownPreview {
                 }
         }
 
+        // Draw thematic breaks with a native line span, keeping Markdown markers hidden.
+        val result = SpannableStringBuilder(parsed)
+        var ruleSearchFrom = 0
+        while (true) {
+            val markerStart = result.toString().indexOf(HORIZONTAL_RULE_MARKER, ruleSearchFrom)
+            if (markerStart < 0) break
+            val markerEnd = markerStart + HORIZONTAL_RULE_MARKER.length
+            result.setSpan(
+                HorizontalRuleSpan(foregroundColor),
+                markerStart,
+                markerEnd,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            ruleSearchFrom = markerEnd
+        }
+
         // Add native quote styling to the matching rendered ranges because the
         // upstream parser has no blockquote support.
-        val result = SpannableStringBuilder(parsed)
         var searchFrom = 0
         quoteLines.forEach { quotedText ->
             if (quotedText.isNotEmpty()) {
