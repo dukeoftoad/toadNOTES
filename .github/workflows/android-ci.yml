@@ -4,10 +4,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch
 permissions:
   contents: read
-# Keep the debounce for PR commit bursts; newer runs replace older runs per ref.
+# Keep a 70-second debounce for PR commit bursts; newer runs replace older runs per ref.
 concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Debounce pull request updates
         if: ${{ github.event_name == 'pull_request' }}
-        run: sleep 120
+        run: sleep 70
       - uses: actions/checkout@v4
         with:
           # Check out the latest PR merge ref after debounce; otherwise use the triggering SHA.
