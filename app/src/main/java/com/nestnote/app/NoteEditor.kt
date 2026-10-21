@@ -316,9 +316,12 @@ internal fun NoteEditorContent(
                 // changing the draft; otherwise the picker appears successful but the
                 // wallpaper can disappear after the document provider/app restarts.
                 val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                resolver.openInputStream(uri)?.use { stream ->
+                val imageStream = resolver.openInputStream(uri) ?: error("Unable to open selected image")
+                imageStream.use { stream ->
+                    // With inJustDecodeBounds enabled, decodeStream intentionally returns null;
+                    // the dimensions are the validation result, not the decoded bitmap.
                     android.graphics.BitmapFactory.decodeStream(stream, null, bounds)
-                } ?: error("Unable to open selected image")
+                }
                 require(bounds.outWidth > 0 && bounds.outHeight > 0) { "The selected file is not a readable image" }
                 resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
