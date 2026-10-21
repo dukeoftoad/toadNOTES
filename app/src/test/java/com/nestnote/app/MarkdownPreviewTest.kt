@@ -1,5 +1,7 @@
 package com.nestnote.app
 
+import android.graphics.Color
+import android.text.style.ForegroundColorSpan
 import android.text.style.ImageSpan
 import android.text.style.QuoteSpan
 import android.text.style.URLSpan
@@ -32,6 +34,14 @@ class MarkdownPreviewTest {
     fun emptyAndPlainTextPreviewAreHandled() {
         assertTrue(MarkdownPreview.toSpanned("").isEmpty())
         assertTrue(MarkdownPreview.toSpanned("ordinary note").toString().contains("ordinary note"))
+    }
+
+    @Test
+    fun explicitBlackMarkdownSpansUseThemeForegroundInDarkMode() {
+        val result = MarkdownPreview.toSpanned("# Dark heading\n\n- dark list item", Color.WHITE)
+        val spans = result.getSpans(0, result.length, ForegroundColorSpan::class.java)
+        assertTrue(spans.isNotEmpty())
+        assertTrue(spans.all { it.foregroundColor == Color.WHITE })
     }
 
     @Test
