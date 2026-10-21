@@ -205,6 +205,29 @@ class NoteTextTest {
     }
 
     @Test
+    fun lineBoundariesSupportLfCrLfAndLoneCr() {
+        assertEquals(3, NoteText.lineStart("one\ntwo", 5))
+        assertEquals(3, NoteText.lineStart("one\r\ntwo", 6))
+        assertEquals(4, NoteText.lineStart("one\rtwo", 5))
+        assertEquals(3, NoteText.lineEnd("one\r\ntwo", 0))
+        assertEquals(3, NoteText.lineEnd("one\rtwo", 0))
+    }
+
+    @Test
+    fun selectionRemappingUsesActualTextDeltaAndPreservesReversedSelections() {
+        val old = "before\nselected text\nafter"
+        val updated = "before\n☐ selected text\nafter"
+        assertEquals(
+            9 to 22,
+            NoteText.selectionAfterLineEdit(old, updated, 7, 20, 9)
+        )
+        assertEquals(
+            22 to 9,
+            NoteText.selectionAfterLineEdit(old, updated, 20, 7, 9)
+        )
+    }
+
+    @Test
     fun lineFormattingPreservesSelectedTextRange() {
         val old = "first\nsecond"
         val (newText, cursor) = NoteText.cycleChecklist(old, 8)
