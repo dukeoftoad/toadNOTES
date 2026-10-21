@@ -1,6 +1,7 @@
 package com.nestnote.app
 
 import android.text.style.ImageSpan
+import android.text.style.QuoteSpan
 import android.text.style.URLSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,6 +35,14 @@ class MarkdownPreviewTest {
     }
 
     @Test
+    fun blockquoteMarkerIsParsedAsMarkdownRatherThanDisplayedLiterally() {
+        val result = MarkdownPreview.toSpanned("> A quoted thought")
+        assertTrue(result.toString().contains("A quoted thought"))
+        assertFalse(result.toString().contains(">"))
+        assertTrue(result.getSpans(0, result.length, QuoteSpan::class.java).isNotEmpty())
+    }
+
+    @Test
     fun markdownFormattingIsPreservedInTextSegmentsAroundVoiceNotes() {
         val id = "11111111-1111-4111-8111-111111111111"
         val body = "**before**\\n[[voice:$id]]\\n*after*"
@@ -44,5 +53,4 @@ class MarkdownPreviewTest {
         assertEquals(id, segments[1].attachmentId)
         assertTrue(MarkdownPreview.toSpanned(segments[2].text).toString().contains("after"))
     }
-
 }
