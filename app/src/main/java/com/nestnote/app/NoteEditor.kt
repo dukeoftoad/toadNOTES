@@ -102,6 +102,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
@@ -393,7 +394,9 @@ internal fun NoteEditorContent(
     val voiceNoteId = original?.id ?: draftNoteId
     val colors = MaterialTheme.colorScheme
     val reducedMotion = rememberSystemReducedMotion()
-    val darkEditor = colors.surface.red < 0.5f
+    // Use perceived surface brightness, not only the red channel, to classify dark themes.
+    // This keeps editor ink and secondary text readable with tinted/dynamic color schemes.
+    val darkEditor = colors.surface.luminance() < 0.5f
     val ink = if (darkEditor) colors.onSurface else Color(0xFF292633)
     val muted = if (darkEditor) colors.onSurfaceVariant else Color(0xFF66616D)
     val accent = if (darkEditor) colors.primary else Color(0xFF514783)
