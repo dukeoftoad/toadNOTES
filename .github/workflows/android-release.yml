@@ -1,6 +1,6 @@
 name: Android Release
 
-# Publish a signed release when a version tag is pushed, or run manually.
+# Publish a signed APK for a stable version tag, then update the F-Droid repository.
 on:
   push:
     tags:
@@ -8,118 +8,166 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release version (for example v1.2.1)'
+        description: 'Stable release tag to create (for example v1.3.9)'
         required: true
         type: string
 
 permissions:
   contents: write
 
+concurrency:
+  # Do not cancel a release midway through signing or publishing.
+  group: android-release-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
+    name: Test, build, sign and publish APK
     runs-on: ubuntu-latest
     outputs:
-      release_tag: ${{ steps.release-version.outputs.release_tag }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out release source
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Tag events build the tagged source; manual runs build the selected commit.
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
 
-      - name: Set release version output
-        id: release-version
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Validate version
+      - name: Resolve and validate release version
+        id: version
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          INPUT_TAG: ${{ inputs.release_tag }}
           EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        shell: bash
         run: |
           set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            RELEASE_TAG="$INPUT_TAG"
+          else
+            RELEASE_TAG="$REF_NAME"
+          fi
+
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Use a version like v1.2.1."
-            exit 1
-          fi
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "::error::That release already exists."
-            exit 1
-          fi
-          # Manual runs create the tag; tag-triggered runs already have one.
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] && git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "::error::That tag already exists. Push a new version tag to publish automatically."
+            echo "::error::Release tag must use stable semantic version format vMAJOR.MINOR.PATCH (for example v1.3.9)."
             exit 1
           fi
 
-      - uses: actions/setup-java@v4
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::A GitHub Release already exists for $RELEASE_TAG."
+            exit 1
+          fi
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] &&
+             git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Git tag $RELEASE_TAG already exists. Push that tag to run the automatic release workflow."
+            exit 1
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version_name=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # Use the repository wrapper so CI and releases share one Gradle version.
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - uses: android-actions/setup-android@v3
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
         with:
-          # setup-android expects a comma-separated package list, not YAML block lines.
-          packages: platform-tools,platforms;android-36,build-tools;36.0.0
+          # This action expects whitespace-separated package IDs. Fold YAML lines
+          # into spaces so each SDK package is passed as a separate argument.
+          packages: >-
+            platform-tools
+            platforms;android-36
+            build-tools;36.0.0
 
-      # Run validation and packaging in one Gradle invocation to reuse task graph
-      # and avoid paying Gradle startup/configuration overhead twice.
-      - name: Test and build release APK
+      - name: Verify required Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --list_installed | tee "$RUNNER_TEMP/android-sdk-installed.txt"
+          for package in "platform-tools" "platforms;android-36" "build-tools;36.0.0"; do
+            if ! grep -Fq "$package" "$RUNNER_TEMP/android-sdk-installed.txt"; then
+              echo "::error::Required Android SDK package is not installed: $package"
+              exit 1
+            fi
+          done
+
+      - name: Run unit tests and build release APK
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
           VERSION_CODE: ${{ github.run_number }}
         shell: bash
         run: |
           set -euo pipefail
-          VERSION_NAME="${RELEASE_TAG#v}"
-          ./gradlew --no-daemon testDebugUnitTest assembleRelease \
+          ./gradlew --no-daemon --stacktrace \
             -PversionName="$VERSION_NAME" \
-            -PversionCode="$VERSION_CODE"
+            -PversionCode="$VERSION_CODE" \
+            testDebugUnitTest assembleRelease
 
-      - name: Sign APK with permanent key
+          APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [[ ! -s "$APK_PATH" ]]; then
+            echo "::error::Gradle completed without producing the expected unsigned release APK: $APK_PATH"
+            exit 1
+          fi
+
+      - name: Sign and verify release APK
+        id: sign
         env:
           SIGNING_KEY: ${{ secrets.KEYSTORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
-          : "${SIGNING_KEY:?KEYSTORE_BASE64 secret is required}"
-          : "${KEY_ALIAS:?KEY_ALIAS secret is required}"
-          : "${KEY_STORE_PASSWORD:?KEYSTORE_PASSWORD secret is required}"
-          : "${KEY_PASSWORD:?KEY_PASSWORD secret is required}"
+          : "${SIGNING_KEY:?Repository secret KEYSTORE_BASE64 is required}"
+          : "${KEY_ALIAS:?Repository secret KEY_ALIAS is required}"
+          : "${KEY_STORE_PASSWORD:?Repository secret KEYSTORE_PASSWORD is required}"
+          : "${KEY_PASSWORD:?Repository secret KEY_PASSWORD is required}"
 
-          KEYSTORE_PATH="$RUNNER_TEMP/nestnote-production.jks"
+          KEYSTORE_PATH="$RUNNER_TEMP/nestnote-release.jks"
+          APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
+          SIGNED_APK="NESTNOTE-$RELEASE_TAG.apk"
           trap 'rm -f "$KEYSTORE_PATH"' EXIT
+
           if ! printf '%s' "$SIGNING_KEY" | tr -d '[:space:]' | base64 --decode > "$KEYSTORE_PATH"; then
-            echo "::error::KEYSTORE_BASE64 is invalid Base64."
+            echo "::error::KEYSTORE_BASE64 is not valid Base64."
             exit 1
           fi
-          test -s "$KEYSTORE_PATH" || { echo "::error::Decoded keystore is empty."; exit 1; }
+          test -s "$KEYSTORE_PATH" || { echo "::error::Decoded signing keystore is empty."; exit 1; }
 
-          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$KEY_STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-          APK_NAME="NESTNOTE-$RELEASE_TAG.apk"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+          keytool -list -keystore "$KEYSTORE_PATH" \
+            -storepass "$KEY_STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$APKSIGNER" sign \
             --ks "$KEYSTORE_PATH" \
             --ks-key-alias "$KEY_ALIAS" \
             --ks-pass "pass:$KEY_STORE_PASSWORD" \
             --key-pass "pass:$KEY_PASSWORD" \
-            --out "$APK_NAME" \
-            app/build/outputs/apk/release/app-release-unsigned.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK_NAME"
-          echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+            --out "$SIGNED_APK" \
+            "$APK_PATH"
+          "$APKSIGNER" verify --verbose "$SIGNED_APK"
+          echo "apk_name=$SIGNED_APK" >> "$GITHUB_OUTPUT"
 
       - name: Publish APK to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          APK_NAME: ${{ steps.sign.outputs.apk_name }}
           EVENT_NAME: ${{ github.event_name }}
+        shell: bash
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -132,7 +180,9 @@ jobs:
               --title "NESTNOTE $RELEASE_TAG" \
               --generate-notes
           fi
-          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fx "$APK_NAME"
+
+          gh release view "$RELEASE_TAG" --json assets \
+            --jq '.assets[].name' | grep -Fx "$APK_NAME"
 
   publish-fdroid:
     name: Publish F-Droid repository
