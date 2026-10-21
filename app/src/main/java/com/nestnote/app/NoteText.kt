@@ -19,24 +19,23 @@ object NoteText {
      * Recognizes headings, bullets, numbered lists, and simple checklists; other lines stay intact.
      */
     fun toMarkdown(title: String, plainText: String): String {
-        val output = mutableListOf<String>()
-        if (title.isNotBlank()) {
-            output += "# ${title.trim()}"
-            output += ""
-        }
-        plainText.trim().lines().forEach { raw ->
-            val line = raw.trim()
-            when {
-                line.isEmpty() -> output += ""
-                line.matches(Regex("^#{1,6}\\s+.*")) -> output += line
-                line.matches(Regex("^[-*•]\\s+.*")) -> output += "- " + line.replaceFirst(Regex("^[-*•]\\s+"), "")
-                line.matches(Regex("^\\d+[.)]\\s+.*")) -> output += line.replaceFirst(Regex("^\\d+[.)]\\s+"), "").let { item -> "${Regex("^\\d+").find(line)?.value ?: "1"}. $item" }
-                line.startsWith("☑ ") -> output += "- [x] " + line.removePrefix("☑ ")
-                line.startsWith("☐ ") -> output += "- [ ] " + line.removePrefix("☐ ")
-                else -> output += line
+        val body = plainText.split("\n", ignoreCase = false, limit = Int.MAX_VALUE).joinToString("\n") { raw ->
+            val indent = raw.takeWhile { it == ' ' || it == '\t' }
+            val line = raw.drop(indent.length)
+            indent + when {
+                line.matches(Regex("^#{1,6}\\s+.*")) -> line
+                line.matches(Regex("^[-*•]\\s+.*")) ->
+                    "- " + line.replaceFirst(Regex("^[-*•]\\s+"), "")
+                line.matches(Regex("^\\d+[.)]\\s+.*")) ->
+                    line.replaceFirst(Regex("^\\d+[.)]\\s+"), "")
+                        .let { item -> "${Regex("^\\d+").find(line)?.value ?: "1"}. $item" }
+                line.startsWith("☑ ") -> "- [x] " + line.removePrefix("☑ ")
+                line.startsWith("☐ ") -> "- [ ] " + line.removePrefix("☐ ")
+                else -> line
             }
         }
-        return output.joinToString("\n").trimEnd() + "\n"
+        val heading = if (title.isNotBlank()) "# ${title.trim()}\n\n" else ""
+        return heading + body
     }
 
     fun wordCount(text: String): Int =
@@ -247,15 +246,37 @@ object NoteText {
             val cursor = newCursor.coerceIn(0, newText.length)
             return cursor to cursor
         }
-        val startOfLine = lineStart(oldText, start)
-        val delta = newCursor - start
-        fun map(position: Int): Int {
-            val adjusted = if (position >= startOfLine) position + delta else position
-            return adjusted.coerceIn(0, newText.length)
+
+        // Derive the changed range from the texts themselves. The returned cursor can
+        // be anywhere on the edited line and is not a reliable measure of edit length.
+        var prefix = 0
+        val commonLimit = minOf(oldText.length, newText.length)
+        while (prefix < commonLimit && oldText[prefix] == newText[prefix]) prefix++
+
+        var suffix = 0
+        while (
+            suffix < oldText.length - prefix &&
+            suffix < newText.length - prefix &&
+            oldText[oldText.length - suffix - 1] == newText[newText.length - suffix - 1]
+        ) {
+            suffix++
         }
-        val mappedStart = map(start)
-        val mappedEnd = map(end)
-        return mappedStart to mappedEnd
+
+        val oldChangedEnd = oldText.length - suffix
+        val newChangedEnd = newText.length - suffix
+        val delta = newText.length - oldText.length
+        fun map(position: Int): Int {
+            val mapped = when {
+                position <= prefix -> position
+                position >= oldChangedEnd -> position + delta
+                else -> newChangedEnd
+            }
+            return mapped.coerceIn(0, newText.length)
+        }
+
+        // Keep reversed selections reversed; TextFieldValue uses them to represent
+        // selection direction as well as the selected range.
+        return map(start) to map(end)
     }
 
     data class ChecklistItem(val lineIndex: Int, val text: String, val checked: Boolean)

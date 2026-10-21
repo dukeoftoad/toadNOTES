@@ -8,6 +8,24 @@ import org.junit.Test
 
 class NoteTextTest {
     @Test
+    fun markdownExportPreservesMeaningfulWhitespaceAndTrailingNewlines() {
+        val body = "  indented text\n\ncode  \nlast line\n"
+        assertEquals(body, NoteText.toMarkdown("", body))
+    }
+
+    @Test
+    fun markdownExportPreservesLeadingIndentationWhenConvertingListMarkers() {
+        assertEquals("  - item\n\t- [x] done", NoteText.toMarkdown("", "  • item\n\t☑ done"))
+    }
+
+    @Test
+    fun selectionMappingUsesActualTextEditDeltaRatherThanCursorPosition() {
+        val old = "first\nsecond\nthird"
+        val new = "first\n☐ second\nthird"
+        assertEquals(10 to 15, NoteText.selectionAfterLineEdit(old, new, 8, 13, 10))
+    }
+
+    @Test
     fun wordCountIgnoresExtraWhitespace() {
         assertEquals(0, NoteText.wordCount("   \n "))
         assertEquals(3, NoteText.wordCount("one  two\nthree "))
