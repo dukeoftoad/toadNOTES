@@ -1404,6 +1404,7 @@ internal fun NoteEditorContent(
         onTabChange = { toolRailTab = it },
         colorIndex = colorIndex,
         backgroundIndex = backgroundIndex,
+        customWallpaperUri = customWallpaperUri,
         onColorSelected = { colorIndex = it },
         onImportWallpaper = { wallpaperImportLauncher.launch(arrayOf("image/*")) },
         // A selected preset must replace the imported image, which otherwise takes precedence.
