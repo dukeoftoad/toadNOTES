@@ -1712,7 +1712,7 @@ internal fun PreviewWithInlineVoice(
             if (segment.attachmentId == null) {
                 if (segment.text.isNotEmpty()) {
                     val spanned = remember(segment.text, bodySp, ink, renderMarkdown) {
-                        if (renderMarkdown) MarkdownPreview.toSpanned(segment.text)
+                        if (renderMarkdown) MarkdownPreview.toSpanned(segment.text, ink.toArgb())
                         else android.text.SpannableString(segment.text)
                     }
                     AndroidView(
