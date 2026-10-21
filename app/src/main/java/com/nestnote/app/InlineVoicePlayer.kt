@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -331,9 +332,9 @@ internal fun InlineVoicePlayer(
                     },
                     modifier = Modifier.size(44.dp).semantics {
                         contentDescription = when {
-                            !isActive -> "Play voice note"
-                            paused -> "Resume voice note"
-                            else -> "Pause voice note"
+                            !isActive -> "Play $displayName"
+                            paused -> "Resume $displayName"
+                            else -> "Pause $displayName"
                         }
                     }
                 ) {
@@ -414,7 +415,8 @@ internal fun InlineVoicePlayer(
                             inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
                         ),
                         modifier = Modifier.weight(1f).height(28.dp).semantics {
-                            contentDescription = "Seek voice note"
+                            contentDescription = "Seek $displayName"
+                            stateDescription = "${formatInlineTime(if (isActive) pendingSeekMs else 0)} of ${formatInlineTime(shownDuration)}"
                         }
                     )
                     Text(

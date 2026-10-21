@@ -151,7 +151,7 @@ internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
  * Each marker is displayed as a compact, styled voice-note label. Offset mapping
  * keeps text selection and cursor movement anchored to the underlying marker.
  */
-private class VoiceMarkerVisualTransformation(
+internal class VoiceMarkerVisualTransformation(
     private val chipBackground: Color,
     private val chipForeground: Color,
     private val names: Map<String, String> = emptyMap()
