@@ -11,10 +11,12 @@ import com.nestnote.app.opensource.GsSimpleMarkdownParser
  */
 internal object MarkdownPreview {
     fun toSpanned(markdown: String): Spanned {
+        // Escape HTML-opening characters, but leave Markdown's '>' syntax intact so
+        // the parser can recognize blockquotes. Escaping every '>' turned quote
+        // prefixes into literal text before Markdown parsing ever began.
         val escaped = markdown
             .replace("&", "&amp;")
             .replace("<", "&lt;")
-            .replace(">", "&gt;")
         val html = GsSimpleMarkdownParser()
             .parse(escaped, "", GsSimpleMarkdownParser.FILTER_ANDROID_TEXTVIEW)
             .html
