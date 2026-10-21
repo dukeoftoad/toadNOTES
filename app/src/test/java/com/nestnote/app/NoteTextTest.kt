@@ -206,8 +206,8 @@ class NoteTextTest {
 
     @Test
     fun lineBoundariesSupportLfCrLfAndLoneCr() {
-        assertEquals(3, NoteText.lineStart("one\ntwo", 5))
-        assertEquals(3, NoteText.lineStart("one\r\ntwo", 6))
+        assertEquals(4, NoteText.lineStart("one\ntwo", 5))
+        assertEquals(5, NoteText.lineStart("one\r\ntwo", 6))
         assertEquals(4, NoteText.lineStart("one\rtwo", 5))
         assertEquals(3, NoteText.lineEnd("one\r\ntwo", 0))
         assertEquals(3, NoteText.lineEnd("one\rtwo", 0))
