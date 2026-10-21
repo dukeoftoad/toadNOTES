@@ -57,13 +57,17 @@ object NoteText {
 
     fun lineStart(text: String, cursor: Int): Int {
         val c = cursor.coerceIn(0, text.length)
-        return if (c == 0) 0 else text.lastIndexOf('\n', c - 1) + 1
+        if (c == 0) return 0
+        val lf = text.lastIndexOf('\n', c - 1)
+        val cr = text.lastIndexOf('\r', c - 1)
+        return maxOf(lf, cr) + 1
     }
 
     fun lineEnd(text: String, cursor: Int): Int {
         val c = cursor.coerceIn(0, text.length)
-        val i = text.indexOf('\n', c)
-        return if (i < 0) text.length else i
+        val lf = text.indexOf('\n', c)
+        val cr = text.indexOf('\r', c)
+        return listOf(lf, cr).filter { it >= 0 }.minOrNull() ?: text.length
     }
 
     /** Leading whitespace of a line. Checklist views already tolerate it, so formatting actions must too. */
@@ -247,15 +251,32 @@ object NoteText {
             val cursor = newCursor.coerceIn(0, newText.length)
             return cursor to cursor
         }
-        val startOfLine = lineStart(oldText, start)
-        val delta = newCursor - start
+        // Derive the actual changed range from the two texts. The returned cursor may
+        // be inside a newly inserted prefix, so it is not a reliable edit-delta anchor.
+        var prefix = 0
+        val sharedLimit = minOf(oldText.length, newText.length)
+        while (prefix < sharedLimit && oldText[prefix] == newText[prefix]) prefix++
+
+        var oldSuffix = oldText.length
+        var newSuffix = newText.length
+        while (oldSuffix > prefix && newSuffix > prefix &&
+            oldText[oldSuffix - 1] == newText[newSuffix - 1]
+        ) {
+            oldSuffix--
+            newSuffix--
+        }
+        val delta = newSuffix - oldSuffix
         fun map(position: Int): Int {
-            val adjusted = if (position >= startOfLine) position + delta else position
-            return adjusted.coerceIn(0, newText.length)
+            val mapped = when {
+                position <= prefix -> position
+                position >= oldSuffix -> position + delta
+                else -> if (position - prefix <= oldSuffix - position) prefix else newSuffix
+            }
+            return mapped.coerceIn(0, newText.length)
         }
         val mappedStart = map(start)
         val mappedEnd = map(end)
-        return mappedStart to mappedEnd
+        return if (selectionStart <= selectionEnd) mappedStart to mappedEnd else mappedEnd to mappedStart
     }
 
     data class ChecklistItem(val lineIndex: Int, val text: String, val checked: Boolean)
