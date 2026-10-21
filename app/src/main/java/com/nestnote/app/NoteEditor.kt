@@ -1,6 +1,7 @@
 package com.nestnote.app
 
 import android.Manifest
+import android.graphics.Bitmap
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.ClipData
@@ -24,6 +25,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +68,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -99,6 +102,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -302,6 +306,8 @@ internal fun NoteEditorContent(
     var reminderMenu by remember { mutableStateOf(false) }
     var voiceNoteDialog by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    var qrCodeDialog by remember { mutableStateOf(false) }
+    var qrPayloadToSave by remember { mutableStateOf<String?>(null) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
     var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
@@ -349,6 +355,23 @@ internal fun NoteEditorContent(
                 android.widget.Toast.makeText(context, "Could not save Markdown file", android.widget.Toast.LENGTH_LONG).show()
             }
         }
+    }
+    val qrImageExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+        val payload = qrPayloadToSave
+        if (uri != null && !payload.isNullOrBlank()) {
+            runCatching {
+                val bitmap = NoteQrCode.createBitmap(payload)
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                        "Could not encode QR image"
+                    }
+                } ?: error("Unable to open destination")
+                android.widget.Toast.makeText(context, "QR image saved", android.widget.Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                android.widget.Toast.makeText(context, "Could not save QR image", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+        qrPayloadToSave = null
     }
     // Permission request is a no-op on Android < 13 (permission doesn't exist).
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -886,6 +909,12 @@ internal fun NoteEditorContent(
                                     enabled = title.isNotBlank() || body.isNotBlank(),
                                     onClick = { moreMenu = false; shareNote() },
                                     leadingIcon = { Icon(Icons.Default.Share, null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Show QR code") },
+                                    enabled = title.isNotBlank() || body.isNotBlank(),
+                                    onClick = { moreMenu = false; qrCodeDialog = true },
+                                    leadingIcon = { Icon(Icons.Default.QrCode2, null) }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Note format · " + if (noteFormat == "markdown") "Markdown" else "Plain text") },
@@ -1448,6 +1477,51 @@ internal fun NoteEditorContent(
             }
         }
     )
+
+    if (qrCodeDialog) {
+        val qrPayload = remember(title, body) { NoteQrCode.sharePayload(title, body) }
+        val qrBitmap = remember(qrPayload) {
+            runCatching { NoteQrCode.createBitmap(qrPayload) }.getOrNull()
+        }
+        AlertDialog(
+            onDismissRequest = { qrCodeDialog = false },
+            title = { Text("Share with QR code") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "QR code containing this note text. Scanning it reveals the note text.",
+                            modifier = Modifier.size(220.dp)
+                        )
+                    } else {
+                        Text("This note is too long to fit in a single QR code. Shorten the note and try again.")
+                    }
+                    Text(
+                        "Anyone who scans this code can read the note. The QR code contains the text directly; it is not an encrypted link.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { qrCodeDialog = false }) { Text("Close") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = qrBitmap != null,
+                    onClick = {
+                        qrPayloadToSave = qrPayload
+                        qrImageExportLauncher.launch("nestnote-qr.png")
+                    }
+                ) { Text("Save QR image") }
+            },
+        )
+    }
 
     if (deleteConfirmation && onDelete != null) {
         AlertDialog(

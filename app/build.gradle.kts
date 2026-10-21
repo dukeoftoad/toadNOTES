@@ -36,6 +36,7 @@ android {
 }
 
 dependencies {
+    implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation(platform("androidx.compose:compose-bom:2025.05.00"))
     implementation("androidx.core:core-ktx:1.16.0")

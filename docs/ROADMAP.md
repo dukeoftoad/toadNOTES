@@ -73,6 +73,13 @@ Implemented a unified Material 3 editor with saveable title/body/category/color/
 
 Still not implemented: reminder delivery (alarms/notifications), rich-text formatting beyond checklist/bullet prefixes, tap-to-toggle checkboxes inside the text.
 
+
+## Sharing follow-up — local QR and encrypted links
+
+- [ ] **Browser link sharing** — tracked in [issue #57](https://github.com/dukeoftoad/toadNOTES/issues/57). Generate a unique URL that opens in Chrome/Brave and decrypts note content on the recipient device. Never upload plaintext or the decryption key. Prefer free, low-maintenance hosting; document link revocation/expiry and URL-size limitations honestly. Do not present the feature as available until the recipient page is deployed and the end-to-end flow is tested.
+- [x] **Local QR sharing** — an offline alternative only; it contains readable note text, not an encrypted link. The dialog warns recipients that the payload is plaintext.
+- [x] Add a local QR-code option to the editor's sharing menu. It encodes the same share-safe note text used by Android sharing and displays a clear warning that scanned content is plaintext. QR generation does not require network access or a hosting account.
+
 ## Release and validation policy
 - Android CI targets API 36 and is the required automated validation.
 - Separate emulator UI workflow is manual-only and not a blocking check.
