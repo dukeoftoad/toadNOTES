@@ -63,10 +63,8 @@ jobs:
 
       - uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
+          # setup-android expects a comma-separated package list, not YAML block lines.
+          packages: platform-tools,platforms;android-36,build-tools;36.0.0
 
       # Run validation and packaging in one Gradle invocation to reuse task graph
       # and avoid paying Gradle startup/configuration overhead twice.
