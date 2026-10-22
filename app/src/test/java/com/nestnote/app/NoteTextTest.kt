@@ -26,6 +26,34 @@ class NoteTextTest {
     }
 
     @Test
+    fun lineBoundariesSupportLfCrLfAndLoneCr() {
+        listOf("\n", "\r\n", "\r").forEach { newline ->
+            val text = "first${newline}second${newline}third"
+            val secondStart = "first".length + newline.length
+            assertEquals(secondStart, NoteText.lineStart(text, secondStart + 2))
+            assertEquals(secondStart + "second".length, NoteText.lineEnd(text, secondStart + 2))
+        }
+    }
+
+    @Test
+    fun markdownConversionPreservesNewlineStyleBlankLinesAndTrailingSeparators() {
+        listOf("\n", "\r\n", "\r").forEach { newline ->
+            val body = "  • item${newline}${newline}code  ${newline}last${newline}"
+            assertEquals("  - item${newline}${newline}code  ${newline}last${newline}", NoteText.toMarkdown("", body))
+        }
+    }
+
+    @Test
+    fun enterContinuesListsForLfCrLfAndLoneCr() {
+        listOf("\n", "\r\n", "\r").forEach { newline ->
+            val old = "  9. nested"
+            val new = old + newline
+            val expected = "  9. nested${newline}  10. "
+            assertEquals(expected to expected.length, NoteText.continueList(old, new, new.length))
+        }
+    }
+
+    @Test
     fun wordCountIgnoresExtraWhitespace() {
         assertEquals(0, NoteText.wordCount("   \n "))
         assertEquals(3, NoteText.wordCount("one  two\nthree "))

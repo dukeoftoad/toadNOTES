@@ -19,23 +19,46 @@ object NoteText {
      * Recognizes headings, bullets, numbered lists, and simple checklists; other lines stay intact.
      */
     fun toMarkdown(title: String, plainText: String): String {
-        val body = plainText.split("\n", ignoreCase = false, limit = Int.MAX_VALUE).joinToString("\n") { raw ->
-            val indent = raw.takeWhile { it == ' ' || it == '\t' }
-            val line = raw.drop(indent.length)
-            indent + when {
-                line.matches(Regex("^#{1,6}\\s+.*")) -> line
-                line.matches(Regex("^[-*•]\\s+.*")) ->
-                    "- " + line.replaceFirst(Regex("^[-*•]\\s+"), "")
-                line.matches(Regex("^\\d+[.)]\\s+.*")) ->
-                    line.replaceFirst(Regex("^\\d+[.)]\\s+"), "")
-                        .let { item -> "${Regex("^\\d+").find(line)?.value ?: "1"}. $item" }
-                line.startsWith("☑ ") -> "- [x] " + line.removePrefix("☑ ")
-                line.startsWith("☐ ") -> "- [ ] " + line.removePrefix("☐ ")
-                else -> line
+        // Preserve original line separators while converting each line independently.
+        // This retains CRLF/lone-CR notes, blank lines, and trailing-newline semantics.
+        val body = buildString {
+            var lineStart = 0
+            var index = 0
+            while (index < plainText.length) {
+                if (plainText[index] == '\n' || plainText[index] == '\r') {
+                    append(convertPlainTextLine(plainText.substring(lineStart, index)))
+                    if (plainText[index] == '\r' && index + 1 < plainText.length && plainText[index + 1] == '\n') {
+                        append("\r\n")
+                        index += 2
+                    } else {
+                        append(plainText[index])
+                        index++
+                    }
+                    lineStart = index
+                } else {
+                    index++
+                }
             }
+            append(convertPlainTextLine(plainText.substring(lineStart)))
         }
         val heading = if (title.isNotBlank()) "# ${title.trim()}\n\n" else ""
         return heading + body
+    }
+
+    private fun convertPlainTextLine(raw: String): String {
+        val indent = raw.takeWhile { it == ' ' || it == '\t' }
+        val line = raw.drop(indent.length)
+        return indent + when {
+            line.matches(Regex("^#{1,6}\\s+.*")) -> line
+            line.matches(Regex("^[-*•]\\s+.*")) ->
+                "- " + line.replaceFirst(Regex("^[-*•]\\s+"), "")
+            line.matches(Regex("^\\d+[.)]\\s+.*")) ->
+                line.replaceFirst(Regex("^\\d+[.)]\\s+"), "")
+                    .let { item -> "${Regex("^\\d+").find(line)?.value ?: "1"}. $item" }
+            line.startsWith("☑ ") -> "- [x] " + line.removePrefix("☑ ")
+            line.startsWith("☐ ") -> "- [ ] " + line.removePrefix("☐ ")
+            else -> line
+        }
     }
 
     fun wordCount(text: String): Int =
@@ -56,13 +79,16 @@ object NoteText {
 
     fun lineStart(text: String, cursor: Int): Int {
         val c = cursor.coerceIn(0, text.length)
-        return if (c == 0) 0 else text.lastIndexOf('\n', c - 1) + 1
+        if (c == 0) return 0
+        val separator = maxOf(text.lastIndexOf('\n', c - 1), text.lastIndexOf('\r', c - 1))
+        return if (separator < 0) 0 else separator + 1
     }
 
     fun lineEnd(text: String, cursor: Int): Int {
         val c = cursor.coerceIn(0, text.length)
-        val i = text.indexOf('\n', c)
-        return if (i < 0) text.length else i
+        val lf = text.indexOf('\n', c)
+        val cr = text.indexOf('\r', c)
+        return listOf(lf, cr).filter { it >= 0 }.minOrNull() ?: text.length
     }
 
     /** Leading whitespace of a line. Checklist views already tolerate it, so formatting actions must too. */
@@ -209,12 +235,22 @@ object NoteText {
      * Returns null when nothing should change.
      */
     fun continueList(old: String, new: String, cursor: Int): Pair<String, Int>? {
-        if (new.length != old.length + 1 || cursor < 1 || cursor > new.length || new[cursor - 1] != '\n') return null
-        if (new.removeRange(cursor - 1, cursor) != old) return null
-        val start = lineStart(old, cursor - 1)
-        val beforeCursor = old.substring(start, cursor - 1)
-        val prefix = prefixOf(beforeCursor) ?: return null
+        if (cursor < 1 || cursor > new.length) return null
+        // Detect a single inserted line separator (LF, CRLF, or lone CR) at the cursor.
+        val newlineStart = when {
+            cursor >= 2 && new.substring(cursor - 2, cursor) == "\r\n" -> cursor - 2
+            new[cursor - 1] == '\n' || new[cursor - 1] == '\r' -> cursor - 1
+            else -> return null
+        }
+        val newlineLength = cursor - newlineStart
+        if (new.length != old.length + newlineLength) return null
+        if (new.removeRange(newlineStart, cursor) != old) return null
+        val start = lineStart(old, newlineStart)
+        val beforeCursor = old.substring(start, newlineStart)
         val indent = indentOf(beforeCursor)
+        val prefix = prefixOf(beforeCursor)
+            ?: Regex("""^\d+\. """).find(beforeCursor.removePrefix(indent))?.value
+            ?: return null
         if (beforeCursor.removePrefix(indent).removePrefix(prefix).isBlank()) {
             // Empty item: Enter ends the list instead of adding another bullet.
             return old.removeRange(start, start + indent.length + prefix.length) to start
