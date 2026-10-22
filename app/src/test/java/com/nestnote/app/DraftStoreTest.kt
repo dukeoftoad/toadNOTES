@@ -133,4 +133,39 @@ class DraftStoreTest {
         File(root, "note-${draft.noteId}.json").writeText("x".repeat(3 * 1024 * 1024))
         assertNull(store.read(draft.noteId))
     }
+
+    @Test
+    fun `drafts remain isolated by note ID across store recreation`() {
+        val firstStore = DraftStore(root)
+        val noteOne = sampleDraft(id = 101L).copy(
+            title = "Note one",
+            body = "line one\n\n  indented\n[[voice:attachment-one]]"
+        )
+        val noteTwo = sampleDraft(id = 202L).copy(
+            title = "Note two",
+            body = "different content"
+        )
+
+        assertTrue(firstStore.write(noteOne))
+        assertTrue(firstStore.write(noteTwo))
+
+        // A new store instance models process recreation; each note must recover
+        // only its own latest snapshot, including whitespace and attachment markers.
+        val recreatedStore = DraftStore(root)
+        assertEquals(noteOne, recreatedStore.read(101L))
+        assertEquals(noteTwo, recreatedStore.read(202L))
+
+        assertTrue(recreatedStore.clear(101L))
+        assertNull(recreatedStore.read(101L))
+        assertEquals(noteTwo, recreatedStore.read(202L))
+    }
+
+    @Test
+    fun `draft timestamp and note ID round trip for stale draft comparison`() {
+        val draft = sampleDraft(id = 42L).copy(savedAtMillis = 987654321L)
+        assertTrue(store.write(draft))
+        val restored = store.read(42L)
+        assertEquals(42L, restored?.noteId)
+        assertEquals(987654321L, restored?.savedAtMillis)
+    }
 }

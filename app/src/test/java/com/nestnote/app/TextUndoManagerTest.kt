@@ -158,4 +158,34 @@ class TextUndoManagerTest {
         assertEquals(2, result!!.selectionStart)
         assertEquals(4, result.selectionEnd)
     }
+
+    @Test
+    fun `undo redo restores formatted text and reversed selection exactly`() {
+        val manager = TextUndoManager(debounceMs = 0L)
+        val before = TextUndoManager.Snapshot("A **bold** and `code`", 12, 3)
+        val after = TextUndoManager.Snapshot("A **strong** and `code`", 13, 4)
+
+        manager.push(before)
+        val undone = manager.undo(after)
+        assertEquals(before, undone)
+
+        val redone = manager.redo(undone!!)
+        assertEquals(after, redone)
+    }
+
+    @Test
+    fun `formatting edit after undo clears redo and preserves latest selection snapshot`() {
+        val manager = TextUndoManager(debounceMs = 0L)
+        val plain = TextUndoManager.Snapshot("quote", 0, 5)
+        val quoted = TextUndoManager.Snapshot("> quote", 2, 7)
+        val blockquoted = TextUndoManager.Snapshot("> **quote**", 4, 9)
+
+        manager.push(plain)
+        assertEquals(plain, manager.undo(quoted))
+        assertTrue(manager.canRedo())
+
+        manager.push(blockquoted)
+        assertFalse(manager.canRedo())
+        assertEquals(blockquoted, manager.undo(TextUndoManager.Snapshot("new", 1, 1)))
+    }
 }
