@@ -1,10 +1,44 @@
 # NESTNOTE Changelog
 
-## v1.3.9 — 2026-10-21 (release notes draft)
+## v1.3.11 — Current branch release record (2026-10-22)
+
+Versioned notes: [docs/release-notes/v1.3.11.md](release-notes/v1.3.11.md).
+
+This is the current release record prepared in PR #76 for the next NESTNOTE version. The documentation is current for the branch; publishing v1.3.11 still requires a stable tag and successful release workflow.
+
+### Fixed
+- Improve editor foreground contrast on dark surfaces using surface luminance and theme-provided colors.
+- Improve Markdown blockquote and horizontal-rule rendering while keeping raw HTML inert.
+- Preserve whitespace, indentation, trailing-newline behavior, and LF/CRLF/lone-CR line endings during text conversion and list operations.
+- Improve selection remapping after line edits and harden inline formatting and checklist/bullet transitions.
+- Restrict actionable Markdown links to `http`, `https`, and `mailto` schemes.
+- Improve accessibility touch targets and standalone Markdown heading semantics.
+
+### Markdown renderer and link insertion — PR #74 merged 2026-10-22
+- Replaced the regex-based preview preprocessor with Markwon/CommonMark and added task-list and strikethrough extensions.
+- Hardened safe link-label escaping and cursor placement, with Unicode, punctuation, selection, and boundary regression cases.
+- PR #74 merged as `479d6a2013a18a6673f179c00e147c24e4ed798f`. Its merge-triggered Android CI run is still in progress; do not call the release validated until it completes successfully.
+
+### Validation status
+- Confirm exact-head Android CI before declaring the release validated.
+- Production APK signing, installation/upgrade checks, and physical-device accessibility checks are not claimed complete by this documentation update.
+
+---
+
+## v1.3.10 — 2026-10-21 (published release)
+
+- Fixed GitHub Pages preservation during F-Droid publishing.
+- Showed the voice-note waveform in the in-place note editor.
+- Release asset: [NESTNOTE-v1.3.10.apk](https://github.com/dukeoftoad/toadNOTES/releases/download/v1.3.10/NESTNOTE-v1.3.10.apk).
+
+---
+
+
+## v1.3.9 — 2026-10-21 (published release; historical entry)
 
 Versioned notes: [docs/release-notes/v1.3.9.md](release-notes/v1.3.9.md).
 
-This draft consolidates recent voice-note/editor fixes and release-facing changes. Publish it as the final v1.3.9 changelog only after the release candidate, CI, and required device checks are confirmed.
+This section is retained as the historical v1.3.9 release record. Later fixes and release changes are tracked in the newer version sections above.
 
 ### Improved
 - Keep voice-note playback inline with the note instead of opening a separate player or covering the page.
@@ -18,18 +52,18 @@ This draft consolidates recent voice-note/editor fixes and release-facing change
 - Persist plain-text versus Markdown note format and safely default older notes to plain text.
 - Add regression coverage for inline/adjacent voice markers, text preservation, and marker removal.
 
-### Release validation
-- Do not treat inline playback while actively editing as complete until it is verified on a real device; the current audit records this as outstanding.
-- Confirm wallpaper import is fully integrated into the editor and covered by tests before listing it as a shipped v1.3.9 feature.
-- Encrypted unique-link sharing and QR-code sharing are not included in these release notes until their implementation PRs are merged and validated.
-- Verify the exact release-tag CI, production APK signature, install/upgrade behavior, and applicable device checks before publishing.
+### Scope note (historical)
+- Encrypted unique-link sharing and QR-code sharing were not part of the v1.3.9 release record.
+- Wallpaper-import availability must be checked against the current implementation and tests; this historical entry does not claim it shipped in v1.3.9.
 
 ---
 
-## Unreleased
+## Historical voice-player implementation notes — superseded by v1.3.10
+
+The following entries preserve earlier implementation notes for traceability. The current published release scope is recorded under v1.3.10 above; this is not a separate unreleased release.
 
 ### Changed
-- Added a dedicated inline voice-player area to the note editor so voice attachments can be played while editing, without opening Markdown preview. Validation is in progress.
+- Added a dedicated inline voice-player area to the note editor so voice attachments can be played while editing, without opening Markdown preview.
 
 ### Fixed
 - Voice-note playback cards stack their title/waveform and seek controls vertically, preventing the seek bar from overlapping the voice-note label.
@@ -39,8 +73,8 @@ This draft consolidates recent voice-note/editor fixes and release-facing change
 - Note format is persisted as plain text or Markdown, with older notes defaulting safely to plain text.
 - The note format menu no longer references an unavailable Material icon, fixing the Android CI compilation failure.
 
-### Known issue
-- The editor screenshot still shows a highlighted voice-note marker rather than an inline player while editing. Inline playback in read mode and Markdown preview is implemented, but direct playback from the editable text field is not yet verified/fixed. Do not consider this interaction complete until tested on-device.
+### Historical validation note
+- Earlier editor screenshots showed a highlighted voice-note marker rather than an inline player while editing. v1.3.10 subsequently records the in-place voice-note waveform fix; this historical note alone does not certify device-level validation.
 
 ### Tests
 - Added regression coverage for inline and adjacent voice markers, text preservation, and marker removal.

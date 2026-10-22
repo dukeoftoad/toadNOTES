@@ -41,7 +41,7 @@ Make NESTNOTE installable and updateable through an F-Droid-compatible source wi
 
 ## Phase 2 — metadata preparation checklist
 
-A metadata draft now exists in `F-DROID_METADATA_PROPOSAL.md`. Do not submit it until the license-rights check, dependency review, and F-Droid build validation are complete. The likely metadata fields to prepare are:
+The working metadata proposal is maintained in `F-DROID_METADATA_PROPOSAL.md` and reflects the latest published upstream release, v1.3.10, plus the planned v1.3.11 release record. The proposal is not an official F-Droid submission. Do not submit it until the license-rights check, dependency review, and F-Droid build validation are complete. The likely metadata fields to prepare are:
 
 - package ID: `com.nestnote.app`
 - source code URL: `https://github.com/dukeoftoad/toadNOTES`

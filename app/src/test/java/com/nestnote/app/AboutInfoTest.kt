@@ -22,10 +22,10 @@ class AboutInfoTest {
     @Test
     fun `fallback version matches the gradle defaults`() {
         val fallback = AboutInfo.fallbackVersion()
-        assertEquals("1.0.0", fallback.name)
+        assertEquals("1.3.11", fallback.name)
         assertEquals(1L, fallback.code)
         assertFalse(fallback.fromPackage)
-        assertEquals("Version 1.0.0 (1)", AboutInfo.versionLabel(fallback))
+        assertEquals("Version 1.3.11 (1)", AboutInfo.versionLabel(fallback))
     }
 
     @Test

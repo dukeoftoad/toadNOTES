@@ -1,13 +1,14 @@
 # NESTNOTE Work Log
 
-## 2026-10-21 — v1.3.9 release documentation draft
+## 2026-10-22 — PR #74 merged; v1.3.11 release metadata sync
 
-- Added a v1.3.9 draft section at the top of `docs/CHANGELOG.md` and a versioned release-note draft at `docs/release-notes/v1.3.9.md`.
-- Release notes cover voice-player layout/accessibility and note-format fixes, and explicitly exclude encrypted link/QR sharing until PRs are merged and validated.
-- F-Droid metadata already points to the canonical raw changelog at `https://raw.githubusercontent.com/dukeoftoad/toadNOTES/main/docs/CHANGELOG.md`; source code and issue-tracker links are already present. No speculative website URL or unverified version code was added.
-- Validation status: documentation only; no Android build, CI, device checks, production APK signature verification, GitHub Release publication, or GitHub Pages deployment was performed. Release remains a draft pending the checklist gates.
+- Updated the root changelog, documentation changelog, README, release-note record, F-Droid metadata proposal, and F-Droid distribution notes to reflect the current v1.3.11 branch work and latest published upstream release v1.3.10.
+- Aligned the local Gradle version-name fallback and About screen fallback with v1.3.11; updated the corresponding JVM test assertion.
+- PR #74 merged on 2026-10-22 as `479d6a2013a18a6673f179c00e147c24e4ed798f`. Markwon/CommonMark preview rendering, task-list/strikethrough support, and safe link-label/cursor handling are now in `main`.
+- Merge-triggered Android CI run [39727819191](https://github.com/dukeoftoad/toadNOTES/actions/runs/39727819191) was in progress at log update time; the release must not be marked validated until it completes successfully.
+- Validation status: repository metadata updated through GitHub. PR #74's merge-triggered CI was in progress; no local Android build/test run, device checks, APK signature verification, v1.3.11 release publication, or F-Droid publication was performed.
 
-Last updated: 2026-10-12
+Last updated: 2026-10-22
 
 > Maintenance rule: update this log in the same commit as every implementation commit, including the commit SHA, summary, and validation status. If a separate commit is unavoidable, update the log immediately afterward.  
 Repository: [dukeoftoad/toadNOTES](https://github.com/dukeoftoad/toadNOTES)
@@ -15,6 +16,10 @@ Repository: [dukeoftoad/toadNOTES](https://github.com/dukeoftoad/toadNOTES)
 This activity record is assembled from visible repository commits, pull requests, and GitHub Actions runs. Statuses reflect the latest checks observed when written; use the linked run for live status.
 
 ## Current snapshot
+- PR #74 is merged into `main`; merge commit `479d6a2013a18a6673f179c00e147c24e4ed798f`. Verify its CI run before declaring release validation complete.
+- PR #76 contains the v1.3.11 release metadata/version fallback changes; it is not merged yet at the time this log was authored.
+- Latest published stable GitHub Release observed on 2026-10-22: v1.3.10. The v1.3.11 release record is current on branch `docs/changelog-1.3.11-issue-61`; it is not yet a published tag/release.
+- PR #76 carries the current release-record and metadata updates. PR #74 remains an open draft; do not count its changes as merged.
 - Native Android app using Kotlin, Jetpack Compose, and Material 3; target SDK API 36, minimum SDK 26.
 - `main` includes merged PRs #1–#5 as of 2026-10-12. Verify live PR status before relying on this snapshot.
 - PR #6, `security/privacy-hardening`, is intentionally on hold and remains unmerged pending owner approval and device/release validation.
@@ -29,7 +34,7 @@ This activity record is assembled from visible repository commits, pull requests
 | [#1](https://github.com/dukeoftoad/toadNOTES/pull/1) | feat: Material 3 personalization and flexible note creation | **Merged** 2026-10-11 | Phase 1 dashboard modernization and personalization. |
 | [#2](https://github.com/dukeoftoad/toadNOTES/pull/2) | feat: resilient inline note editor | **Merged** 2026-10-11 | Unified create/edit experience and draft safety. |
 | [#3](https://github.com/dukeoftoad/toadNOTES/pull/3) | Expand settings | **Merged** 2026-10-11 | Theme, colors, layout, sorting, and note display preferences. |
-| [#4](https://github.com/dukeoftoad/toadNOTES/pull/4) | feat: modernize everyday note-taking experience | **Open draft — awaiting owner review** | Phase 4 editor refinement, sorting, timestamp compatibility, archive/restore, deletion Undo, and explicit reminder-status messaging. |
+| [#4](https://github.com/dukeoftoad/toadNOTES/pull/4) | feat: modernize everyday note-taking experience | **Merged** 2026-10-12 | Phase 4 editor refinement, sorting, timestamp compatibility, archive/restore, deletion Undo, and explicit reminder-status messaging. |
 
 ## Work completed
 ### Foundation and delivery automation
