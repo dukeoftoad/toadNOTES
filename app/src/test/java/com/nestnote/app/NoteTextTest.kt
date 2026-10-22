@@ -789,4 +789,43 @@ class NoteTextTest {
         assertEquals(2, atStart.second)
     }
 
+    @Test
+    fun markdownLinkInsertionUsesSelectedUnicodeLabelAndPlacesCursorInsideUrl() {
+        val source = "before café, 世界! after"
+        val start = source.indexOf("café")
+        val end = source.indexOf(" after")
+        val result = NoteText.insertMarkdownLink(source, start, end)
+
+        assertEquals("before [café, 世界!](https://) after", result.first)
+        assertEquals(result.first.indexOf("https://") + "https://".length, result.second)
+        assertEquals(result.second, result.third)
+    }
+
+    @Test
+    fun markdownLinkInsertionAtEmptySelectionAndDocumentBoundariesIsSafe() {
+        val empty = NoteText.insertMarkdownLink("abc", 1, 1)
+        assertEquals("a[text](https://)bc", empty.first)
+        assertEquals(empty.first.indexOf("https://") + "https://".length, empty.second)
+        assertEquals(empty.second, empty.third)
+
+        val atStart = NoteText.insertMarkdownLink("abc", 0, 0)
+        assertEquals("[text](https://)abc", atStart.first)
+        assertEquals(atStart.first.indexOf("https://") + "https://".length, atStart.second)
+
+        val atEnd = NoteText.insertMarkdownLink("abc", 3, 3)
+        assertEquals("abc[text](https://)", atEnd.first)
+        assertEquals(atEnd.first.indexOf("https://") + "https://".length, atEnd.second)
+    }
+
+    @Test
+    fun markdownLinkInsertionHandlesReversedSelectionAndEscapesClosingBracket() {
+        val source = "A [label] B"
+        val start = source.indexOf("[label]") + "[label]".length
+        val end = source.indexOf("[label]")
+        val result = NoteText.insertMarkdownLink(source, start, end)
+
+        assertEquals("A [\\[label\\]](https://) B", result.first)
+        assertEquals(result.first.indexOf("https://") + "https://".length, result.second)
+        assertEquals(result.second, result.third)
+    }
 }

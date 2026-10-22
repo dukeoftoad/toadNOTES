@@ -1721,6 +1721,7 @@ internal fun PreviewWithInlineVoice(
     modifier: Modifier = Modifier,
     renderMarkdown: Boolean = true
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val segments = remember(body) { NoteText.voiceSegments(body) }
     val bodySp = textSize.bodySp.toFloat()
     Column(modifier.verticalScroll(rememberScrollState())) {
@@ -1728,7 +1729,7 @@ internal fun PreviewWithInlineVoice(
             if (segment.attachmentId == null) {
                 if (segment.text.isNotEmpty()) {
                     val spanned = remember(segment.text, bodySp, ink, renderMarkdown) {
-                        if (renderMarkdown) MarkdownPreview.toSpanned(segment.text, ink.toArgb())
+                        if (renderMarkdown) MarkdownPreview.toSpanned(context, segment.text, ink.toArgb())
                         else android.text.SpannableString(segment.text)
                     }
                     AndroidView(

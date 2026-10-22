@@ -176,9 +176,14 @@ object NoteText {
         val start = minOf(first, second)
         val end = maxOf(first, second)
         val selectedLabel = if (start == end) "text" else text.substring(start, end)
-        // Escape Markdown link-label delimiters so selected brackets/backslashes
-        // cannot accidentally terminate or alter the generated link label.
-        val label = selectedLabel.replace("\\", "\\\\").replace("]", "\\]")
+        // Escape Markdown link-label delimiters in a single pass. Escaping backslashes
+        // first prevents newly inserted escape characters from being escaped again.
+        val label = buildString(selectedLabel.length) {
+            selectedLabel.forEach { character ->
+                if (character == '\\' || character == '[' || character == ']') append('\\')
+                append(character)
+            }
+        }
         val replacement = "[$label](https://)"
         val updated = text.substring(0, start) + replacement + text.substring(end)
         val urlStart = start + label.length + 3 + "https://".length

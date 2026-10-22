@@ -37,6 +37,10 @@ android {
 
 dependencies {
     implementation("com.google.zxing:core:3.5.3")
+    // CommonMark-based native Android Markdown renderer.
+    implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-strikethrough:4.6.2")
+    implementation("io.noties.markwon:ext-tasklist:4.6.2")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation(platform("androidx.compose:compose-bom:2025.05.00"))
     implementation("androidx.core:core-ktx:1.16.0")
