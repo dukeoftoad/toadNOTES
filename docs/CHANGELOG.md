@@ -1,10 +1,10 @@
 # NESTNOTE Changelog
 
-## v1.3.11 — Current branch release record (2026-10-22)
+## v1.3.11 — Current repository release record (2026-10-22)
 
 Versioned notes: [docs/release-notes/v1.3.11.md](release-notes/v1.3.11.md).
 
-This is the current release record prepared in PR #76 for the next NESTNOTE version. The documentation is current for the branch; publishing v1.3.11 still requires a stable tag and successful release workflow.
+This is the current release record on `main`, synchronized by merged PR #76. Publishing v1.3.11 still requires a stable tag and successful release workflow.
 
 ### Fixed
 - Improve editor foreground contrast on dark surfaces using surface luminance and theme-provided colors.
