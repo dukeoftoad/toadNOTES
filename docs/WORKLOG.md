@@ -1,12 +1,12 @@
 # NESTNOTE Work Log
 
-## 2026-10-22 — PR #74 merged; v1.3.11 release metadata sync
+## 2026-10-22 — PRs #74 and #76 merged; v1.3.11 metadata sync
 
-- Updated the root changelog, documentation changelog, README, release-note record, F-Droid metadata proposal, and F-Droid distribution notes to reflect the current v1.3.11 branch work and latest published upstream release v1.3.10.
+- Merged PR #76 as `857f711a304eadc1134bdb80446d3071bac102e6`, updating the root changelog, documentation changelog, README, v1.3.11 release notes, F-Droid metadata/distribution docs, work log, Gradle fallback, About fallback, and its JVM test assertion. Latest published stable release remains v1.3.10; v1.3.11 is documented but not published.
 - Aligned the local Gradle version-name fallback and About screen fallback with v1.3.11; updated the corresponding JVM test assertion.
 - PR #74 merged on 2026-10-22 as `479d6a2013a18a6673f179c00e147c24e4ed798f`. Markwon/CommonMark preview rendering, task-list/strikethrough support, and safe link-label/cursor handling are now in `main`.
 - Merge-triggered Android CI run [39727819191](https://github.com/dukeoftoad/toadNOTES/actions/runs/39727819191) was in progress at log update time; the release must not be marked validated until it completes successfully.
-- Validation status: repository metadata updated through GitHub. PR #74's merge-triggered CI was in progress; no local Android build/test run, device checks, APK signature verification, v1.3.11 release publication, or F-Droid publication was performed.
+- Validation status: PR #74 merge-triggered Android CI run [39727819191](https://github.com/dukeoftoad/toadNOTES/actions/runs/39727819191) was in progress at the last check. PR #76 was documentation/version-metadata work and no exact-head CI result has been confirmed for its merge. No local Android build/test run, device checks, APK signature verification, v1.3.11 release publication, or F-Droid publication was performed.
 
 Last updated: 2026-10-22
 
@@ -17,7 +17,7 @@ This activity record is assembled from visible repository commits, pull requests
 
 ## Current snapshot
 - PR #74 is merged into `main`; merge commit `479d6a2013a18a6673f179c00e147c24e4ed798f`. Verify its CI run before declaring release validation complete.
-- PR #76 contains the v1.3.11 release metadata/version fallback changes; it is not merged yet at the time this log was authored.
+- PR #76 is merged as `857f711a304eadc1134bdb80446d3071bac102e6`; v1.3.11 release metadata and version-name fallbacks are now on `main`.
 - Latest published stable GitHub Release observed on 2026-10-22: v1.3.10. The v1.3.11 release record is current on branch `docs/changelog-1.3.11-issue-61`; it is not yet a published tag/release.
 - PR #76 carries the current release-record and metadata updates. PR #74 remains an open draft; do not count its changes as merged.
 - Native Android app using Kotlin, Jetpack Compose, and Material 3; target SDK API 36, minimum SDK 26.
