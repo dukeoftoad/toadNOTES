@@ -1,5 +1,14 @@
 name: Android Emulator UI Tests (ReactiveCircus)
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/**'
+      - 'app/build.gradle.kts'
+      - 'build.gradle.kts'
+      - 'gradle/**'
+      - 'gradlew'
+      - '.github/workflows/android-ui-tests.yml'
   workflow_dispatch:
 permissions:
   contents: read
