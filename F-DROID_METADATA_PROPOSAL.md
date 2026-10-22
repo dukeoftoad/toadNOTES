@@ -8,7 +8,7 @@ This document records the metadata prepared for a possible merge request to the 
 - **License:** `GPL-3.0-only`
 - **Source code:** https://github.com/dukeoftoad/toadNOTES
 - **Issue tracker:** https://github.com/dukeoftoad/toadNOTES/issues
-- **Latest published upstream release:** `v1.3.10` ([GitHub Release](https://github.com/dukeoftoad/toadNOTES/releases/tag/v1.3.10)). The v1.3.11 release record is being prepared in the current branch; do not use it as an upstream version until its stable tag is published.
+- **Latest published upstream release:** `v1.3.10` ([GitHub Release](https://github.com/dukeoftoad/toadNOTES/releases/tag/v1.3.10)). The v1.3.11 release record is now on `main` but is not a published upstream version; do not use it as an upstream version until its stable tag is published.
 - **Build system:** Gradle / Android Gradle Plugin
 - **Build environment observed in CI:** Java 17, Gradle 8.13, Android SDK platform 36, build tools 36.0.0
 - **Minimum SDK:** 26
