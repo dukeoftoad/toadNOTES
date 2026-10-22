@@ -153,7 +153,14 @@ object NoteText {
             // run lengths can be nested or malformed Markdown; basing the toggle
             // on the left run alone can delete an unrelated closing marker.
             leftRun >= marker.length && rightRun >= marker.length &&
-                leftRun == rightRun && (leftRun / marker.length) % 2 == 1
+                (leftRun / marker.length) % 2 == 1 &&
+                (leftRun == rightRun ||
+                    // Adjacent strong spans can share a closing/opening run:
+                    // **two****three** has two opening stars and four closing-side
+                    // stars at the selection boundary. Do not apply this exception
+                    // to single-character markers, where *bold** is ambiguous.
+                    (marker.length > 1 && leftRun == marker.length &&
+                        rightRun % marker.length == 0))
         } else {
             start >= marker.length && end + marker.length <= text.length &&
                 text.substring(start - marker.length, start) == marker &&
