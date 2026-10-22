@@ -1134,7 +1134,8 @@ internal fun NoteEditorContent(
                         readOnly = editorMode == EditorMode.Locked,
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(titleFocus)
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp)
+                            .testTag("editor_title_field"),
                         textStyle = MaterialTheme.typography.headlineSmall.copy(
                             fontSize = textSize.titleSp.sp,
                             lineHeight = (textSize.titleSp * 1.26f).sp,
@@ -1323,7 +1324,8 @@ internal fun NoteEditorContent(
                             ),
                             modifier = Modifier.fillMaxWidth()
                                 .weight(1f)
-                                .padding(top = 3.dp),
+                                .padding(top = 3.dp)
+                                .testTag("editor_body_field"),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = textSize.bodySp.sp,
                                 lineHeight = (textSize.bodySp * 1.45f).sp,

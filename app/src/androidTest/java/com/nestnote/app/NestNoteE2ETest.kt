@@ -2,6 +2,10 @@ package com.nestnote.app
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasText
@@ -20,6 +24,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+@OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 class NestNoteE2ETest {
     @get:Rule
@@ -362,4 +367,196 @@ class NestNoteE2ETest {
         composeRule.onNodeWithContentDescription("Toggle checklist item").performClick()
         composeRule.onNodeWithText("☐ buy milk").assertIsDisplayed()
     }
+
+    private fun seedSavedNote(note: NestNote) {
+        assertEquals(true, NoteStore(composeRule.activity).save(listOf(note)))
+        composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
+        composeRule.waitForIdle()
+    }
+
+    private fun sampleSavedNote(
+        id: Long,
+        title: String,
+        body: String,
+        updated: Long = System.currentTimeMillis()
+    ) = NestNote(
+        id = id,
+        title = title,
+        body = body,
+        category = "Personal",
+        updated = updated,
+        created = updated,
+        format = "markdown"
+    )
+
+    @Test
+    fun formattingEditUndoRedoPreservesBodyAndSelection() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithTag("editor_body_field").performTextInput("quote")
+        composeRule.onNodeWithTag("editor_body_field")
+            .performTextInputSelection(TextRange(0, 5))
+
+        composeRule.onNodeWithContentDescription("Formatting").performClick()
+        composeRule.onNodeWithTag("format_Bold").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("**quote**")
+
+        composeRule.onNodeWithContentDescription("Undo").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("quote")
+        composeRule.onNodeWithContentDescription("Redo").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("**quote**")
+    }
+
+    @Test
+    fun markdownPreviewCanToggleBackToEditingWithoutLosingBody() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithTag("editor_body_field").performTextInput("# Heading\n\n**bold**")
+        composeRule.onNodeWithContentDescription("More editor actions").performClick()
+        composeRule.onNodeWithText("Note format · Plain text").performClick()
+
+        composeRule.onNodeWithText("Preview Markdown").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Edit Markdown").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("editor_body_field")
+            .assertTextEquals("# Heading\n\n**bold**")
+    }
+
+    @Test
+    fun newerDraftIsRecoveredAfterActivityRecreationAndCanBeSaved() {
+        val now = System.currentTimeMillis()
+        val saved = sampleSavedNote(901L, "Saved title", "Saved body", updated = now - 60_000L)
+        assertEquals(true, NoteStore(composeRule.activity).save(listOf(saved)))
+        assertEquals(true, DraftStore(composeRule.activity).write(
+            DraftStore.Draft(
+                noteId = saved.id,
+                title = "Recovered title",
+                body = "Recovered body\n\n  preserved indent",
+                category = "Work",
+                color = 2,
+                background = 1,
+                pinned = true,
+                reminder = "",
+                wallpaperUri = "",
+                savedAtMillis = now
+            )
+        ))
+        composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Saved title").performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Recover unsaved changes?").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Recover").performClick()
+        composeRule.onNodeWithTag("editor_title_field").assertTextEquals("Recovered title")
+        composeRule.onNodeWithTag("editor_body_field")
+            .assertTextEquals("Recovered body\n\n  preserved indent")
+        composeRule.onNodeWithText("Save", substring = false).performClick()
+
+        composeRule.runOnIdle {
+            val persisted = NoteStore(composeRule.activity).load().first { it.id == saved.id }
+            assertEquals("Recovered title", persisted.title)
+            assertEquals("Recovered body\n\n  preserved indent", persisted.body)
+        }
+        assertEquals(null, DraftStore(composeRule.activity).read(saved.id))
+    }
+
+    @Test
+    fun staleDraftIsNotOfferedWhenSavedNoteIsNewer() {
+        val now = System.currentTimeMillis()
+        val saved = sampleSavedNote(902L, "Current title", "Current body", updated = now)
+        assertEquals(true, NoteStore(composeRule.activity).save(listOf(saved)))
+        assertEquals(true, DraftStore(composeRule.activity).write(
+            DraftStore.Draft(
+                noteId = saved.id,
+                title = "Stale title",
+                body = "Stale body",
+                category = saved.category,
+                color = 0,
+                background = 0,
+                pinned = false,
+                reminder = "",
+                wallpaperUri = "",
+                savedAtMillis = now - 1_000L
+            )
+        ))
+        composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Current title").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Recover unsaved changes?").assertDoesNotExist()
+        composeRule.onNodeWithTag("editor_title_field").assertTextEquals("Current title")
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("Current body")
+    }
+
+    @Test
+    fun discardingExistingNoteEditsKeepsPersistedContentOnReopen() {
+        val saved = sampleSavedNote(903L, "Keep this title", "Original body")
+        seedSavedNote(saved)
+
+        composeRule.onNodeWithText("Keep this title").performClick()
+        composeRule.onNodeWithTag("editor_body_field").performTextClearance()
+        composeRule.onNodeWithTag("editor_body_field").performTextInput("Temporary edit")
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("Discard changes?").assertIsDisplayed()
+        composeRule.onNodeWithText("Discard").performClick()
+
+        composeRule.onNodeWithText("Keep this title").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("Original body")
+        composeRule.runOnIdle {
+            assertEquals("Original body", NoteStore(composeRule.activity).load().first { it.id == saved.id }.body)
+        }
+    }
+
+    @Test
+    fun switchingBetweenSavedNotesDoesNotLeakEditorState() {
+        val first = sampleSavedNote(904L, "First note", "First body")
+        val second = sampleSavedNote(905L, "Second note", "Second body")
+        assertEquals(true, NoteStore(composeRule.activity).save(listOf(first, second)))
+        composeRule.activity.runOnUiThread { composeRule.activity.recreate() }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("First note").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("Second note").performClick()
+        composeRule.onNodeWithTag("editor_title_field").assertTextEquals("Second note")
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("Second body")
+    }
+
+
+    @Test
+    fun lineFormattingForNumberedListsAndBlockquotesSupportsUndoRedo() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithTag("editor_body_field").performTextInput("item")
+        composeRule.onNodeWithContentDescription("Formatting").performClick()
+
+        composeRule.onNodeWithTag("format_Numbered").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("1. item")
+        composeRule.onNodeWithContentDescription("Undo").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("item")
+        composeRule.onNodeWithContentDescription("Redo").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("1. item")
+
+        composeRule.onNodeWithTag("format_Quote").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("> 1. item")
+        composeRule.onNodeWithContentDescription("Undo").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("1. item")
+        composeRule.onNodeWithContentDescription("Redo").performClick()
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("> 1. item")
+    }
+
+    @Test
+    fun linkFormattingKeepsSelectedLabelAndPlacesCursorInUrl() {
+        composeRule.onNodeWithContentDescription("Create note").performClick()
+        composeRule.onNodeWithTag("editor_body_field").performTextInput("label")
+        composeRule.onNodeWithTag("editor_body_field")
+            .performTextInputSelection(TextRange(0, 5))
+        composeRule.onNodeWithContentDescription("Formatting").performClick()
+        composeRule.onNodeWithTag("format_Link").performClick()
+
+        composeRule.onNodeWithTag("editor_body_field").assertTextEquals("[label](https://)")
+        composeRule.onNodeWithTag("editor_body_field").performTextInput("example.com")
+        composeRule.onNodeWithTag("editor_body_field")
+            .assertTextEquals("[label](https://example.com)")
+    }
+
 }
