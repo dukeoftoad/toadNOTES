@@ -940,7 +940,7 @@ internal fun SettingsScreen(
 
         // ---- 6. Privacy Section ----
         if (matchesSearch("privacy")) {
-            item(key = SettingsItemKeys[5]) {
+            item(key = SettingsItemKeys[6]) {
                 SettingsSection(
                     title = "Privacy",
                     subtitle = "Your notes stay safely on your device",
@@ -974,7 +974,7 @@ internal fun SettingsScreen(
 
         // ---- 7. Data & Backup Section ----
         if (matchesSearch("data")) {
-            item(key = SettingsItemKeys[6]) {
+            item(key = SettingsItemKeys[7]) {
                 SettingsSection(
                     title = "Data",
                     subtitle = "Backup and manage your notes",
@@ -1025,7 +1025,7 @@ internal fun SettingsScreen(
         }
 
         // ---- 8. Reset Button ----
-        item(key = SettingsItemKeys[7]) {
+        item(key = SettingsItemKeys[8]) {
             OutlinedButton(
                 onClick = { confirmReset = true },
                 modifier = Modifier
