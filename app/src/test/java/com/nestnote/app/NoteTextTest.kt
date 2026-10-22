@@ -619,4 +619,76 @@ class NoteTextTest {
         assertEquals(linked.first.indexOf("https://") + "https://".length, linked.second)
     }
 
+
+    @Test
+    fun inlineFormattingRepeatedTogglesPreserveTextAndSelectionForAllMarkerKinds() {
+        listOf("**", "_", "~~", "\u0060").forEach { marker ->
+            val original = "left selected right"
+            val start = original.indexOf("selected")
+            val end = start + "selected".length
+            val wrapped = NoteText.toggleInlineFormat(original, start, end, marker)
+            assertEquals("left " + marker + "selected" + marker + " right", wrapped.first)
+            assertEquals(start + marker.length to end + marker.length, wrapped.second to wrapped.third)
+
+            val unwrapped = NoteText.toggleInlineFormat(wrapped.first, wrapped.second, wrapped.third, marker)
+            assertEquals(original, unwrapped.first)
+            assertEquals(start to end, unwrapped.second to unwrapped.third)
+        }
+
+        val empty = NoteText.toggleInlineFormat("abc", 1, 1, "~~")
+        assertEquals("a~~~~bc", empty.first)
+        assertEquals(3 to 3, empty.second to empty.third)
+    }
+
+    @Test
+    fun checklistCyclesPlainUncheckedCheckedAndBackWithoutMovingIndentation() {
+        val plain = "  task"
+        val unchecked = NoteText.cycleChecklist(plain, plain.length)
+        assertEquals("  ☐ task", unchecked.first)
+        assertEquals(8, unchecked.second)
+
+        val checked = NoteText.cycleChecklist(unchecked.first, unchecked.second)
+        assertEquals("  ☑ task", checked.first)
+        assertEquals(8, checked.second)
+
+        val backToPlain = NoteText.cycleChecklist(checked.first, checked.second)
+        assertEquals(plain, backToPlain.first)
+        assertEquals(6, backToPlain.second)
+    }
+
+    @Test
+    fun checklistStateUpdatesPreserveLineEndingsAndIgnoreInvalidRows() {
+        listOf("\n", "\r\n", "\r").forEach { newline ->
+            val body = "  ☐ first" + newline + "☑ second" + newline + "last"
+            assertEquals("  ☑ first" + newline + "☑ second" + newline + "last", NoteText.setChecklistItemChecked(body, 0, true))
+            assertEquals("  ☐ first" + newline + "☐ second" + newline + "last", NoteText.setChecklistItemChecked(body, 1, false))
+            assertEquals(body, NoteText.setChecklistItemChecked(body, 2, true))
+            assertEquals(body, NoteText.setChecklistItemChecked(body, 99, true))
+        }
+    }
+
+    @Test
+    fun checklistEnterContinuesUncheckedAndEmptyChecklistItemTerminatesCleanly() {
+        val old = "  ☑ done"
+        assertEquals("  ☑ done\n  ☐ ", NoteText.continueList(old, old + "\n", old.length + 1)!!.first)
+
+        val empty = "before\n  ☐ "
+        val result = NoteText.continueList(empty, empty + "\n", empty.length + 1)!!
+        assertEquals("before\n", result.first)
+        assertEquals("before\n".length, result.second)
+    }
+
+    @Test
+    fun markdownLinkEscapesLabelDelimitersAndKeepsUrlCursorCorrect() {
+        val text = "a]b\\c"
+        val linked = NoteText.insertMarkdownLink(text, 0, text.length)
+        assertEquals("[a\\]b\\\\c](https://)", linked.first)
+        assertEquals(linked.first.indexOf("https://") + "https://".length, linked.second)
+        assertEquals(linked.second, linked.third)
+
+        val noSelection = NoteText.insertMarkdownLink("text", 2, 2)
+        assertEquals("te[text](https://)xt", noSelection.first)
+        assertEquals(noSelection.first.indexOf("https://") + "https://".length, noSelection.second)
+    }
+
 }

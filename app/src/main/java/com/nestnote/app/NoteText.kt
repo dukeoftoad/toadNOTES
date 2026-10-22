@@ -176,7 +176,10 @@ object NoteText {
         val second = selectionEnd.coerceIn(0, text.length)
         val start = minOf(first, second)
         val end = maxOf(first, second)
-        val label = if (start == end) "text" else text.substring(start, end)
+        val selectedLabel = if (start == end) "text" else text.substring(start, end)
+        // Escape Markdown link-label delimiters so selected brackets/backslashes
+        // cannot accidentally terminate or alter the generated link label.
+        val label = selectedLabel.replace("\\", "\\\\").replace("]", "\\]")
         val replacement = "[$label](https://)"
         val updated = text.substring(0, start) + replacement + text.substring(end)
         val urlStart = start + label.length + 3 + "https://".length
@@ -371,10 +374,30 @@ object NoteText {
 
     /** Updates one checklist item's state without changing other lines or indentation. */
     fun setChecklistItemChecked(text: String, lineIndex: Int, checked: Boolean): String {
-        val lines = text.split("\n").toMutableList()
+        // Preserve the document's original line separators (including CRLF and lone CR).
+        val lines = mutableListOf<String>()
+        val separators = mutableListOf<String>()
+        var lineStart = 0
+        var index = 0
+        while (index < text.length) {
+            if (text[index] == '\n' || text[index] == '\r') {
+                lines += text.substring(lineStart, index)
+                val separator = if (text[index] == '\r' && index + 1 < text.length && text[index + 1] == '\n') {
+                    index += 2
+                    "\r\n"
+                } else {
+                    text[index++].toString()
+                }
+                separators += separator
+                lineStart = index
+            } else {
+                index++
+            }
+        }
+        lines += text.substring(lineStart)
         if (lineIndex !in lines.indices) return text
         val line = lines[lineIndex]
-        val indentation = line.takeWhile { it.isWhitespace() }
+        val indentation = line.takeWhile { it == ' ' || it == '\t' }
         val content = line.drop(indentation.length)
         val prefix = when {
             content.startsWith(UNCHECKED) -> UNCHECKED
@@ -384,7 +407,12 @@ object NoteText {
         if ((prefix == CHECKED) == checked) return text
         val replacement = if (checked) CHECKED else UNCHECKED
         lines[lineIndex] = indentation + replacement + content.removePrefix(prefix)
-        return lines.joinToString("\n")
+        return buildString {
+            lines.forEachIndexed { lineNumber, value ->
+                append(value)
+                if (lineNumber < separators.size) append(separators[lineNumber])
+            }
+        }
     }
 
     /** Returns (total checklist items, completed items) for the note body. */
