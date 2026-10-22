@@ -9,6 +9,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.QuoteSpan
 import androidx.core.text.HtmlCompat
 import com.nestnote.app.opensource.GsSimpleMarkdownParser
+import java.util.Locale
 
 /**
  * Safe, intentionally small Markdown preview using Markor's CC0 parser.
@@ -112,6 +113,18 @@ internal object MarkdownPreview {
                     parsed.setSpan(ForegroundColorSpan(foregroundColor), start, end, flags)
                 }
         }
+
+        // Treat note content as untrusted. Markdown links may create URLSpan instances,
+        // but only ordinary web links and email links are actionable in this local preview.
+        // Remove unsupported schemes rather than letting TextView launch arbitrary intents.
+        parsed.getSpans(0, parsed.length, android.text.style.URLSpan::class.java)
+            .filter { span ->
+                val scheme = runCatching {
+                    android.net.Uri.parse(span.url).scheme?.lowercase(Locale.ROOT)
+                }.getOrNull()
+                scheme !in setOf("http", "https", "mailto")
+            }
+            .forEach(parsed::removeSpan)
 
         // Draw thematic breaks with a native line span, keeping Markdown markers hidden.
         val result = SpannableStringBuilder(parsed)

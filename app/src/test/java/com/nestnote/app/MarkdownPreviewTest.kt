@@ -45,6 +45,21 @@ class MarkdownPreviewTest {
     }
 
     @Test
+    fun unsafeMarkdownLinkSchemesAreNotActionable() {
+        val result = MarkdownPreview.toSpanned(
+            "[safe](https://example.com) [mail](mailto:notes@example.com) " +
+                "[script](javascript:alert%281%29) [local](file:///etc/passwd) " +
+                "[data](data:text/html,hello)"
+        )
+        val links = result.getSpans(0, result.length, URLSpan::class.java)
+        assertTrue(links.any { it.url == "https://example.com" })
+        assertTrue(links.any { it.url == "mailto:notes@example.com" })
+        assertFalse(links.any { it.url.startsWith("javascript:", ignoreCase = true) })
+        assertFalse(links.any { it.url.startsWith("file:", ignoreCase = true) })
+        assertFalse(links.any { it.url.startsWith("data:", ignoreCase = true) })
+    }
+
+    @Test
     fun emptyAndPlainTextPreviewAreHandled() {
         assertTrue(MarkdownPreview.toSpanned("").isEmpty())
         assertTrue(MarkdownPreview.toSpanned("ordinary note").toString().contains("ordinary note"))
