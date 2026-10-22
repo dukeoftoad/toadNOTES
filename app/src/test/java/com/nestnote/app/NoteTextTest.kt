@@ -691,4 +691,89 @@ class NoteTextTest {
         assertEquals(noSelection.first.indexOf("https://") + "https://".length, noSelection.second)
     }
 
+
+    @Test
+    fun inlineFormattingHandlesNestedAndAdjacentMarkersAndReversedSelections() {
+        val bold = "**bold**"
+        val boldStart = 2
+        val boldEnd = 6
+        val italic = NoteText.toggleInlineFormat(bold, boldStart, boldEnd, "_")
+        assertEquals("**_bold_**", italic.first)
+        assertEquals(3 to 7, italic.second to italic.third)
+
+        val unitalic = NoteText.toggleInlineFormat(italic.first, italic.second, italic.third, "_")
+        assertEquals(bold, unitalic.first)
+        assertEquals(boldStart to boldEnd, unitalic.second to unitalic.third)
+
+        val adjacent = "one**two****three**"
+        val twoStart = adjacent.indexOf("two")
+        val twoEnd = twoStart + 3
+        val toggled = NoteText.toggleInlineFormat(adjacent, twoStart, twoEnd, "**")
+        assertEquals("onetwo**three**", toggled.first)
+        assertEquals(twoStart - 2 to twoEnd - 2, toggled.second to toggled.third)
+
+        val reversed = NoteText.toggleInlineFormat("alpha beta", 10, 6, "~~")
+        assertEquals("alpha ~~beta~~", reversed.first)
+        assertEquals(12 to 8, reversed.second to reversed.third)
+    }
+
+    @Test
+    fun inlineFormattingCanToggleBoldInsideItalicWithoutRemovingOuterFormatting() {
+        val original = "_italic text_"
+        val start = original.indexOf("italic")
+        val end = start + "italic".length
+        val bold = NoteText.toggleInlineFormat(original, start, end, "**")
+        assertEquals("_**italic** text_", bold.first)
+        assertEquals(start + 2 to end + 2, bold.second to bold.third)
+
+        val plainAgain = NoteText.toggleInlineFormat(bold.first, bold.second, bold.third, "**")
+        assertEquals(original, plainAgain.first)
+        assertEquals(start to end, plainAgain.second to plainAgain.third)
+    }
+
+    @Test
+    fun checklistAndBulletActionsReplaceExistingPrefixesAndPreserveIndentation() {
+        val numbered = "  12. task"
+        val bullet = NoteText.toggleBullet(numbered, numbered.length)
+        assertEquals("  • task", bullet.first)
+        assertEquals(bullet.first.length, bullet.second)
+
+        val checklist = NoteText.cycleChecklist(bullet.first, bullet.second)
+        assertEquals("  ☐ task", checklist.first)
+        assertEquals(checklist.first.length, checklist.second)
+
+        val checked = NoteText.cycleChecklist(checklist.first, checklist.second)
+        assertEquals("  ☑ task", checked.first)
+        assertEquals(checked.first.length, checked.second)
+
+        val plain = NoteText.cycleChecklist(checked.first, checked.second)
+        assertEquals("  task", plain.first)
+        assertEquals(plain.first.length, plain.second)
+    }
+
+    @Test
+    fun bulletToggleRemovesOnlyItsOwnPrefixAndReplacesChecklistOrNumberedPrefix() {
+        assertEquals("  task", NoteText.toggleBullet("  • task", 8).first)
+        assertEquals("  • task", NoteText.toggleBullet("  ☑ task", 8).first)
+        assertEquals("  • task", NoteText.toggleBullet("  9) task", 9).first)
+        assertEquals("• task", NoteText.toggleBullet("task", 4).first)
+    }
+
+    @Test
+    fun checklistAndBulletCursorMappingWorksAtLineBoundariesAndWithMixedNewlines() {
+        val source = "first\r\n  task\r\nlast"
+        val lineCursor = source.indexOf("task") + 2
+        val checked = NoteText.cycleChecklist(source, lineCursor)
+        assertEquals("first\r\n  ☐ task\r\nlast", checked.first)
+        assertEquals(lineCursor + 2, checked.second)
+
+        val bullet = NoteText.toggleBullet(checked.first, checked.second)
+        assertEquals("first\r\n  • task\r\nlast", bullet.first)
+        assertEquals(lineCursor + 2, bullet.second)
+
+        val atStart = NoteText.cycleChecklist("task", 0)
+        assertEquals("☐ task", atStart.first)
+        assertEquals(2, atStart.second)
+    }
+
 }

@@ -150,8 +150,7 @@ object NoteText {
                 index++
             }
             leftRun >= marker.length && rightRun >= marker.length &&
-                (leftRun / marker.length) % 2 == 1 &&
-                (rightRun / marker.length) % 2 == 1
+                (leftRun / marker.length) % 2 == 1
         } else {
             start >= marker.length && end + marker.length <= text.length &&
                 text.substring(start - marker.length, start) == marker &&
