@@ -132,6 +132,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -145,6 +146,15 @@ import kotlin.math.roundToInt
 
 internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
     (measuredHeight * fraction).roundToInt().coerceAtLeast(0)
+/**
+ * The preview exposes each voice-free segment as one selectable TextView (one
+ * accessibility node). Mark it as a heading only when the entire segment is one
+ * Markdown ATX heading. Mixed paragraphs or multiple headings remain a normal text
+ * node; marking the whole node as a heading would misrepresent its content.
+ * Rendering mixed Markdown as separate semantic block nodes is a separate change.
+ */
+internal fun isStandaloneMarkdownHeading(text: String, renderMarkdown: Boolean = true): Boolean =
+    renderMarkdown && Regex("^#{1,6}\\\\s+\\\\S(?:.*\\\\S)?$").matches(text.trim())
 
 
 /**
@@ -1729,6 +1739,10 @@ internal fun PreviewWithInlineVoice(
                                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, bodySp)
                                 setTextIsSelectable(true)
                                 movementMethod = LinkMovementMethod.getInstance()
+                                ViewCompat.setAccessibilityHeading(
+                                    this,
+                                    isStandaloneMarkdownHeading(segment.text, renderMarkdown)
+                                )
                             }
                         },
                         update = { textView ->
@@ -1736,6 +1750,10 @@ internal fun PreviewWithInlineVoice(
                             textView.setLinkTextColor(ink.toArgb())
                             textView.textSize = bodySp
                             textView.text = spanned
+                            ViewCompat.setAccessibilityHeading(
+                                textView,
+                                isStandaloneMarkdownHeading(segment.text, renderMarkdown)
+                            )
                         }
                     )
                 }
