@@ -18,8 +18,7 @@ This activity record is assembled from visible repository commits, pull requests
 ## Current snapshot
 - PR #74 is merged into `main`; merge commit `479d6a2013a18a6673f179c00e147c24e4ed798f`. Verify its CI run before declaring release validation complete.
 - PR #76 is merged as `857f711a304eadc1134bdb80446d3071bac102e6`; v1.3.11 release metadata and version-name fallbacks are now on `main`.
-- Latest published stable GitHub Release observed on 2026-10-22: v1.3.10. The v1.3.11 release record is current on branch `docs/changelog-1.3.11-issue-61`; it is not yet a published tag/release.
-- PR #76 carries the current release-record and metadata updates. PR #74 remains an open draft; do not count its changes as merged.
+- Latest published stable GitHub Release observed on 2026-10-22: v1.3.10. The v1.3.11 release record is current on `main`, but it is not yet a published tag/release.
 - Native Android app using Kotlin, Jetpack Compose, and Material 3; target SDK API 36, minimum SDK 26.
 - `main` includes merged PRs #1–#5 as of 2026-10-12. Verify live PR status before relying on this snapshot.
 - PR #6, `security/privacy-hardening`, is intentionally on hold and remains unmerged pending owner approval and device/release validation.
