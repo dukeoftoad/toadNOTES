@@ -149,8 +149,11 @@ object NoteText {
                 rightRun++
                 index++
             }
+            // Unwrap only when both sides have matching marker runs. Different
+            // run lengths can be nested or malformed Markdown; basing the toggle
+            // on the left run alone can delete an unrelated closing marker.
             leftRun >= marker.length && rightRun >= marker.length &&
-                (leftRun / marker.length) % 2 == 1
+                leftRun == rightRun && (leftRun / marker.length) % 2 == 1
         } else {
             start >= marker.length && end + marker.length <= text.length &&
                 text.substring(start - marker.length, start) == marker &&

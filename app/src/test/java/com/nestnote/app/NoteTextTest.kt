@@ -828,4 +828,45 @@ class NoteTextTest {
         assertEquals(result.first.indexOf("https://") + "https://".length, result.second)
         assertEquals(result.second, result.third)
     }
+
+    @Test
+    fun inlineFormatDoesNotUnwrapWhenOpeningAndClosingMarkerRunsDiffer() {
+        // The opening side has one asterisk, while the closing side has two.
+        // This is malformed/ambiguous Markdown, not a balanced italic wrapper.
+        // Applying italic should wrap the selected text rather than deleting one
+        // character from each side and corrupting the existing source.
+        val result = NoteText.toggleInlineFormat("*bold**", 1, 5, "*")
+        assertEquals("**bold***", result.first)
+        assertEquals(2 to 6, result.second to result.third)
+    }
+
+    @Test
+    fun inlineFormatStillTogglesBalancedNestedEmphasis() {
+        val italicOff = NoteText.toggleInlineFormat("***bold***", 3, 7, "*")
+        assertEquals("**bold**", italicOff.first)
+
+        val boldOff = NoteText.toggleInlineFormat("***bold***", 3, 7, "**")
+        assertEquals("*bold*", boldOff.first)
+    }
+
+    @Test
+    fun inlineFormatDoesNotConsumeExistingStrongMarkersWhenApplyingItalic() {
+        val result = NoteText.toggleInlineFormat("**bold**", 2, 6, "*")
+        assertEquals("***bold***", result.first)
+        assertEquals(3 to 7, result.second to result.third)
+    }
+
+    @Test
+    fun inlineFormatPreservesReversedSelectionWhenUnwrappingBalancedMarkers() {
+        val result = NoteText.toggleInlineFormat("**bold**", 6, 2, "**")
+        assertEquals("bold", result.first)
+        assertEquals(4 to 0, result.second to result.third)
+    }
+
+    @Test
+    fun inlineFormatAtCollapsedCursorInsertsPairWithoutLosingSurroundingText() {
+        val result = NoteText.toggleInlineFormat("before after", 7, 7, "**")
+        assertEquals("before ****after", result.first)
+        assertEquals(9 to 9, result.second to result.third)
+    }
 }

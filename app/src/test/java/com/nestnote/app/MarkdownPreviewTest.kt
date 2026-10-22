@@ -177,4 +177,13 @@ class MarkdownPreviewTest {
         assertTrue(result.contains("footnote body"))
         assertTrue(result.contains("struck"))
     }
+
+    @Test
+    fun malformedEmphasisMarkersKeepReadableBodyTextInPreview() {
+        val body = "*********jklloikkk**uuiii_iiio9_**"
+        val result = MarkdownPreview.toSpanned(RuntimeEnvironment.getApplication(), body)
+
+        assertTrue("first body token must not be lost", result.toString().contains("jklloikkk"))
+        assertTrue("second body token must not be lost", result.toString().contains("uuiii_iiio9"))
+    }
 }
