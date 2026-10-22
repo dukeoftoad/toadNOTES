@@ -1724,6 +1724,8 @@ internal fun PreviewWithInlineVoice(
                         factory = { viewContext ->
                             TextView(viewContext).apply {
                                 setTextColor(ink.toArgb())
+                                // Markdown links must remain legible against the active note surface.
+                                setLinkTextColor(ink.toArgb())
                                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, bodySp)
                                 setTextIsSelectable(true)
                                 movementMethod = LinkMovementMethod.getInstance()
@@ -1731,6 +1733,7 @@ internal fun PreviewWithInlineVoice(
                         },
                         update = { textView ->
                             textView.setTextColor(ink.toArgb())
+                            textView.setLinkTextColor(ink.toArgb())
                             textView.textSize = bodySp
                             textView.text = spanned
                         }
