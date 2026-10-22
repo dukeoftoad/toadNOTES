@@ -361,17 +361,26 @@ internal fun NestNoteApp(store: NoteStore) {
             }
         }
     }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val raw = runCatching {
-                context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-            }.getOrNull()
-            val incoming = raw?.let { NoteStore.decodeBackup(it) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            // Validate every selected file before opening the restore preview; never apply a partial batch.
+            val batches = uris.map { uri ->
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                        ?.let { NoteStore.decodeBackup(it) }
+                }.getOrNull()
+            }
+            val incoming = if (batches.all { it != null }) {
+                batches.filterNotNull().flatten().takeIf { it.isNotEmpty() }
+            } else null
             val message = if (incoming == null) {
-                "That file isn't a valid NESTNOTE backup"
+                "One or more selected files aren't valid NESTNOTE backups. Nothing was imported."
             } else {
-                pendingRestore = incoming
-                "Backup validated. Review the restore before applying it."
+                // Deduplicate IDs across files using the same newest-update-wins rule as restore.
+                pendingRestore = incoming.fold(emptyList()) { accumulated, batchNote ->
+                    NoteStore.merge(accumulated, listOf(batchNote)).notes
+                }
+                "Validated ${uris.size} backup file(s). Review the combined restore before applying it."
             }
             coroutineScope.launch { snackbarHostState.showSnackbar(message) }
         }
