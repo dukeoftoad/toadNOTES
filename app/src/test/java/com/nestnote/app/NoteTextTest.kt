@@ -13,10 +13,10 @@ class NoteTextTest {
         assertEquals(true, isStandaloneMarkdownHeading("  ### Nested heading  "))
         assertEquals(true, isStandaloneMarkdownHeading("###### Deep heading"))
         assertEquals(false, isStandaloneMarkdownHeading("Heading without marker"))
-        assertEquals(false, isStandaloneMarkdownHeading("# Heading\\nBody paragraph"))
-        assertEquals(false, isStandaloneMarkdownHeading("# First\\n\\n## Second"))
-        assertEquals(false, isStandaloneMarkdownHeading("Paragraph\\n# Heading"))
-        assertEquals(false, isStandaloneMarkdownHeading("```md\\n# Not a heading node\\n```"))
+        assertEquals(false, isStandaloneMarkdownHeading("# Heading\nBody paragraph"))
+        assertEquals(false, isStandaloneMarkdownHeading("# First\n\n## Second"))
+        assertEquals(false, isStandaloneMarkdownHeading("Paragraph\n# Heading"))
+        assertEquals(false, isStandaloneMarkdownHeading("```md\n# Not a heading node\n```"))
         assertEquals(false, isStandaloneMarkdownHeading("# Heading", renderMarkdown = false))
     }
 
@@ -491,13 +491,13 @@ class NoteTextTest {
     @Test
     fun voiceSegmentsPreserveWhitespaceAroundMarkers() {
         val id = "11111111-1111-4111-8111-111111111111"
-        val body = "first paragraph\\n\\n[[voice:$id]]\\n\\nlast paragraph"
+        val body = "first paragraph\n\n[[voice:$id]]\n\nlast paragraph"
 
         assertEquals(
             listOf(
-                NoteText.VoiceSegment("first paragraph\\n\\n", null),
+                NoteText.VoiceSegment("first paragraph\n\n", null),
                 NoteText.VoiceSegment("", id),
-                NoteText.VoiceSegment("\\n\\nlast paragraph", null)
+                NoteText.VoiceSegment("\n\nlast paragraph", null)
             ),
             NoteText.voiceSegments(body)
         )
@@ -507,14 +507,14 @@ class NoteTextTest {
     fun voiceSegmentsPreserveLeadingAndTrailingWhitespaceAndAdjacentMarkers() {
         val first = "11111111-1111-4111-8111-111111111111"
         val second = "22222222-2222-4222-8222-222222222222"
-        val body = "\\n[[voice:$first]][[voice:$second]]\\n"
+        val body = "\n[[voice:$first]][[voice:$second]]\n"
 
         assertEquals(
             listOf(
-                NoteText.VoiceSegment("\\n", null),
+                NoteText.VoiceSegment("\n", null),
                 NoteText.VoiceSegment("", first),
                 NoteText.VoiceSegment("", second),
-                NoteText.VoiceSegment("\\n", null)
+                NoteText.VoiceSegment("\n", null)
             ),
             NoteText.voiceSegments(body)
         )
