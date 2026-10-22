@@ -133,7 +133,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
-internal fun NestNoteApp(store: NoteStore) {
+internal fun NestNoteApp(
+    store: NoteStore,
+    externalMarkdownUri: android.net.Uri? = null,
+    onExternalMarkdownHandled: () -> Unit = {}
+) {
     val context = LocalContext.current
     val appVersion = remember { readAppVersion(context) }
     val windowSizeClass = (context as? ComponentActivity)?.let { calculateWindowSizeClass(it) }
@@ -309,32 +313,73 @@ internal fun NestNoteApp(store: NoteStore) {
         AutomaticBackupScheduler.cancel(context)
         coroutineScope.launch { snackbarHostState.showSnackbar("Settings reset to defaults") }
     }
-    val markdownImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val markdown = runCatching {
-                context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-            }.getOrNull()
-            if (markdown == null) {
-                coroutineScope.launch { snackbarHostState.showSnackbar("Couldn't read that Markdown file") }
-            } else {
-                val firstHeading = Regex("(?m)^#\\s+(.+?)\\s*$").find(markdown)
-                val importedTitle = firstHeading?.groupValues?.get(1)?.trim().orEmpty()
-                    .ifBlank { uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.ifBlank { "Imported note" } ?: "Imported note" }
-                val importedBody = if (firstHeading != null) {
-                    markdown.removeRange(firstHeading.range).trim()
-                } else markdown.trim()
-                val imported = NestNote(
-                    id = System.currentTimeMillis(),
-                    title = importedTitle,
-                    body = importedBody,
-                    category = defaultNoteCategory,
-                    updated = System.currentTimeMillis(),
-                    created = System.currentTimeMillis()
-                )
-                persist(listOf(imported) + notes)
-                selectedView = "Home"
-                coroutineScope.launch { snackbarHostState.showSnackbar("Markdown file imported as a new note") }
+    suspend fun importMarkdownUris(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) return
+        // Read and parse documents off the main thread; don't freeze the UI for large batches.
+        val parsed = withContext(Dispatchers.IO) {
+            uris.map { uri ->
+                runCatching {
+                    val markdown = context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                        ?: error("Unable to read Markdown file")
+                    val displayName = runCatching {
+                        context.contentResolver.query(
+                            uri,
+                            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                            null,
+                            null,
+                            null
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
+                        }
+                    }.getOrNull().orEmpty()
+                    val fileName = displayName.ifBlank {
+                        uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: ""
+                    }
+                    val firstHeading = Regex("(?m)^#\\s+(.+?)\\s*$").find(markdown)
+                    val title = firstHeading?.groupValues?.get(1)?.trim().orEmpty()
+                        .ifBlank { fileName.ifBlank { "Imported note" } }
+                    val body = if (firstHeading != null) markdown.removeRange(firstHeading.range).trim()
+                        else markdown.trim()
+                    title to body
+                }.getOrNull()
             }
+        }
+        if (parsed.any { it == null }) {
+            snackbarHostState.showSnackbar("Couldn't read one or more Markdown files. Nothing was imported.")
+            return
+        }
+        val now = System.currentTimeMillis()
+        val usedNotes = notes.toMutableList()
+        val imported = parsed.filterNotNull().mapIndexed { index, (title, body) ->
+            val timestamp = now + index
+            val note = NestNote(
+                id = NoteStore.allocateNoteId(usedNotes, timestamp),
+                title = title,
+                body = body,
+                category = defaultNoteCategory,
+                updated = timestamp,
+                created = timestamp
+            )
+            usedNotes += note
+            note
+        }
+        if (persist(imported + notes)) {
+            selectedView = "Home"
+            snackbarHostState.showSnackbar(
+                if (imported.size == 1) "Markdown file imported as a new note"
+                else "${imported.size} Markdown files imported as new notes"
+            )
+        }
+    }
+    val markdownImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        coroutineScope.launch { importMarkdownUris(uris) }
+    }
+    LaunchedEffect(externalMarkdownUri, storageLoaded) {
+        val uri = externalMarkdownUri
+        if (storageLoaded && uri != null) {
+            importMarkdownUris(listOf(uri))
+            onExternalMarkdownHandled()
         }
     }
     var exportArchivedNotes by remember { mutableStateOf(true) }
