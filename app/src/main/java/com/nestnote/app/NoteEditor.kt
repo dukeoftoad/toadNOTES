@@ -154,7 +154,7 @@ internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
  * Rendering mixed Markdown as separate semantic block nodes is a separate change.
  */
 internal fun isStandaloneMarkdownHeading(text: String, renderMarkdown: Boolean = true): Boolean =
-    renderMarkdown && Regex("^#{1,6}\\\\s+\\\\S(?:.*\\\\S)?$").matches(text.trim())
+    renderMarkdown && Regex("^#{1,6}\\s+\\S(?:.*\\S)?$").matches(text.trim())
 
 
 /**
