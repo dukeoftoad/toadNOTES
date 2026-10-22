@@ -20,7 +20,7 @@ NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, an
 NESTNOTE is intended to be distributed under the GNU General Public License v3.0 only (GPL-3.0-only). See [`LICENSE`](LICENSE) and the [canonical license text](https://www.gnu.org/licenses/gpl-3.0.txt). Confirm contributor/copyright-holder rights before distribution.
 
 ## Current version and release downloads
-The latest published stable release is **v1.3.10**. The repository's current v1.3.11 release record is maintained in [`CHANGELOG.md`](CHANGELOG.md) and [`docs/release-notes/v1.3.11.md`](docs/release-notes/v1.3.11.md); v1.3.11 is not a published release until its stable tag and release workflow complete.
+The latest published stable release is **v1.3.10**. The current v1.3.11 release record is maintained in [`CHANGELOG.md`](CHANGELOG.md) and [`docs/release-notes/v1.3.11.md`](docs/release-notes/v1.3.11.md); v1.3.11 is not a published release until its stable tag and release workflow complete.
 
 Visit [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases). Only download an APK attached to a versioned production release and verify its signature before installing. Historical “latest” or “CI-SIGNED” artifacts, if present, are not proof of production signing.
 
