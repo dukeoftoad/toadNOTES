@@ -1,6 +1,20 @@
 package com.nestnote.app
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,11 +34,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,7 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /** Destinations that live under the More tab; back from these returns to More. */
-internal val moreSubViews = listOf("Settings", "Backup", "Pinned", "Archived", "Categories", "About")
+internal val moreSubViews = listOf("Settings", "Backup", "Pinned", "Archived", "Categories", "About", "Templates", "Insights", "Shortcuts")
 
 /**
  * Floating four-tab bar with a centred New note button: Home, Notes, [New], Reminders, More.
@@ -81,36 +93,67 @@ internal fun NestNoteNavBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            NavItem("Home", Icons.Default.Home, current == "Home", reducedMotion) { onSelect("Home") }
-            NavItem("Notes", Icons.AutoMirrored.Filled.List, current == "All notes", reducedMotion) { onSelect("All notes") }
+            NavItem("Home", Icons.Outlined.Home, Icons.Default.Home, current == "Home", reducedMotion) { onSelect("Home") }
+            NavItem("Notes", Icons.Outlined.Description, Icons.Default.Description, current == "All notes", reducedMotion) { onSelect("All notes") }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                val fabSource = remember { MutableInteractionSource() }
+                val fabPressed by fabSource.collectIsPressedAsState()
+                val fabRotation by animateFloatAsState(
+                    if (fabPressed) 90f else 0f, NestMotion.fast(reducedMotion), label = "fab-rotation"
+                )
                 Surface(
                     onClick = onNewNote,
-                    modifier = Modifier.size(52.dp).semantics { contentDescription = "Create note" },
+                    interactionSource = fabSource,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .pressScale(fabSource, pressedScale = 0.92f)
+                        .semantics { contentDescription = "Create note" },
                     shape = RoundedCornerShape(18.dp),
                     color = colors.primary,
                     contentColor = colors.onPrimary,
                     shadowElevation = 4.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(28.dp))
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp).graphicsLayer { rotationZ = fabRotation }
+                        )
                     }
                 }
             }
-            NavItem("Reminders", Icons.Default.NotificationsNone, current == "Reminders", reducedMotion) { onSelect("Reminders") }
-            NavItem("More", Icons.Default.MoreHoriz, current == "More", reducedMotion) { onSelect("More") }
+            NavItem("Reminders", Icons.Outlined.NotificationsNone, Icons.Default.Notifications, current == "Reminders", reducedMotion) { onSelect("Reminders") }
+            NavItem("More", Icons.Outlined.MoreHoriz, Icons.Default.MoreHoriz, current == "More", reducedMotion) { onSelect("More") }
         }
     }
 }
 
 @Composable
-private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean, reducedMotion: Boolean, onClick: () -> Unit) {
+private fun RowScope.NavItem(
+    label: String,
+    icon: ImageVector,
+    selectedIcon: ImageVector,
+    selected: Boolean,
+    reducedMotion: Boolean,
+    onClick: () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
     val tint by animateColorAsState(
         if (selected) colors.primary else colors.onSurfaceVariant, NestMotion.fast(reducedMotion), label = "nav-tint"
     )
-    val pill by animateColorAsState(
-        if (selected) colors.primary.copy(alpha = 0.14f) else Color.Transparent, NestMotion.fast(reducedMotion), label = "nav-pill"
+    // The pill grows out of the icon's centre instead of fading in as a fixed block.
+    val pillScale by animateFloatAsState(
+        if (selected) 1f else 0.4f,
+        if (reducedMotion) snap() else spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow),
+        label = "nav-pill-scale"
+    )
+    val pillAlpha by animateFloatAsState(
+        if (selected) 1f else 0f, NestMotion.fast(reducedMotion), label = "nav-pill-alpha"
+    )
+    val iconScale by animateFloatAsState(
+        if (selected) 1.1f else 1f,
+        if (reducedMotion) snap() else spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
+        label = "nav-icon-scale"
     )
     Column(
         modifier = Modifier
@@ -120,8 +163,27 @@ private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(Modifier.clip(RoundedCornerShape(16.dp)).background(pill).padding(horizontal = 16.dp, vertical = 4.dp)) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+        Box(Modifier.size(width = 60.dp, height = 32.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        scaleX = pillScale
+                        scaleY = pillScale
+                        alpha = pillAlpha
+                    }
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.primary.copy(alpha = 0.16f))
+            )
+            Icon(
+                if (selected) selectedIcon else icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp).graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+            )
         }
         Text(
             label,

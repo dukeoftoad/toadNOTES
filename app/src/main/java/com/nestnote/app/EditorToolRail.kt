@@ -70,7 +70,7 @@ internal enum class ToolRailTab(val label: String, val icon: ImageVector) {
 
 internal enum class FormatAction(val label: String) {
     Checklist("Checklist"), Bullet("Bullet list"), Numbered("Numbered list"), Quote("Blockquote"),
-    Bold("Bold"), Italic("Italic"), Strike("Strikethrough"), Code("Inline code"), Link("Insert link"),
+    Bold("Bold"), Italic("Italic"), Strike("Strikethrough"), Code("Inline code"), Link("Insert web link"), NoteLink("Link to note"),
     Heading1("Heading 1"), Heading2("Heading 2"), Heading3("Heading 3")
 }
 
@@ -228,7 +228,7 @@ internal fun EditorToolRail(
                                         FormatAction.Italic -> Icon(Icons.Default.FormatItalic, null, tint = tint)
                                         FormatAction.Strike -> Icon(Icons.Default.FormatStrikethrough, null, tint = tint)
                                         FormatAction.Code -> Icon(Icons.Default.Code, null, tint = tint)
-                                        FormatAction.Link -> Icon(Icons.Default.Link, null, tint = tint)
+                                        FormatAction.Link, FormatAction.NoteLink -> Icon(Icons.Default.Link, null, tint = tint)
                                         FormatAction.Heading1 -> Text("H1", fontWeight = FontWeight.Bold, color = tint)
                                         FormatAction.Heading2 -> Text("H2", fontWeight = FontWeight.Bold, color = tint)
                                         FormatAction.Heading3 -> Text("H3", fontWeight = FontWeight.Bold, color = tint)

@@ -19,6 +19,17 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInHorizontally
@@ -53,6 +64,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Title
@@ -130,8 +143,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 // Dashboard note card.
 
 @Composable
-internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit) {
+internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit, onSelect: () -> Unit = {}, isSelected: Boolean = false, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     val markdownLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
         if (uri != null) {
@@ -154,10 +169,18 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
     val cardSecondary = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF625D6B) else colors.onSurfaceVariant
     val cardAccent = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF51466B) else colors.primary
     Card(
-        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = { menu = true }),
+        modifier = modifier
+            .fillMaxWidth()
+            .pressScale(interaction)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onOpen,
+                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }
+            ),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = if (note.background > 0 || note.wallpaperUri.isNotBlank()) Color.Transparent else tint, contentColor = cardText),
-        border = BorderStroke(1.dp, colors.outlineVariant)
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.primary else colors.outlineVariant)
     ) {
         Box {
             if (note.wallpaperUri.isNotBlank()) {
@@ -171,15 +194,20 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                     .padding(if (compact) 10.dp else 16.dp)
             ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isSelected) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = colors.primary, modifier = Modifier.padding(end = 6.dp).size(20.dp))
+                }
                 Surface(color = tint, shape = RoundedCornerShape(8.dp)) {
                     Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = cardText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.weight(1f))
-                if (note.pinned) Icon(Icons.Default.PushPin, contentDescription = "Pinned note", tint = cardAccent, modifier = Modifier.size(18.dp))
+                AnimatedVisibility(visible = note.pinned, enter = scaleIn(NestMotion.spatial()) + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    Icon(Icons.Default.PushPin, contentDescription = "Pinned note", tint = cardAccent, modifier = Modifier.size(18.dp))
+                }
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Actions for " + note.title, tint = cardText) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; onPin() }, leadingIcon = { Icon(Icons.Default.PushPin, null) })
+                        DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onPin() }, leadingIcon = { Icon(if (note.pinned) Icons.Outlined.PushPin else Icons.Default.PushPin, null) })
                         DropdownMenuItem(
                             text = { Text("Download as Markdown") },
                             onClick = {
@@ -190,9 +218,16 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                             leadingIcon = { Icon(Icons.Default.Download, null) },
                             modifier = Modifier.testTag("note_export_markdown")
                         )
+                        DropdownMenuItem(text = { Text(if (isSelected) "Remove from selection" else "Select note") }, onClick = { menu = false; onSelect() }, leadingIcon = { Icon(Icons.Default.CheckCircleOutline, null) })
                         DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onOpen() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-                        DropdownMenuItem(text = { Text(if (note.archived) "Restore from archive" else "Archive") }, onClick = { menu = false; onArchive() }, leadingIcon = { Icon(if (note.archived) Icons.Default.Home else Icons.Default.Delete, null) })
-                        DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
+                        DropdownMenuItem(text = { Text(if (note.archived) "Restore from archive" else "Archive") }, onClick = { menu = false; onArchive() }, leadingIcon = { Icon(if (note.archived) Icons.Default.Unarchive else Icons.Default.Archive, null) })
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            onClick = { menu = false; onDelete() },
+                            leadingIcon = { Icon(Icons.Default.DeleteOutline, null) },
+                            colors = MenuDefaults.itemColors(textColor = colors.error, leadingIconColor = colors.error)
+                        )
                     }
                 }
             }
@@ -211,21 +246,41 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
             // Parsed once per note body, not on every dashboard recomposition.
             val (checklistTotal, checklistDone) = remember(note.body) { NoteText.checklistProgress(note.body) }
             if (checklistTotal > 0) {
-                Text(
-                    "Checklist · $checklistDone/$checklistTotal complete",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cardAccent,
-                    modifier = Modifier.padding(top = 6.dp).semantics {
-                        contentDescription = "Checklist progress: $checklistDone of $checklistTotal items complete"
-                    }
+                val reducedMotion = rememberSystemReducedMotion()
+                val progress by animateFloatAsState(
+                    checklistDone.toFloat() / checklistTotal,
+                    NestMotion.spatial(reducedMotion),
+                    label = "checklist-progress"
                 )
+                Column(
+                    Modifier.padding(top = 8.dp).semantics {
+                        contentDescription = "Checklist progress: $checklistDone of $checklistTotal items complete"
+                    },
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(
+                            if (checklistDone == checklistTotal) Icons.Default.Check else Icons.Default.CheckBox,
+                            contentDescription = null, tint = cardAccent, modifier = Modifier.size(14.dp)
+                        )
+                        Text("$checklistDone/$checklistTotal", style = MaterialTheme.typography.labelSmall, color = cardAccent, fontWeight = FontWeight.SemiBold)
+                    }
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(cardAccent.copy(alpha = 0.18f))) {
+                        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(cardAccent))
+                    }
+                }
             }
             if (showTimestamp) {
             Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
-            Text(
-                if (note.reminder.isNotBlank()) "◷ ${note.reminder}" else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
-                style = MaterialTheme.typography.labelSmall, color = cardSecondary
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (note.reminder.isNotBlank()) {
+                    Icon(Icons.Default.Alarm, contentDescription = null, tint = cardAccent, modifier = Modifier.size(13.dp))
+                }
+                Text(
+                    if (note.reminder.isNotBlank()) note.reminder else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
+                    style = MaterialTheme.typography.labelSmall, color = if (note.reminder.isNotBlank()) cardAccent else cardSecondary
+                )
+            }
             }
             }
         }

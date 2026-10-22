@@ -48,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -193,7 +194,12 @@ internal fun NestNoteApp(store: NoteStore) {
     var sortByCreated by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_SORT, "RECENT") == "CREATED") }
     var showNotePreviews by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_PREVIEWS, true)) }
     var showNoteTimestamps by remember { mutableStateOf(preferences.getBoolean(PREF_NOTE_TIMESTAMPS, true)) }
-    var defaultNoteCategory by remember { mutableStateOf(preferences.getString(PREF_DEFAULT_CATEGORY, "Ideas")?.takeIf { it in categories } ?: "Ideas") }
+    var categoryOptions by remember {
+        mutableStateOf(preferences.getStringSet(PREF_CUSTOM_CATEGORIES, null)?.toList()?.sorted() ?: categories)
+    }
+    var defaultNoteCategory by remember {
+        mutableStateOf(preferences.getString(PREF_DEFAULT_CATEGORY, "Ideas")?.takeIf { it in categoryOptions } ?: "Ideas")
+    }
     var noteColorStyle by remember { mutableStateOf(NoteColorStyle.values().firstOrNull { it.name == preferences.getString(PREF_NOTE_STYLE, "PASTEL") } ?: NoteColorStyle.PASTEL) }
     var editorTextSize by remember { mutableStateOf(EditorTextSize.values().firstOrNull { it.name == preferences.getString(PREF_TEXT_SIZE, "MEDIUM") } ?: EditorTextSize.MEDIUM) }
     var showEditorCounts by remember { mutableStateOf(preferences.getBoolean(PREF_EDITOR_COUNTS, true)) }
@@ -205,9 +211,15 @@ internal fun NestNoteApp(store: NoteStore) {
         }
     }
     var search by remember { mutableStateOf("") }
+    var selectedNoteIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var confirmBulkDelete by remember { mutableStateOf(false) }
+    var savedSearches by remember {
+        mutableStateOf<List<String>>(preferences.getStringSet(PREF_SAVED_SEARCHES, emptySet())?.toList()?.sorted() ?: emptyList())
+    }
     var searchVisible by remember { mutableStateOf(false) }
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorDraftId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editorTemplate by remember { mutableStateOf<NoteTemplate?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     var editorHasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
     var discardVoiceChanges by remember { mutableStateOf<() -> Unit>({}) }
@@ -289,6 +301,8 @@ internal fun NestNoteApp(store: NoteStore) {
         noteColorStyle = NoteColorStyle.PASTEL
         editorTextSize = EditorTextSize.MEDIUM
         showEditorCounts = true
+        categoryOptions = categories
+        defaultNoteCategory = "Ideas"
         automaticBackupEnabled = false
         automaticBackupLastRun = 0L
         automaticBackupStatus = "Not run yet"
@@ -317,7 +331,7 @@ internal fun NestNoteApp(store: NoteStore) {
                     updated = System.currentTimeMillis(),
                     created = System.currentTimeMillis()
                 )
-                notes = listOf(imported) + notes
+                persist(listOf(imported) + notes)
                 selectedView = "Home"
                 coroutineScope.launch { snackbarHostState.showSnackbar("Markdown file imported as a new note") }
             }
@@ -403,12 +417,12 @@ internal fun NestNoteApp(store: NoteStore) {
                     title = {
                         Column {
                             Text(
-                                when (selectedView) { "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
+                                when (selectedView) { "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.2.sp
                             )
                             Text(
-                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
+                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
@@ -425,19 +439,43 @@ internal fun NestNoteApp(store: NoteStore) {
                 )
             },
             bottomBar = {
-                NestNoteNavBar(
-                    selectedView = selectedView,
-                    onSelect = { selectedView = it },
-                    onNewNote = {
-                        if (!storageLoaded) {
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
-                        } else {
-                            editorNoteId = null
-                            editorDraftId = NoteStore.allocateNoteId(notes)
-                            editorVisible = true
+                if (selectedNoteIds.isNotEmpty()) {
+                    val selectedNotes = notes.filter { it.id in selectedNoteIds }
+                    BulkSelectionBar(
+                        selectedCount = selectedNotes.size,
+                        categories = categoryOptions,
+                        allPinned = selectedNotes.isNotEmpty() && selectedNotes.all { it.pinned },
+                        allArchived = selectedNotes.isNotEmpty() && selectedNotes.all { it.archived },
+                        onMoveCategory = { category ->
+                            if (persist(notes.map { if (it.id in selectedNoteIds) it.copy(category = category) else it })) selectedNoteIds = emptySet()
+                        },
+                        onTogglePin = {
+                            val pin = !(selectedNotes.isNotEmpty() && selectedNotes.all { it.pinned })
+                            if (persist(notes.map { if (it.id in selectedNoteIds) it.copy(pinned = pin, updated = System.currentTimeMillis()) else it })) selectedNoteIds = emptySet()
+                        },
+                        onToggleArchive = {
+                            val restore = selectedNotes.isNotEmpty() && selectedNotes.all { it.archived }
+                            if (persist(notes.map { if (it.id in selectedNoteIds) it.copy(archived = !restore, pinned = if (restore) it.pinned else false, updated = System.currentTimeMillis()) else it })) selectedNoteIds = emptySet()
+                        },
+                        onDelete = { confirmBulkDelete = true },
+                        onClear = { selectedNoteIds = emptySet() }
+                    )
+                } else {
+                    NestNoteNavBar(
+                        selectedView = selectedView,
+                        onSelect = { selectedView = it; selectedNoteIds = emptySet() },
+                        onNewNote = {
+                            if (!storageLoaded) {
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
+                            } else {
+                                editorNoteId = null
+                                editorDraftId = NoteStore.allocateNoteId(notes)
+                                editorTemplate = null
+                                editorVisible = true
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         ) { padding ->
             Box(
@@ -475,8 +513,20 @@ internal fun NestNoteApp(store: NoteStore) {
                     OutlinedTextField(
                         value = search, onValueChange = { search = it },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("note_search_field"),
-                        placeholder = { Text("Search your notes") },
+                        placeholder = { Text("Search · is:pinned · has:voice · after:YYYY-MM-DD") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (search.isNotBlank()) IconButton(
+                                onClick = {
+                                    val query = search.trim()
+                                    if (query !in savedSearches && savedSearches.size < 12) {
+                                        savedSearches = savedSearches + query
+                                        preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
+                                    }
+                                },
+                                enabled = search.trim() in savedSearches || savedSearches.size < 12
+                            ) { Icon(Icons.Default.BookmarkAdd, contentDescription = "Save search") }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -487,7 +537,31 @@ internal fun NestNoteApp(store: NoteStore) {
                         )
                     )
                 }
-                if (selectedView == "Home" || selectedView == "All notes" || categories.contains(selectedView)) {
+                if (savedSearches.isNotEmpty() && (selectedView == "Home" || selectedView == "All notes")) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        savedSearches.forEach { query ->
+                            FilterChip(
+                                selected = search == query,
+                                onClick = { search = query },
+                                label = { Text(query, maxLines = 1) },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            savedSearches = savedSearches - query
+                                            preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
+                                        },
+                                        modifier = Modifier.size(26.dp)
+                                    ) { Icon(Icons.Default.Close, contentDescription = "Remove saved search", modifier = Modifier.size(16.dp)) }
+                                }
+                            )
+                        }
+                    }
+                }
+                if (selectedView == "Home" || selectedView == "All notes" || categoryOptions.contains(selectedView)) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .horizontalScroll(rememberScrollState())
@@ -502,7 +576,7 @@ internal fun NestNoteApp(store: NoteStore) {
                                 { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                             } else null
                         )
-                        categories.forEach { category ->
+                        categoryOptions.forEach { category ->
                             FilterChip(
                                 selected = selectedView == category,
                                 onClick = { selectedView = category },
@@ -515,10 +589,27 @@ internal fun NestNoteApp(store: NoteStore) {
                     MoreScreen(
                         pinnedCount = notes.count { it.pinned && !it.archived },
                         archivedCount = notes.count { it.archived },
-                        categoryCount = categories.size,
+                        categoryCount = categoryOptions.size,
                         versionLabel = AboutInfo.versionLabel(appVersion),
-                        onOpen = { selectedView = it }
+                        onOpen = { selectedView = it; selectedNoteIds = emptySet() }
                     )
+                } else if (selectedView == "Templates") {
+                    NoteTemplatesScreen { template ->
+                        editorTemplate = template
+                        editorNoteId = null
+                        editorDraftId = NoteStore.allocateNoteId(notes)
+                        selectedView = "Home"
+                        editorVisible = true
+                    }
+                } else if (selectedView == "Insights") {
+                    NoteInsightsScreen(notes, onOpenCategory = { selectedView = it }) { noteId ->
+                        editorNoteId = noteId
+                        editorDraftId = noteId
+                        selectedView = "Home"
+                        editorVisible = true
+                    }
+                } else if (selectedView == "Shortcuts") {
+                    KeyboardShortcutsScreen()
                 } else if (selectedView == "Backup") {
                     BackupRestoreScreen(
                         totalNotes = notes.size,
@@ -565,6 +656,23 @@ internal fun NestNoteApp(store: NoteStore) {
                         onShowNoteTimestampsChange = { showNoteTimestamps = it; saveBoolean(PREF_NOTE_TIMESTAMPS, it) },
                         defaultNoteCategory = defaultNoteCategory,
                         onDefaultNoteCategoryChange = { defaultNoteCategory = it; saveString(PREF_DEFAULT_CATEGORY, it) },
+                        categoryOptions = categoryOptions,
+                        onCategoryOptionsChange = { updated ->
+                            val removed = categoryOptions.toSet() - updated.toSet()
+                            val fallback = updated.firstOrNull() ?: "Other"
+                            val notesMoved = removed.isEmpty() || persist(
+                                notes.map { if (it.category in removed) it.copy(category = fallback) else it }
+                            )
+                            if (notesMoved) {
+                                if (selectedView in removed) selectedView = "Home"
+                                categoryOptions = updated
+                                preferences.edit().putStringSet(PREF_CUSTOM_CATEGORIES, updated.toMutableSet()).apply()
+                                if (defaultNoteCategory !in updated) {
+                                    defaultNoteCategory = updated.firstOrNull() ?: "Ideas"
+                                    saveString(PREF_DEFAULT_CATEGORY, defaultNoteCategory)
+                                }
+                            }
+                        },
                         editorTextSize = editorTextSize,
                         onEditorTextSizeChange = { editorTextSize = it; saveString(PREF_TEXT_SIZE, it.name) },
                         showEditorCounts = showEditorCounts,
@@ -578,11 +686,11 @@ internal fun NestNoteApp(store: NoteStore) {
                     AboutScreen(version = appVersion)
                 } else if (selectedView == "Categories") {
                     val activeCategoryCounts = remember(notes) {
-                        categories.associateWith { category -> notes.count { it.category == category && !it.archived } }
+                        categoryOptions.associateWith { category -> notes.count { it.category == category && !it.archived } }
                     }
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Categories", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        categories.chunked(2).forEach { pair ->
+                        categoryOptions.chunked(2).forEach { pair ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 pair.forEach { category ->
                                     Card(
@@ -699,30 +807,22 @@ internal fun NestNoteApp(store: NoteStore) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = colors.secondaryContainer,
-                                contentColor = colors.onSecondaryContainer
-                            ) {
-                                Icon(
-                                    when {
-                                        search.isNotBlank() -> Icons.Default.Search
-                                        selectedView == "Archived" -> Icons.Default.Archive
-                                        selectedView == "Pinned" -> Icons.Default.PushPin
-                                        selectedView == "Reminders" -> Icons.Default.NotificationsNone
-                                        else -> Icons.Default.Add
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(18.dp).size(30.dp)
-                                )
-                            }
+                            NestEmptyIllustration(
+                                when {
+                                    search.isNotBlank() -> Icons.Default.Search
+                                    selectedView == "Archived" -> Icons.Default.Archive
+                                    selectedView == "Pinned" -> Icons.Default.PushPin
+                                    selectedView == "Reminders" -> Icons.Default.NotificationsNone
+                                    else -> Icons.Default.Add
+                                }
+                            )
                             Text(
                                 when {
                                     search.isNotBlank() -> "No matching notes"
                                     selectedView == "Archived" -> "Nothing archived yet"
                                     selectedView == "Pinned" -> "No pinned notes yet"
                                     selectedView == "Reminders" -> "No reminders yet"
-                                    categories.contains(selectedView) -> "No $selectedView notes yet"
+                                    categoryOptions.contains(selectedView) -> "No $selectedView notes yet"
                                     else -> "A fresh page awaits"
                                 },
                                 style = MaterialTheme.typography.titleLarge,
@@ -734,7 +834,7 @@ internal fun NestNoteApp(store: NoteStore) {
                                     selectedView == "Archived" -> "Notes you archive will be kept here, away from your main lists."
                                     selectedView == "Pinned" -> "Pin important notes to keep them easy to find."
                                     selectedView == "Reminders" -> "Add a reminder to a note and it will show up here."
-                                    categories.contains(selectedView) -> "Notes assigned to this category will appear here."
+                                    categoryOptions.contains(selectedView) -> "Notes assigned to this category will appear here."
                                     else -> "Create a note and let ideas flow."
                                 },
                                 color = colors.onSurfaceVariant,
@@ -754,9 +854,16 @@ internal fun NestNoteApp(store: NoteStore) {
                         ) {
                             gridItems(filteredNotes, key = { it.id }) { note ->
                                 NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps,
-                                    onOpen = { editorNoteId = note.id; editorDraftId = note.id; editorVisible = true },
+                                    onOpen = {
+                                        if (selectedNoteIds.isNotEmpty()) {
+                                            selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
+                                        } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
+                                    },
+                                    onSelect = { selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id },
+                                    isSelected = note.id in selectedNoteIds,
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
-                                    onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) })
+                                    onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) },
+                                    modifier = Modifier.animateItem())
                             }
                         }
                     } else {
@@ -767,9 +874,16 @@ internal fun NestNoteApp(store: NoteStore) {
                         ) {
                             items(filteredNotes, key = { it.id }) { note ->
                                 NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps,
-                                    onOpen = { editorNoteId = note.id; editorDraftId = note.id; editorVisible = true },
+                                    onOpen = {
+                                        if (selectedNoteIds.isNotEmpty()) {
+                                            selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
+                                        } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
+                                    },
+                                    onSelect = { selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id },
+                                    isSelected = note.id in selectedNoteIds,
                                     onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
-                                    onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) })
+                                    onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) },
+                                    modifier = Modifier.animateItem())
                             }
                         }
                     }
@@ -879,6 +993,12 @@ internal fun NestNoteApp(store: NoteStore) {
                         enabled = withinNoteLimit,
                         onClick = {
                             if (persist(preview.notes, allowRecovery = true)) {
+                                val restoredCategories = (categoryOptions + preview.notes.map { it.category })
+                                    .distinct().filter { it.isNotBlank() }
+                                if (restoredCategories != categoryOptions) {
+                                    categoryOptions = restoredCategories
+                                    preferences.edit().putStringSet(PREF_CUSTOM_CATEGORIES, restoredCategories.toMutableSet()).apply()
+                                }
                                 pendingRestore = null
                                 coroutineScope.launch {
                                     snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
@@ -915,6 +1035,7 @@ internal fun NestNoteApp(store: NoteStore) {
                 confirmSystemDiscard = false
                 editorVisible = false
                 editorDraftId = null
+                editorTemplate = null
                 discardVoiceChanges = {}
                 commitVoiceChanges = {}
             }
@@ -970,6 +1091,22 @@ internal fun NestNoteApp(store: NoteStore) {
                     }
                 }
             }
+            val openLinkedNote: (NestNote, NestNote) -> Unit = { current, target ->
+                if (current != editorNote) {
+                    saveNote(current)
+                    if (!editorVisible) {
+                        editorNoteId = target.id
+                        editorDraftId = target.id
+                        editorTemplate = null
+                        editorVisible = true
+                    }
+                } else {
+                    editorNoteId = target.id
+                    editorDraftId = target.id
+                    editorTemplate = null
+                    selectedNoteIds = emptySet()
+                }
+            }
             val duplicateAction: ((NestNote) -> Unit)? = if (editorNote != null) {
                 { noteState ->
                     val duplicate = NoteDuplicate.duplicate(
@@ -988,11 +1125,11 @@ internal fun NestNoteApp(store: NoteStore) {
             }) else null
             when (editorMode) {
                 EditorPresentationMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, categoryOptions = categoryOptions, defaultNoteFormat = preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain", template = editorTemplate, allNotes = notes, onOpenLinkedNote = openLinkedNote, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorPresentationMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, categoryOptions = categoryOptions, defaultNoteFormat = preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain", template = editorTemplate, allNotes = notes, onOpenLinkedNote = openLinkedNote, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorPresentationMode.QUICK_DIALOG -> Dialog(
@@ -1014,6 +1151,11 @@ internal fun NestNoteApp(store: NoteStore) {
                             original = editorNote,
                             draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes),
                             defaultNoteCategory = defaultNoteCategory,
+                            categoryOptions = categoryOptions,
+                            defaultNoteFormat = preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain",
+                            template = editorTemplate,
+                            allNotes = notes,
+                            onOpenLinkedNote = openLinkedNote,
                             textSize = editorTextSize,
                             showCounts = showEditorCounts,
                             onSave = saveNote,
@@ -1046,5 +1188,28 @@ internal fun NestNoteApp(store: NoteStore) {
                 )
             }
         }
+        if (confirmBulkDelete) {
+            val deleting = notes.filter { it.id in selectedNoteIds }
+            AlertDialog(
+                onDismissRequest = { confirmBulkDelete = false },
+                title = { Text("Delete ${deleting.size} notes?") },
+                text = { Text("This permanently removes the selected notes and their voice recordings.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmBulkDelete = false
+                        if (persist(notes.filterNot { it.id in selectedNoteIds })) {
+                            deleting.forEach { note ->
+                                runCatching { VoiceAttachmentStore(context).deleteAll(note.id) }
+                                runCatching { VoiceAttachmentManifest(context).removeNote(note.id) }
+                            }
+                            selectedNoteIds = emptySet()
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Selected notes deleted") }
+                        }
+                    }) { Text("Delete", color = colors.error) }
+                },
+                dismissButton = { TextButton(onClick = { confirmBulkDelete = false }) { Text("Cancel") } }
+            )
+        }
+
     }
 }

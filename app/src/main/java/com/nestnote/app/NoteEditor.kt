@@ -7,6 +7,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface as AndroidTypeface
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -54,6 +55,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -65,6 +67,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * Unified create/edit note editor.
@@ -90,6 +93,11 @@ internal fun NoteEditorContent(
     original: NestNote?,
     draftNoteId: Long,
     defaultNoteCategory: String,
+    categoryOptions: List<String> = categories,
+    defaultNoteFormat: String = "plain",
+    template: NoteTemplate? = null,
+    allNotes: List<NestNote> = emptyList(),
+    onOpenLinkedNote: ((NestNote, NestNote) -> Unit)? = null,
     textSize: EditorTextSize,
     showCounts: Boolean,
     onSave: (NestNote) -> Unit,
@@ -104,9 +112,11 @@ internal fun NoteEditorContent(
     modifier: Modifier = Modifier
 ) {
     // ---- Core editor state ----
-    var title by rememberSaveable(original?.id) { mutableStateOf(original?.title.orEmpty()) }
-    var bodyValue by rememberSaveable(original?.id, stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(original?.body.orEmpty()))
+    var title by rememberSaveable(original?.id, draftNoteId) {
+        mutableStateOf(original?.title ?: template?.title.orEmpty())
+    }
+    var bodyValue by rememberSaveable(original?.id, draftNoteId, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(original?.body ?: template?.body.orEmpty()))
     }
     val body = bodyValue.text
 
@@ -115,7 +125,7 @@ internal fun NoteEditorContent(
     var canUndo by remember(original?.id, draftNoteId) { mutableStateOf(false) }
     var canRedo by remember(original?.id, draftNoteId) { mutableStateOf(false) }
 
-    var category by rememberSaveable(original?.id) {
+    var category by rememberSaveable(original?.id, draftNoteId) {
         mutableStateOf(original?.category ?: defaultNoteCategory)
     }
     var colorIndex by rememberSaveable(original?.id) {
@@ -130,7 +140,9 @@ internal fun NoteEditorContent(
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
     var editVoiceText by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
-    var noteFormat by rememberSaveable(original?.id) { mutableStateOf(original?.format ?: "plain") }
+    var noteFormat by rememberSaveable(original?.id, draftNoteId) {
+        mutableStateOf(original?.format ?: template?.format ?: if (defaultNoteFormat == "markdown") "markdown" else "plain")
+    }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
     var appearanceStartWallpaperUri by remember { mutableStateOf(original?.wallpaperUri.orEmpty()) }
@@ -141,6 +153,27 @@ internal fun NoteEditorContent(
     var qrPayloadToSave by remember { mutableStateOf<String?>(null) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
+    val editorPreferences = remember(context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    val customTextSizeSp = remember(original?.id) {
+        editorPreferences.getInt(PREF_TEXT_SIZE_SP, textSize.bodySp).coerceIn(12, 32)
+    }
+    val editorFontStyle = remember(original?.id) {
+        runCatching { EditorFontFamily.valueOf(editorPreferences.getString(PREF_EDITOR_FONT, "SANS") ?: "SANS") }
+            .getOrDefault(EditorFontFamily.SANS)
+    }
+    val customFontPath = remember(original?.id) { editorPreferences.getString(PREF_EDITOR_FONT_FILE, null) }
+    val editorTypeface = remember(editorFontStyle, customFontPath) {
+        when (editorFontStyle) {
+            EditorFontFamily.SERIF -> AndroidTypeface.SERIF
+            EditorFontFamily.MONOSPACE -> AndroidTypeface.MONOSPACE
+            EditorFontFamily.CURSIVE -> AndroidTypeface.create("casual", AndroidTypeface.NORMAL)
+            EditorFontFamily.CUSTOM -> customFontPath?.let { path ->
+                runCatching { AndroidTypeface.createFromFile(path) }.getOrNull()
+            } ?: AndroidTypeface.DEFAULT
+            EditorFontFamily.SANS -> AndroidTypeface.SANS_SERIF
+        }
+    }
+    val editorFontFamily = remember(editorTypeface) { FontFamily(editorTypeface) }
     var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     val wallpaperImportLauncher = rememberWallpaperImportLauncher { imported ->
         customWallpaperUri = imported
@@ -633,6 +666,8 @@ internal fun NoteEditorContent(
                         editable = editable,
                         focusRequester = titleFocus,
                         textSize = textSize,
+                        bodyTextSp = customTextSizeSp,
+                        fontFamily = editorFontFamily,
                         ink = ink,
                         muted = muted
                     )
@@ -674,6 +709,9 @@ internal fun NoteEditorContent(
                         onEditVoiceTextChange = { editVoiceText = it },
                         voiceNoteId = voiceNoteId,
                         textSize = textSize,
+                        bodyTextSp = customTextSizeSp,
+                        fontFamily = editorFontFamily,
+                        typeface = editorTypeface,
                         ink = ink,
                         muted = muted,
                         visualTransformation = voiceChipTransformation,
@@ -682,12 +720,18 @@ internal fun NoteEditorContent(
                         onStopRequested = { activeVoicePlayerId = null },
                         onDeleteRequested = { id -> pendingVoiceDeletion = id }
                     )
+                    if (allNotes.isNotEmpty()) {
+                        EditorRelatedNotes(title, body, voiceNoteId, allNotes) { target ->
+                            onOpenLinkedNote?.invoke(buildNote(), target)
+                        }
+                    }
 
                     Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
 
                     EditorFooter(
                         editable = editable,
                         category = category,
+                        categoryOptions = categoryOptions,
                         onCategoryChange = { category = it },
                         reminder = reminder,
                         onPickReminder = ::pickReminder,
@@ -749,6 +793,11 @@ internal fun NoteEditorContent(
                 FormatAction.Strike -> applyInlineEdit("~~")
                 FormatAction.Code -> applyInlineEdit("`")
                 FormatAction.Link -> applyMarkdownLink()
+                FormatAction.NoteLink -> {
+                    val wrapped = wrapAsNoteLink(bodyValue.text, bodyValue.selection.min, bodyValue.selection.max)
+                    noteFormat = "markdown"
+                    setBody(TextFieldValue(wrapped.first, TextRange(wrapped.second, wrapped.third)))
+                }
                 FormatAction.Heading1 -> applyLineEdit { text, cursor ->
                     NoteText.toggleHeadingLevel(text, cursor, 1)
                 }

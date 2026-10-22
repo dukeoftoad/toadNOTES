@@ -16,10 +16,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
@@ -53,11 +57,15 @@ internal fun MoreScreen(
             MoreRow(Icons.Default.Archive, "Archived notes", "$archivedCount notes kept out of your main lists", true) { onOpen("Archived") }
             MoreRow(Icons.Default.Category, "Categories", "$categoryCount categories", true) { onOpen("Categories") }
         }
-        MoreGroup("Preferences") {
-            MoreRow(Icons.Default.Settings, "Settings", "Appearance, layout, editor and note behaviour", false) { onOpen("Settings") }
-            // Prototype parity: the Preferences group ends with About & help
-            // ("Version, licence, F-Droid"), which opens the dedicated About tab.
-            MoreRow(Icons.Default.Info, "About & help", "Version, licence, F-Droid", false) { onOpen("About") }
+        MoreGroup("Power tools") {
+            MoreRow(Icons.Default.AutoAwesome, "Note templates", "Daily journal, meetings, projects and checklists", false) { onOpen("Templates") }
+            MoreRow(Icons.Default.Insights, "Note insights", "Activity, word counts and rediscovery", true) { onOpen("Insights") }
+            MoreRow(Icons.Default.Keyboard, "Keyboard shortcuts", "Undo and redo for hardware keyboards", true) { onOpen("Shortcuts") }
+        }
+        MoreGroup("Preferences & technology") {
+            MoreRow(Icons.Default.Settings, "Settings", "Themes, typography, categories and editor defaults", false) { onOpen("Settings") }
+            MoreRow(Icons.Default.FileOpen, "Backup & restore", "Portable files and on-device backup status", true) { onOpen("Backup") }
+            MoreRow(Icons.Default.Info, "About & technical details", "Encryption, storage, formats and open-source credits", true) { onOpen("About") }
         }
         if (versionLabel.isNotEmpty()) {
             Text(

@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -40,8 +42,12 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NotificationsNone
@@ -54,6 +60,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -157,8 +164,8 @@ internal fun EditorTopBar(
                     modifier = Modifier.testTag("editor_format_button")
                 ) {
                     Icon(
-                        Icons.Default.FormatSize,
-                        contentDescription = "Formatting",
+                        Icons.Default.TextFields,
+                        contentDescription = "Formatting options",
                         tint = colors.onSurfaceVariant
                     )
                 }
@@ -275,6 +282,7 @@ internal fun EditorTopBar(
                     )
                     DropdownMenuItem(
                         text = { Text("Note format · " + if (noteFormat == "markdown") "Markdown" else "Plain text") },
+                        leadingIcon = { Icon(Icons.Default.FormatSize, contentDescription = null) },
                         onClick = {
                             moreMenu = false
                             onToggleFormat()
@@ -394,7 +402,13 @@ internal fun EditorTopBar(
                         }
                     },
                     enabled = mode == EditorMode.Locked || hasContent
-                ) { Text(if (mode == EditorMode.Editing) "Save" else "Done") }
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(if (mode == EditorMode.Editing) "Save" else "Done")
+                    }
+                }
             }
         }
     )
@@ -449,15 +463,11 @@ internal fun EditorBottomBar(
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
-                if (canUndo) {
-                    IconButton(onClick = { onUndo() }) {
-                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-                    }
+                IconButton(onClick = onUndo, enabled = canUndo) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
                 }
-                if (canRedo) {
-                    IconButton(onClick = { onRedo() }) {
-                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-                    }
+                IconButton(onClick = onRedo, enabled = canRedo) {
+                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
                 }
             }
         }
@@ -471,6 +481,8 @@ internal fun EditorTitleField(
     editable: Boolean,
     focusRequester: FocusRequester,
     textSize: EditorTextSize,
+    bodyTextSp: Int = textSize.bodySp,
+    fontFamily: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
     ink: Color,
     muted: Color
 ) {
@@ -483,9 +495,10 @@ internal fun EditorTitleField(
             .padding(vertical = 8.dp)
             .testTag("editor_title_field"),
         textStyle = MaterialTheme.typography.headlineSmall.copy(
-            fontSize = textSize.titleSp.sp,
-            lineHeight = (textSize.titleSp * 1.26f).sp,
+            fontSize = (bodyTextSp * 1.65f).sp,
+            lineHeight = (bodyTextSp * 2.05f).sp,
             fontWeight = FontWeight.Normal,
+            fontFamily = fontFamily,
             color = ink
         ),
         keyboardOptions = KeyboardOptions(
@@ -497,8 +510,9 @@ internal fun EditorTitleField(
                     Text(
                         "Title",
                         style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = textSize.titleSp.sp,
-                            lineHeight = (textSize.titleSp * 1.26f).sp
+                            fontSize = (bodyTextSp * 1.65f).sp,
+                            lineHeight = (bodyTextSp * 2.05f).sp,
+                            fontFamily = fontFamily
                         ),
                         color = muted
                     )
@@ -596,6 +610,9 @@ internal fun ColumnScope.EditorBodySection(
     onEditVoiceTextChange: (Boolean) -> Unit,
     voiceNoteId: Long,
     textSize: EditorTextSize,
+    bodyTextSp: Int = textSize.bodySp,
+    fontFamily: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+    typeface: android.graphics.Typeface = android.graphics.Typeface.DEFAULT,
     ink: Color,
     muted: Color,
     visualTransformation: VisualTransformation,
@@ -613,20 +630,61 @@ internal fun ColumnScope.EditorBodySection(
         NoteText.voiceSegments(body).any { it.attachmentId != null }
     }
     if (editable && (noteFormat == "markdown" || hasInlineVoiceNotes)) {
+        val reducedMotion = rememberSystemReducedMotion()
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
             if (hasInlineVoiceNotes) {
-                TextButton(onClick = { onEditVoiceTextChange(!editVoiceText) }) {
-                    Text(if (editVoiceText) "Play voice notes inline" else "Edit note text")
-                }
+                FilterChip(
+                    selected = editVoiceText,
+                    onClick = { onEditVoiceTextChange(!editVoiceText) },
+                    leadingIcon = {
+                        Icon(
+                            if (editVoiceText) Icons.Default.Edit else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    label = {
+                        AnimatedContent(
+                            targetState = editVoiceText,
+                            transitionSpec = {
+                                if (reducedMotion) fadeIn(snap()) togetherWith fadeOut(snap())
+                                else fadeIn() togetherWith fadeOut()
+                            },
+                            label = "voice-text-mode"
+                        ) { editingText ->
+                            Text(if (editingText) "Edit text" else "Play notes")
+                        }
+                    }
+                )
             }
             if (noteFormat == "markdown") {
-                TextButton(onClick = { onPreviewVisibleChange(!previewVisible) }) {
-                    Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
-                }
+                FilterChip(
+                    selected = previewVisible,
+                    onClick = { onPreviewVisibleChange(!previewVisible) },
+                    leadingIcon = {
+                        Icon(
+                            if (previewVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    label = {
+                        AnimatedContent(
+                            targetState = previewVisible,
+                            transitionSpec = {
+                                if (reducedMotion) fadeIn(snap()) togetherWith fadeOut(snap())
+                                else fadeIn() togetherWith fadeOut()
+                            },
+                            label = "markdown-preview-mode"
+                        ) { showingPreview ->
+                            Text(if (showingPreview) "Edit Markdown" else "Preview")
+                        }
+                    }
+                )
             }
         }
     }
@@ -648,6 +706,8 @@ internal fun ColumnScope.EditorBodySection(
                 body = body,
                 noteId = voiceNoteId,
                 textSize = textSize,
+                bodyTextSp = bodyTextSp,
+                typeface = typeface,
                 ink = ink,
                 activePlayerId = activePlayerId,
                 onPlayRequested = onPlayRequested,
@@ -682,8 +742,9 @@ internal fun ColumnScope.EditorBodySection(
                 .padding(top = 3.dp)
                 .testTag("editor_body_field"),
             textStyle = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = textSize.bodySp.sp,
-                lineHeight = (textSize.bodySp * 1.45f).sp,
+                fontSize = bodyTextSp.sp,
+                lineHeight = (bodyTextSp * 1.45f).sp,
+                fontFamily = fontFamily,
                 color = ink
             ),
             minLines = 1,
@@ -710,9 +771,49 @@ internal fun ColumnScope.EditorBodySection(
 }
 
 @Composable
+internal fun EditorRelatedNotes(
+    title: String,
+    body: String,
+    currentId: Long,
+    notes: List<NestNote>,
+    onOpen: (NestNote) -> Unit
+) {
+    val links = remember(body, notes, currentId) { resolveNoteLinks(body, notes, currentId) }
+    val backlinks = remember(title, notes, currentId) { notesLinkingTo(title, notes, currentId) }
+    val resolvedTitles = remember(links) { links.map { it.label.lowercase() }.toSet() }
+    val missing = remember(body, resolvedTitles) { noteLinkTitles(body).filterNot { it.lowercase() in resolvedTitles } }
+    if (links.isNotEmpty() || backlinks.isNotEmpty() || missing.isNotEmpty()) {
+        Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (links.isNotEmpty()) {
+                Text("Linked notes", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    links.forEach { link ->
+                        FilterChip(selected = false, onClick = { onOpen(link.note) }, label = { Text(link.label) }, leadingIcon = {
+                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
+                        })
+                    }
+                }
+            }
+            if (backlinks.isNotEmpty()) {
+                Text("Linked from", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    backlinks.forEach { source ->
+                        FilterChip(selected = false, onClick = { onOpen(source) }, label = { Text(source.title.ifBlank { "Untitled note" }) })
+                    }
+                }
+            }
+            if (missing.isNotEmpty()) {
+                Text("Missing notes: ${missing.joinToString()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+            }
+        }
+    }
+}
+
+@Composable
 internal fun EditorFooter(
     editable: Boolean,
     category: String,
+    categoryOptions: List<String> = categories,
     onCategoryChange: (String) -> Unit,
     reminder: String,
     onPickReminder: () -> Unit,
@@ -739,7 +840,7 @@ internal fun EditorFooter(
             expanded = categoryMenu,
             onDismissRequest = { categoryMenu = false }
         ) {
-            categories.forEach { item ->
+            categoryOptions.forEach { item ->
                 DropdownMenuItem(
                     text = { Text(item) },
                     onClick = { onCategoryChange(item); categoryMenu = false },

@@ -1,39 +1,104 @@
 package com.nestnote.app
 
+import java.text.ParsePosition
+import java.text.SimpleDateFormat
 import java.util.Locale
 
-/**
- * Pure dashboard filtering and sorting, extracted from [NestNoteApp] so the derivation is
- * JVM-testable and the composable can recompute it only when an input actually changes
- * (see the prototype-parity audit's performance follow-up).
- *
- * View routing (kept identical to the previous inline implementation):
- * - "Archived" shows only archived notes; every other view hides them.
- * - "Home" and "All notes" show all non-archived notes.
- * - "Pinned" / "Reminders" filter by pin / non-blank reminder metadata.
- * - Any other value is treated as a category name.
- * Search matches title, body and category, case-insensitively.
- * Pinned notes always sort first, then by the selected key.
- */
+/** Dashboard filtering, including a small local-only query language for power users. */
 internal object NoteFilters {
-    fun visibleNotes(
-        notes: List<NestNote>,
-        selectedView: String,
-        search: String,
-        sortByTitle: Boolean,
-        sortByCreated: Boolean
-    ): List<NestNote> {
+    private data class Query(
+        val terms: List<String>,
+        val category: String? = null,
+        val pinned: Boolean? = null,
+        val archived: Boolean = false,
+        val reminder: Boolean = false,
+        val voice: Boolean = false,
+        val after: Long? = null,
+        val before: Long? = null
+    )
+
+    private val filterToken = Regex("(?:^|\\s)(is|has|category|in|after|before):([^\\s]+)", RegexOption.IGNORE_CASE)
+
+    fun visibleNotes(notes: List<NestNote>, selectedView: String, search: String, sortByTitle: Boolean, sortByCreated: Boolean): List<NestNote> {
+        val query = parseQuery(search)
+        val showArchived = selectedView == "Archived" || query.archived
         val visible = notes.filter { note ->
-            ((selectedView == "Archived" && note.archived) ||
-                (selectedView != "Archived" && !note.archived && (selectedView == "Home" || selectedView == "All notes" ||
-                (selectedView == "Pinned" && note.pinned) || note.category == selectedView ||
-                (selectedView == "Reminders" && note.reminder.isNotBlank())))) &&
-                (search.isBlank() || (note.title + " " + note.body + " " + note.category).contains(search, true))
+            val inView = if (showArchived) note.archived else !note.archived && when (selectedView) {
+                "Home", "All notes" -> true
+                "Pinned" -> note.pinned
+                "Reminders" -> note.reminder.isNotBlank()
+                else -> note.category.equals(selectedView, ignoreCase = true)
+            }
+            val searchable = "${note.title} ${note.body} ${note.category}".lowercase(Locale.ROOT)
+            inView && query.terms.all { searchable.contains(it.lowercase(Locale.ROOT)) } &&
+                (query.category == null || note.category.equals(query.category, ignoreCase = true)) &&
+                (query.pinned != true || note.pinned) &&
+                (!query.reminder || note.reminder.isNotBlank()) &&
+                (!query.voice || NoteText.voiceMarkers(note.body).isNotEmpty()) &&
+                (query.after == null || note.updated >= query.after) &&
+                (query.before == null || note.updated < query.before)
         }
         return when {
             sortByTitle -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenBy { it.title.lowercase(Locale.getDefault()) })
             sortByCreated -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.created })
             else -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenByDescending { it.updated })
         }
+    }
+
+    private fun parseQuery(raw: String): Query {
+        var category: String? = null
+        var pinned: Boolean? = null
+        var archived = false
+        var reminder = false
+        var voice = false
+        var after: Long? = null
+        var before: Long? = null
+        val consumed = mutableListOf<IntRange>()
+        filterToken.findAll(raw).forEach { match ->
+            val operator = match.groupValues[1].lowercase(Locale.ROOT)
+            val value = match.groupValues[2]
+            val parsedDate = if (operator == "after" || operator == "before") parseDate(value) else null
+            val recognized = when (operator) {
+                "is" -> when (value.lowercase(Locale.ROOT)) {
+                    "pinned" -> { pinned = true; true }
+                    "archived" -> { archived = true; true }
+                    else -> false
+                }
+                "has" -> when (value.lowercase(Locale.ROOT)) {
+                    "reminder" -> { reminder = true; true }
+                    "voice", "audio", "attachment" -> { voice = true; true }
+                    else -> false
+                }
+                "category", "in" -> { category = value.replace('_', ' '); true }
+                "after" -> if (parsedDate != null) { after = parsedDate; true } else false
+                "before" -> if (parsedDate != null) { before = parsedDate; true } else false
+                else -> false
+            }
+            if (recognized) consumed += match.range
+        }
+        val remaining = buildString {
+            var cursor = 0
+            consumed.forEach { range ->
+                append(raw.substring(cursor, range.first))
+                cursor = range.last + 1
+            }
+            append(raw.substring(cursor))
+        }
+        return Query(remaining.trim().split(Regex("\\s+")).filter { it.isNotBlank() }, category, pinned, archived, reminder, voice, after, before)
+    }
+
+    private fun parseDate(value: String): Long? {
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+        val position = ParsePosition(0)
+        val date = formatter.parse(value, position) ?: return null
+        if (position.index != value.length) return null
+        val calendar = java.util.Calendar.getInstance().apply {
+            time = date
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return calendar.timeInMillis
     }
 }

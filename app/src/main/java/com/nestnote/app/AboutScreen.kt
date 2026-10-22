@@ -171,6 +171,33 @@ internal fun AboutScreen(version: AboutInfo.Version) {
             )
         }
 
+        MoreGroup("Under the hood") {
+            AboutInfoRow(
+                Icons.Default.Lock,
+                "Encrypted note storage",
+                "Note text is serialized locally and protected with AES-256-GCM. Encryption keys are generated and kept by Android Keystore; each save uses a fresh nonce and authenticated data.",
+                false
+            )
+            AboutInfoRow(
+                Icons.Default.Shield,
+                "Voice attachments",
+                "Audio is encrypted as it is written to app-private files. Attachment IDs are authenticated with the audio, so moving a file to another note will not decrypt it.",
+                true
+            )
+            AboutInfoRow(
+                Icons.Default.Description,
+                "Portable backup format",
+                "Manual backups use versioned JSON that you can copy with Android's file picker. Backups are not encrypted by NESTNOTE after export; choose a secure destination.",
+                true
+            )
+            AboutInfoRow(
+                Icons.Default.Info,
+                "Background work",
+                "Daily automatic backups are written to private app storage by Android WorkManager. Android may defer the run to protect battery life.",
+                true
+            )
+        }
+
         MoreGroup("Links") {
             MoreRow(
                 Icons.Default.Code,
@@ -241,7 +268,7 @@ internal fun AboutScreen(version: AboutInfo.Version) {
             AboutInfoRow(
                 Icons.Default.NotificationsNone,
                 "Reminders",
-                "Reminder dates are saved with notes. Alarm notifications are not implemented yet.",
+                "NESTNOTE schedules reminder alarms on-device. Android 13 and newer require notification permission; Android may delay inexact alarms when exact-alarm access is unavailable.",
                 true
             )
         }

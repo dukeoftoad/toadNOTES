@@ -12,10 +12,16 @@ internal const val PREF_EDITOR = "editor_mode"
 internal const val PREF_DENSITY = "dashboard_density"
 internal const val PREF_NOTE_STYLE = "note_color_style"
 internal const val PREF_DEFAULT_SORT = "default_sort"
+internal const val PREF_SAVED_SEARCHES = "saved_searches"
 internal const val PREF_NOTE_PREVIEWS = "show_note_previews"
 internal const val PREF_NOTE_TIMESTAMPS = "show_note_timestamps"
 internal const val PREF_DEFAULT_CATEGORY = "default_note_category"
+internal const val PREF_CUSTOM_CATEGORIES = "custom_note_categories"
 internal const val PREF_TEXT_SIZE = "editor_text_size"
+internal const val PREF_TEXT_SIZE_SP = "editor_text_size_sp"
+internal const val PREF_EDITOR_FONT = "editor_font_family"
+internal const val PREF_EDITOR_FONT_FILE = "editor_font_file"
+internal const val PREF_DEFAULT_NOTE_FORMAT = "default_note_format"
 internal const val PREF_EDITOR_COUNTS = "editor_show_counts"
 internal const val PREF_VOICE_PLAYER_COMPACT = "voice_player_compact"
 
@@ -34,6 +40,9 @@ internal enum class ThemeMode(val label: String) {
 }
 internal enum class EditorTextSize(val label: String, val titleSp: Int, val bodySp: Int) {
     SMALL("Small", 24, 14), MEDIUM("Medium", 27, 16), LARGE("Large", 31, 19)
+}
+internal enum class EditorFontFamily(val label: String) {
+    SANS("Sans"), SERIF("Serif"), MONOSPACE("Monospace"), CURSIVE("Cursive"), CUSTOM("Imported")
 }
 internal enum class DashboardLayout(val label: String) {
     GRID("Grid"), LIST("List")

@@ -2,6 +2,7 @@ package com.nestnote.app
 
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
+import android.graphics.Typeface
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,11 +30,13 @@ internal fun PreviewWithInlineVoice(
     onStopRequested: () -> Unit,
     onDeleteRequested: (String) -> Unit,
     modifier: Modifier = Modifier,
-    renderMarkdown: Boolean = true
+    renderMarkdown: Boolean = true,
+    bodyTextSp: Int = textSize.bodySp,
+    typeface: Typeface = Typeface.DEFAULT
 ) {
     val context = LocalContext.current
     val segments = remember(body) { NoteText.voiceSegments(body) }
-    val bodySp = textSize.bodySp.toFloat()
+    val bodySp = bodyTextSp.toFloat()
     Column(modifier.verticalScroll(rememberScrollState())) {
         segments.forEachIndexed { segmentIndex, segment ->
             if (segment.attachmentId == null) {
@@ -51,6 +54,7 @@ internal fun PreviewWithInlineVoice(
                                 // Markdown links must remain legible against the active note surface.
                                 setLinkTextColor(ink.toArgb())
                                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, bodySp)
+                                this.typeface = typeface
                                 setTextIsSelectable(true)
                                 movementMethod = LinkMovementMethod.getInstance()
                                 ViewCompat.setAccessibilityHeading(
@@ -63,6 +67,7 @@ internal fun PreviewWithInlineVoice(
                             textView.setTextColor(ink.toArgb())
                             textView.setLinkTextColor(ink.toArgb())
                             textView.textSize = bodySp
+                            textView.typeface = typeface
                             textView.text = spanned
                             ViewCompat.setAccessibilityHeading(
                                 textView,
