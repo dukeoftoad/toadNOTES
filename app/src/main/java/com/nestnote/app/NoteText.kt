@@ -131,6 +131,15 @@ object NoteText {
             val updated = text.substring(0, start) + marker + marker + text.substring(end)
             return Triple(updated, start + marker.length, start + marker.length)
         }
+        // The selection already includes its own markers (e.g. "**bold**" selected in full):
+        // remove them rather than wrapping the markers a second time.
+        val selected = text.substring(start, end)
+        if (selected.length >= marker.length * 2 && selected.startsWith(marker) && selected.endsWith(marker)) {
+            val inner = selected.substring(marker.length, selected.length - marker.length)
+            val updated = text.substring(0, start) + inner + text.substring(end)
+            val innerEnd = start + inner.length
+            return if (reversed) Triple(updated, innerEnd, start) else Triple(updated, start, innerEnd)
+        }
         val alreadyWrapped = if (marker.all { it == marker.first() }) {
             // For repeated-character markers (*, **, _, __, ~~), distinguish a
             // single formatting layer from a longer adjacent run. Without this,
@@ -185,7 +194,7 @@ object NoteText {
         val second = selectionEnd.coerceIn(0, text.length)
         val start = minOf(first, second)
         val end = maxOf(first, second)
-        val selectedLabel = if (start == end) "text" else text.substring(start, end)
+        val selectedLabel = if (start == end) "text" else text.substring(start, end).replace(Regex("[\\r\\n]+"), " ")
         // Escape Markdown link-label delimiters in a single pass. Escaping backslashes
         // first prevents newly inserted escape characters from being escaped again.
         val label = buildString(selectedLabel.length) {
@@ -196,8 +205,9 @@ object NoteText {
         }
         val replacement = "[$label](https://)"
         val updated = text.substring(0, start) + replacement + text.substring(end)
-        val urlStart = start + label.length + 3 + "https://".length
-        return Triple(updated, urlStart, urlStart)
+        // Place the caret at the end of the URL placeholder so typing can continue there.
+        val urlCursor = start + label.length + 3 + "https://".length
+        return Triple(updated, urlCursor, urlCursor)
     }
 
     /** Toggles a Markdown blockquote prefix on the cursor's line. */

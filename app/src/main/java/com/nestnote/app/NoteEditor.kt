@@ -1,7 +1,6 @@
 package com.nestnote.app
 
 import android.Manifest
-import android.graphics.Bitmap
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.ClipData
@@ -10,82 +9,26 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -97,14 +40,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -113,141 +53,18 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-import kotlin.math.roundToInt
-
-internal fun collapsibleSlotHeight(measuredHeight: Int, fraction: Float): Int =
-    (measuredHeight * fraction).roundToInt().coerceAtLeast(0)
-/**
- * The preview exposes each voice-free segment as one selectable TextView (one
- * accessibility node). Mark it as a heading only when the entire segment is one
- * Markdown ATX heading. Mixed paragraphs or multiple headings remain a normal text
- * node; marking the whole node as a heading would misrepresent its content.
- * Rendering mixed Markdown as separate semantic block nodes is a separate change.
- */
-internal fun isStandaloneMarkdownHeading(text: String, renderMarkdown: Boolean = true): Boolean =
-    renderMarkdown && Regex("^#{1,6}\\s+\\S(?:.*\\S)?$").matches(text.trim())
-
-
-
-/**
- * Hides internal attachment IDs while editing without changing the saved note body.
- * Each marker is displayed as a compact, styled voice-note chip with a visible
- * waveform motif and recording name. Offset mapping keeps text selection and
- * cursor movement anchored to the underlying marker.
- */
-internal class VoiceMarkerVisualTransformation(
-    private val chipBackground: Color,
-    private val chipForeground: Color,
-    private val names: Map<String, String> = emptyMap()
-) : VisualTransformation {
-    private val markerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
-    private val validAttachmentId = Regex("""(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
-
-    override fun filter(text: AnnotatedString): TransformedText {
-        val matches = markerRegex.findAll(text.text).toList()
-        if (matches.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
-
-        val output = AnnotatedString.Builder()
-        val ranges = mutableListOf<MarkerOffset>()
-        var sourceCursor = 0
-        var outputCursor = 0
-
-        matches.forEach { match ->
-            val prefix = text.text.substring(sourceCursor, match.range.first)
-            output.append(prefix)
-            outputCursor += prefix.length
-            val attachmentId = match.groupValues[1]
-            val displayName = if (validAttachmentId.matches(attachmentId)) names[attachmentId] ?: "Voice note" else "Voice note unavailable"
-            // TextField visual transformations cannot embed a live composable.
-            // Use a compact static waveform motif here; the preview player animates it.
-            val waveform = "▂▄▆█▆▄"
-            val label = "  $waveform  " + displayName.take(28) + "  "
-            val transformedStart = outputCursor
-            output.pushStyle(
-                SpanStyle(
-                    color = chipForeground,
-                    background = chipBackground,
-                    fontWeight = FontWeight.SemiBold
-                )
-            )
-            output.append(label)
-            output.pop()
-            outputCursor += label.length
-            ranges += MarkerOffset(match.range.first, match.range.last + 1, transformedStart, outputCursor)
-            sourceCursor = match.range.last + 1
-        }
-        output.append(text.text.substring(sourceCursor))
-
-        val mapping = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int {
-                val safe = offset.coerceIn(0, text.length)
-                var delta = 0
-                for (range in ranges) {
-                    if (safe < range.originalStart) break
-                    if (safe <= range.originalEnd) {
-                        return if (safe == range.originalEnd) range.transformedEnd
-                        else range.transformedStart
-                    }
-                    delta += (range.transformedEnd - range.transformedStart) -
-                        (range.originalEnd - range.originalStart)
-                }
-                return (safe + delta).coerceIn(0, output.length)
-            }
-
-            override fun transformedToOriginal(offset: Int): Int {
-                val safe = offset.coerceIn(0, output.length)
-                var delta = 0
-                for (range in ranges) {
-                    if (safe < range.transformedStart) break
-                    if (safe <= range.transformedEnd) {
-                        return if (safe == range.transformedEnd) range.originalEnd
-                        else range.originalStart
-                    }
-                    delta += (range.originalEnd - range.originalStart) -
-                        (range.transformedEnd - range.transformedStart)
-                }
-                return (safe + delta).coerceIn(0, text.length)
-            }
-        }
-        return TransformedText(output.toAnnotatedString(), mapping)
-    }
-
-    private data class MarkerOffset(
-        val originalStart: Int,
-        val originalEnd: Int,
-        val transformedStart: Int,
-        val transformedEnd: Int
-    )
-}
 
 /**
  * Unified create/edit note editor.
@@ -311,7 +128,6 @@ internal fun NoteEditorContent(
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
     var toolRailVisible by remember { mutableStateOf(false) }
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
-    var categoryMenu by remember { mutableStateOf(false) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
     var editVoiceText by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
     var noteFormat by rememberSaveable(original?.id) { mutableStateOf(original?.format ?: "plain") }
@@ -320,82 +136,26 @@ internal fun NoteEditorContent(
     var appearanceStartWallpaperUri by remember { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     var discardConfirmation by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf(false) }
-    var reminderMenu by remember { mutableStateOf(false) }
     var voiceNoteDialog by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
-    var moreMenu by remember { mutableStateOf(false) }
     var qrCodeDialog by remember { mutableStateOf(false) }
     var qrPayloadToSave by remember { mutableStateOf<String?>(null) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
     var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
-    val wallpaperImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val importResult = runCatching {
-                val resolver = context.contentResolver
-                require(resolver.getType(uri)?.startsWith("image/") == true) {
-                    "Please choose an image file"
-                }
-                // Verify the provider can actually read and decode this image before
-                // changing the draft; otherwise the picker appears successful but the
-                // wallpaper can disappear after the document provider/app restarts.
-                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                val imageStream = resolver.openInputStream(uri) ?: error("Unable to open selected image")
-                imageStream.use { stream ->
-                    // With inJustDecodeBounds enabled, decodeStream intentionally returns null;
-                    // the dimensions are the validation result, not the decoded bitmap.
-                    android.graphics.BitmapFactory.decodeStream(stream, null, bounds)
-                }
-                require(bounds.outWidth > 0 && bounds.outHeight > 0) { "The selected file is not a readable image" }
-                resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            importResult.onSuccess {
-                customWallpaperUri = uri.toString()
-                backgroundIndex = 0
-                android.widget.Toast.makeText(context, "Wallpaper imported", android.widget.Toast.LENGTH_SHORT).show()
-            }.onFailure { error ->
-                android.widget.Toast.makeText(
-                    context,
-                    error.message?.takeIf { it.isNotBlank() } ?: "Could not import wallpaper. Please choose another image.",
-                    android.widget.Toast.LENGTH_LONG
-                ).show()
-            }
-        }
+    val wallpaperImportLauncher = rememberWallpaperImportLauncher { imported ->
+        customWallpaperUri = imported
+        backgroundIndex = 0
     }
-    val markdownExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use {
-                    it.write(NoteText.toMarkdown(title, body))
-                } ?: error("Unable to open destination")
-                android.widget.Toast.makeText(context, "Markdown file saved", android.widget.Toast.LENGTH_SHORT).show()
-            }.onFailure {
-                android.widget.Toast.makeText(context, "Could not save Markdown file", android.widget.Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-    val qrImageExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
-        val payload = qrPayloadToSave
-        if (uri != null && !payload.isNullOrBlank()) {
-            runCatching {
-                val bitmap = NoteQrCode.createBitmap(payload)
-                context.contentResolver.openOutputStream(uri)?.use { output ->
-                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
-                        "Could not encode QR image"
-                    }
-                } ?: error("Unable to open destination")
-                android.widget.Toast.makeText(context, "QR image saved", android.widget.Toast.LENGTH_SHORT).show()
-            }.onFailure {
-                android.widget.Toast.makeText(context, "Could not save QR image", android.widget.Toast.LENGTH_LONG).show()
-            }
-        }
-        qrPayloadToSave = null
-    }
+    val markdownExportLauncher = rememberMarkdownExportLauncher { NoteText.toMarkdown(title, body) }
+    val qrImageExportLauncher = rememberQrImageExportLauncher(
+        pendingPayload = { qrPayloadToSave },
+        onFinished = { qrPayloadToSave = null }
+    )
     // Permission request is a no-op on Android < 13 (permission doesn't exist).
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* Result ignored — reminders still save, they just won't fire until granted. */ }
 
-    val keyboardController = LocalSoftwareKeyboardController.current
     val editorModeViewModel: EditorModeViewModel =
         viewModel(key = "editor-mode-${original?.id ?: draftNoteId}")
     val editorMode = editorModeViewModel.mode
@@ -404,7 +164,6 @@ internal fun NoteEditorContent(
     }
     val voiceNoteId = original?.id ?: draftNoteId
     val colors = MaterialTheme.colorScheme
-    val reducedMotion = rememberSystemReducedMotion()
     // Use perceived surface brightness, not only the red channel, to classify dark themes.
     // This keeps editor ink and secondary text readable with tinted/dynamic color schemes.
     val darkEditor = colors.surface.luminance() < 0.5f
@@ -495,7 +254,10 @@ internal fun NoteEditorContent(
         if (hasUnsavedChanges) discardConfirmation = true else onDismiss()
     }
 
-    fun buildNote(archived: Boolean = original?.archived ?: false): NestNote {
+    fun buildNote(
+        archived: Boolean = original?.archived ?: false,
+        keepReminder: Boolean = true
+    ): NestNote {
         val now = System.currentTimeMillis()
         return NestNote(
             id = original?.id ?: draftNoteId,
@@ -504,7 +266,7 @@ internal fun NoteEditorContent(
             category = category,
             color = colorIndex,
             pinned = if (archived) false else pinned,
-            reminder = reminder,
+            reminder = if (keepReminder) reminder else "",
             updated = original?.updated ?: 0L,
             created = original?.created ?: now,
             archived = archived,
@@ -531,7 +293,13 @@ internal fun NoteEditorContent(
         DatePickerDialog(context, { _, year, month, day ->
             TimePickerDialog(context, { _, hour, minute ->
                 val picked = Calendar.getInstance().apply { set(year, month, day, hour, minute, 0) }
-                reminder = NoteText.formatReminder(picked)
+                if (picked.timeInMillis <= System.currentTimeMillis()) {
+                    android.widget.Toast.makeText(
+                        context, "Pick a time in the future", android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    reminder = NoteText.formatReminder(picked)
+                }
             }, seed.get(Calendar.HOUR_OF_DAY), seed.get(Calendar.MINUTE), true).show()
         }, seed.get(Calendar.YEAR), seed.get(Calendar.MONTH), seed.get(Calendar.DAY_OF_MONTH)).show()
     }
@@ -559,7 +327,19 @@ internal fun NoteEditorContent(
         setBody(TextFieldValue(text, TextRange(selectionStart, selectionEnd)))
     }
 
+    // Markdown-only markers would render as literal characters in a plain-text note,
+    // so the first Bold/Italic/Link on a plain note switches the note to Markdown.
+    fun switchToMarkdownIfPlain() {
+        if (noteFormat == "markdown") return
+        noteFormat = "markdown"
+        previewVisible = false
+        android.widget.Toast.makeText(
+            context, "Note switched to Markdown", android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
     fun applyMarkdownLink() {
+        switchToMarkdownIfPlain()
         val oldValue = bodyValue
         val (text, selectionStart, selectionEnd) = NoteText.insertMarkdownLink(
             oldValue.text, oldValue.selection.start, oldValue.selection.end
@@ -567,7 +347,8 @@ internal fun NoteEditorContent(
         setBody(TextFieldValue(text, TextRange(selectionStart, selectionEnd)))
     }
 
-    fun applyInlineEdit(marker: String) {
+    fun applyInlineEdit(marker: String, switchToMarkdown: Boolean = false) {
+        if (switchToMarkdown) switchToMarkdownIfPlain()
         val oldValue = bodyValue
         val (text, selectionStart, selectionEnd) = NoteText.toggleInlineFormat(
             oldValue.text, oldValue.selection.start, oldValue.selection.end, marker
@@ -617,30 +398,29 @@ internal fun NoteEditorContent(
 
     // ---- Autosave ----
     val currentHasUnsavedChanges by rememberUpdatedState(hasUnsavedChanges)
-    fun writeDraftNow() {
+    suspend fun writeDraftNow() {
         if (!currentHasUnsavedChanges) return
         if (original == null && title.isBlank() && bodyValue.text.isBlank()) return
-        runCatching {
-            DraftStore(context).write(
-                DraftStore.Draft(
-                    noteId = voiceNoteId,
-                    title = title,
-                    body = bodyValue.text,
-                    category = category,
-                    color = colorIndex,
-                    background = backgroundIndex,
-                    pinned = pinned,
-                    reminder = reminder,
-                    wallpaperUri = customWallpaperUri,
-                    savedAtMillis = System.currentTimeMillis()
-                )
-            )
-        }
+        // Read Compose state here (main thread), then do file I/O off the main thread.
+        val draft = DraftStore.Draft(
+            noteId = voiceNoteId,
+            title = title,
+            body = bodyValue.text,
+            category = category,
+            color = colorIndex,
+            background = backgroundIndex,
+            pinned = pinned,
+            reminder = reminder,
+            wallpaperUri = customWallpaperUri,
+            savedAtMillis = System.currentTimeMillis(),
+            format = noteFormat
+        )
+        withContext(Dispatchers.IO) { runCatching { DraftStore(context).write(draft) } }
     }
 
     LaunchedEffect(
         title, bodyValue.text, category, colorIndex, backgroundIndex,
-        pinned, reminder, customWallpaperUri
+        pinned, reminder, customWallpaperUri, noteFormat
     ) {
         delay(2_000L)
         writeDraftNow()
@@ -696,6 +476,16 @@ internal fun NoteEditorContent(
             runCatching { DraftStore(context).clear(voiceNoteId) }
         }
         onDispose { }
+    }
+
+    // Stable instance: a fresh transformation on every recomposition forces the text field
+    // to re-run layout for the whole body even when nothing about the chips changed.
+    val voiceChipTransformation = remember(
+        colors.primaryContainer, colors.onPrimaryContainer, voiceNames
+    ) {
+        VoiceMarkerVisualTransformation(
+            colors.primaryContainer, colors.onPrimaryContainer, voiceNames
+        )
     }
 
     val markerIds = remember(body) { NoteText.voiceMarkers(body).map { it.attachmentId }.distinct() }
@@ -774,349 +564,56 @@ internal fun NoteEditorContent(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            if (title.isBlank()) "New note" else title,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                EditorTopBar(
+                    title = title,
+                    editorMode = editorMode,
+                    pinned = pinned,
+                    reminder = reminder,
+                    noteFormat = noteFormat,
+                    hasContent = title.isNotBlank() || body.isNotBlank(),
+                    isExisting = original != null,
+                    canDelete = onDelete != null && original != null,
+                    canDuplicate = onDuplicate != null,
+                    accent = accent,
+                    onClose = ::requestDismiss,
+                    onOpenToolRail = { tab ->
+                        appearanceStartColor = colorIndex
+                        appearanceStartBackground = backgroundIndex
+                        appearanceStartWallpaperUri = customWallpaperUri
+                        toolRailTab = tab
+                        toolRailVisible = true
                     },
-                    navigationIcon = {
-                        IconButton(onClick = { requestDismiss() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Close editor"
-                            )
-                        }
+                    onVoiceNote = { voiceNoteDialog = true },
+                    onTogglePinned = { pinned = !pinned },
+                    onReminderChange = { reminder = it },
+                    onPickReminder = ::pickReminder,
+                    onLock = { editorModeViewModel.lock() },
+                    onEdit = { editorModeViewModel.edit() },
+                    onArchive = { performSave(buildNote(archived = true)) },
+                    onDuplicate = { onDuplicate?.invoke(buildNote(keepReminder = false)) },
+                    onShare = ::shareNote,
+                    onShowQr = { qrCodeDialog = true },
+                    onToggleFormat = {
+                        noteFormat = if (noteFormat == "markdown") "plain" else "markdown"
+                        previewVisible = false
                     },
-                    actions = {
-                        if (editorMode == EditorMode.Editing) {
-                            IconButton(
-                                onClick = {
-                                    appearanceStartColor = colorIndex
-                                    appearanceStartBackground = backgroundIndex
-                                    appearanceStartWallpaperUri = customWallpaperUri
-                                    toolRailTab = ToolRailTab.Colour
-                                    toolRailVisible = true
-                                },
-                                modifier = Modifier.testTag("editor_appearance_button")
-                            ) {
-                                Icon(
-                                    Icons.Default.Palette,
-                                    contentDescription = "Choose note appearance",
-                                    tint = accent
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    appearanceStartColor = colorIndex
-                                    appearanceStartBackground = backgroundIndex
-                                    appearanceStartWallpaperUri = customWallpaperUri
-                                    toolRailTab = ToolRailTab.Format
-                                    toolRailVisible = true
-                                },
-                                modifier = Modifier.testTag("editor_format_button")
-                            ) {
-                                Icon(
-                                    Icons.Default.FormatSize,
-                                    contentDescription = "Formatting",
-                                    tint = colors.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { moreMenu = true }) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = "More editor actions",
-                                    tint = colors.onSurfaceVariant
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = moreMenu,
-                                onDismissRequest = { moreMenu = false }
-                            ) {
-                                if (editorMode == EditorMode.Editing) {
-                                    DropdownMenuItem(
-                                        text = { Text("Voice note") },
-                                        onClick = {
-                                            moreMenu = false
-                                            voiceNoteDialog = true
-                                        },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Mic, contentDescription = null)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(if (pinned) "Unpin note" else "Pin note") },
-                                        onClick = { moreMenu = false; pinned = !pinned },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Default.PushPin,
-                                                null,
-                                                tint = if (pinned) accent else colors.onSurfaceVariant
-                                            )
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                if (reminder.isNotBlank()) "Change reminder"
-                                                else "Add reminder"
-                                            )
-                                        },
-                                        onClick = { moreMenu = false; reminderMenu = true },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Default.NotificationsNone,
-                                                null,
-                                                tint = if (reminder.isNotBlank()) accent
-                                                else colors.onSurfaceVariant
-                                            )
-                                        }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            if (editorMode == EditorMode.Editing) "Read mode"
-                                            else "Edit note"
-                                        )
-                                    },
-                                    onClick = {
-                                        moreMenu = false
-                                        if (editorMode == EditorMode.Editing) {
-                                            keyboardController?.hide()
-                                            editorModeViewModel.lock()
-                                        } else {
-                                            editorModeViewModel.edit()
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            if (editorMode == EditorMode.Editing) Icons.Default.Lock
-                                            else Icons.Default.Edit,
-                                            null
-                                        )
-                                    }
-                                )
-                                if (editorMode == EditorMode.Editing && original != null) {
-                                    DropdownMenuItem(
-                                        text = { Text("Archive") },
-                                        onClick = {
-                                            moreMenu = false
-                                            performSave(buildNote(archived = true))
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Archive, null) }
-                                    )
-                                    // Duplicate — captures the current editor state,
-                                    // including unsaved edits, as a new note.
-                                    if (onDuplicate != null) {
-                                        DropdownMenuItem(
-                                            text = { Text("Duplicate note") },
-                                            onClick = {
-                                                moreMenu = false
-                                                onDuplicate.invoke(buildNote())
-                                            },
-                                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
-                                        )
-                                    }
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Share note") },
-                                    enabled = title.isNotBlank() || body.isNotBlank(),
-                                    onClick = { moreMenu = false; shareNote() },
-                                    leadingIcon = { Icon(Icons.Default.Share, null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Show QR code") },
-                                    enabled = title.isNotBlank() || body.isNotBlank(),
-                                    onClick = { moreMenu = false; qrCodeDialog = true },
-                                    leadingIcon = { Icon(Icons.Default.QrCode2, null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Note format · " + if (noteFormat == "markdown") "Markdown" else "Plain text") },
-                                    onClick = {
-                                        moreMenu = false
-                                        noteFormat = if (noteFormat == "markdown") "plain" else "markdown"
-                                        previewVisible = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Convert to Markdown file") },
-                                    enabled = title.isNotBlank() || body.isNotBlank(),
-                                    onClick = {
-                                        moreMenu = false
-                                        val safeTitle = title.trim().ifBlank { "note" }.replace(Regex("""[\\/:*?"<>|]"""), "_")
-                                        markdownExportLauncher.launch("$safeTitle.md")
-                                    },
-                                    leadingIcon = { Icon(Icons.Default.Download, null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Copy text") },
-                                    enabled = title.isNotBlank() || body.isNotBlank(),
-                                    onClick = { moreMenu = false; copyNote() },
-                                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
-                                )
-                                if (editorMode == EditorMode.Editing &&
-                                    onDelete != null && original != null
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Delete note", color = colors.error) },
-                                        onClick = { moreMenu = false; deleteConfirmation = true },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Delete, null, tint = colors.error)
-                                        }
-                                    )
-                                }
-                            }
-                            DropdownMenu(
-                                expanded = reminderMenu,
-                                onDismissRequest = { reminderMenu = false }
-                            ) {
-                                val laterToday = NoteText.laterTodayOrNull(Calendar.getInstance())
-                                if (laterToday != null) {
-                                    DropdownMenuItem(
-                                        text = { Text("Later today") },
-                                        onClick = {
-                                            reminderMenu = false
-                                            NoteText.laterTodayOrNull(Calendar.getInstance())?.let {
-                                                reminder = NoteText.formatReminder(it)
-                                            }
-                                        }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Tomorrow morning") },
-                                    onClick = {
-                                        reminderMenu = false
-                                        reminder = NoteText.formatReminder(
-                                            NoteText.tomorrowMorning(Calendar.getInstance())
-                                        )
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Next Monday") },
-                                    onClick = {
-                                        reminderMenu = false
-                                        reminder = NoteText.formatReminder(
-                                            NoteText.nextMonday(Calendar.getInstance())
-                                        )
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Pick date and time…") },
-                                    onClick = { reminderMenu = false; pickReminder() }
-                                )
-                                if (reminder.isNotBlank()) {
-                                    DropdownMenuItem(
-                                        text = { Text("Remove reminder") },
-                                        onClick = { reminderMenu = false; reminder = "" }
-                                    )
-                                }
-                            }
-                        }
-                        AnimatedContent(
-                            targetState = editorMode,
-                            transitionSpec = {
-                                if (reducedMotion) {
-                                    (fadeIn(snap()) + slideInVertically(snap()) { it / 4 }) togetherWith
-                                        (fadeOut(snap()) + slideOutVertically(snap()) { -it / 4 })
-                                } else {
-                                    (fadeIn(
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMedium
-                                        )
-                                    ) + slideInVertically(
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMedium
-                                        )
-                                    ) { it / 4 }) togetherWith
-                                        (fadeOut(
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                                stiffness = Spring.StiffnessMedium
-                                            )
-                                        ) + slideOutVertically(
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                                stiffness = Spring.StiffnessMedium
-                                            )
-                                        ) { -it / 4 })
-                                }
-                            },
-                            label = "editor-save-done"
-                        ) { mode ->
-                            TextButton(
-                                onClick = {
-                                    if (mode == EditorMode.Editing) {
-                                        if (title.isNotBlank() || body.isNotBlank()) {
-                                            performSave(buildNote())
-                                        }
-                                    } else {
-                                        requestDismiss()
-                                    }
-                                },
-                                enabled = mode == EditorMode.Locked || title.isNotBlank() || body.isNotBlank()
-                            ) { Text(if (mode == EditorMode.Editing) "Save" else "Done") }
-                        }
-                    }
+                    onExportMarkdown = { fileName -> markdownExportLauncher.launch(fileName) },
+                    onCopy = ::copyNote,
+                    onRequestDelete = { deleteConfirmation = true },
+                    onSave = { performSave(buildNote()) }
                 )
             },
             bottomBar = {
-                AnimatedVisibility(
+                EditorBottomBar(
                     visible = editorMode == EditorMode.Editing,
-                    enter = if (reducedMotion) {
-                        fadeIn(snap()) + slideInVertically(snap()) { it }
-                    } else {
-                        fadeIn() + slideInVertically { it }
-                    },
-                    exit = if (reducedMotion) {
-                        fadeOut(snap()) + slideOutVertically(snap()) { it }
-                    } else {
-                        fadeOut() + slideOutVertically { it }
-                    }
-                ) {
-                    Column(Modifier.imePadding()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (showCounts) {
-                                val words = remember(body) { NoteText.wordCount(body) }
-                                val minutes = NoteText.readingMinutes(words)
-                                Text(
-                                    buildString {
-                                        append(if (words == 1) "1 word" else "$words words")
-                                        append(" · ${body.length} characters")
-                                        if (minutes > 0) append(" · $minutes min read")
-                                    },
-                                    modifier = Modifier.weight(1f).padding(start = 8.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = muted,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            } else {
-                                Spacer(Modifier.weight(1f))
-                            }
-                            if (canUndo) {
-                                IconButton(onClick = { performUndo() }) {
-                                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-                                }
-                            }
-                            if (canRedo) {
-                                IconButton(onClick = { performRedo() }) {
-                                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-                                }
-                            }
-                        }
-                    }
-                }
+                    showCounts = showCounts,
+                    body = body,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    muted = muted,
+                    onUndo = ::performUndo,
+                    onRedo = ::performRedo
+                )
             }
         ) { editorPadding ->
             Column(
@@ -1128,309 +625,79 @@ internal fun NoteEditorContent(
                 ) {
                     Spacer(Modifier.height(if (compactDialog) 8.dp else 18.dp))
 
-                    BasicTextField(
-                        value = title,
-                        onValueChange = { if (editorMode == EditorMode.Editing) title = it },
-                        readOnly = editorMode == EditorMode.Locked,
-                        modifier = Modifier.fillMaxWidth()
-                            .focusRequester(titleFocus)
-                            .padding(vertical = 8.dp)
-                            .testTag("editor_title_field"),
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = textSize.titleSp.sp,
-                            lineHeight = (textSize.titleSp * 1.26f).sp,
-                            fontWeight = FontWeight.Normal,
-                            color = ink
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Sentences
-                        ),
-                        decorationBox = { innerTextField ->
-                            Box {
-                                if (title.isEmpty()) {
-                                    Text(
-                                        "Title",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        color = muted
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        }
+                    val editable = editorMode == EditorMode.Editing
+
+                    EditorTitleField(
+                        title = title,
+                        onTitleChange = { title = it },
+                        editable = editable,
+                        focusRequester = titleFocus,
+                        textSize = textSize,
+                        ink = ink,
+                        muted = muted
                     )
 
                     if (pinned) {
-                        AssistChip(
-                            onClick = { if (editorMode == EditorMode.Editing) pinned = false },
-                            label = { Text("Pinned") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.PushPin, null, tint = accent,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            modifier = Modifier.padding(top = 4.dp).semantics {
-                                contentDescription = "Pinned. Tap to unpin"
-                            }
-                        )
+                        EditorPinnedChip(accent, editable) { pinned = false }
                     }
 
                     val checklistItems = remember(bodyValue.text) {
                         NoteText.checklistItems(bodyValue.text)
                     }
                     if (checklistItems.isNotEmpty()) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            color = accent.copy(alpha = 0.07f),
-                            border = BorderStroke(1.dp, accent.copy(alpha = 0.18f))
-                        ) {
-                            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                                Text(
-                                    "Checklist",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = ink
+                        EditorChecklistCard(
+                            items = checklistItems,
+                            editable = editable,
+                            accent = accent,
+                            ink = ink,
+                            muted = muted,
+                            onItemChecked = { item, checked ->
+                                setBody(
+                                    bodyValue.copy(
+                                        text = NoteText.setChecklistItemChecked(
+                                            bodyValue.text, item.lineIndex, checked
+                                        )
+                                    )
                                 )
-                                checklistItems.forEach { item ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth()
-                                            .defaultMinSize(minHeight = 48.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Checkbox(
-                                            checked = item.checked,
-                                            modifier = Modifier.semantics {
-                                                contentDescription = buildString {
-                                                    append(item.text.ifBlank { "Empty checklist item" })
-                                                    append(", ")
-                                                    append(if (item.checked) "completed" else "not completed")
-                                                }
-                                            },
-                                            enabled = editorMode == EditorMode.Editing,
-                                            onCheckedChange = { checked ->
-                                                setBody(
-                                                    bodyValue.copy(
-                                                        text = NoteText.setChecklistItemChecked(
-                                                            bodyValue.text, item.lineIndex, checked
-                                                        )
-                                                    )
-                                                )
-                                            }
-                                        )
-                                        Text(
-                                            item.text.ifBlank { "(empty item)" },
-                                            modifier = Modifier.weight(1f).clickable(
-                                                enabled = editorMode == EditorMode.Editing
-                                            ) {
-                                                setBody(
-                                                    bodyValue.copy(
-                                                        text = NoteText.setChecklistItemChecked(
-                                                            bodyValue.text,
-                                                            item.lineIndex,
-                                                            !item.checked
-                                                        )
-                                                    )
-                                                )
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                textDecoration = if (item.checked) {
-                                                    TextDecoration.LineThrough
-                                                } else {
-                                                    TextDecoration.None
-                                                }
-                                            ),
-                                            color = if (item.checked) muted else ink
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Reading mode renders the real inline voice players by default.
-                    // Markdown preview remains an optional editing aid, not a prerequisite
-                    // for playing attachments from a saved note.
-                    val hasInlineVoiceNotes = remember(body) {
-                        NoteText.voiceSegments(body).any { it.attachmentId != null }
-                    }
-                    if (editorMode == EditorMode.Editing && (noteFormat == "markdown" || hasInlineVoiceNotes)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            if (hasInlineVoiceNotes) {
-                                TextButton(onClick = { editVoiceText = !editVoiceText }) {
-                                    Text(if (editVoiceText) "Play voice notes inline" else "Edit note text")
-                                }
-                            }
-                            if (noteFormat == "markdown") {
-                                TextButton(onClick = { previewVisible = !previewVisible }) {
-                                    Text(if (previewVisible) "Edit Markdown" else "Preview Markdown")
-                                }
-                            }
-                        }
-                    }
-
-                    val showInlineVoicePreview = hasInlineVoiceNotes &&
-                        (editorMode == EditorMode.Locked || !editVoiceText)
-                    if (showInlineVoicePreview ||
-                        (noteFormat == "markdown" && (previewVisible || editorMode == EditorMode.Locked)) ||
-                        (editorMode == EditorMode.Locked && noteFormat != "markdown")) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            color = colors.surface.copy(alpha = 0.82f),
-                            border = if (editorMode == EditorMode.Editing) {
-                                BorderStroke(1.dp, colors.outlineVariant)
-                            } else null
-                        ) {
-                            PreviewWithInlineVoice(
-                                body = body,
-                                noteId = voiceNoteId,
-                                textSize = textSize,
-                                ink = ink,
-                                activePlayerId = activeVoicePlayerId,
-                                onPlayRequested = { id -> activeVoicePlayerId = id },
-                                onStopRequested = { activeVoicePlayerId = null },
-                                onDeleteRequested = { id -> pendingVoiceDeletion = id },
-                                modifier = Modifier.fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                renderMarkdown = noteFormat == "markdown"
-                            )
-                        }
-                        if (editorMode == EditorMode.Editing && noteFormat == "markdown") {
-                            Text(
-                                "Preview supports basic headings, emphasis, inline code, links, " +
-                                    "simple lists, and inline voice notes.",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = muted
-                            )
-                        }
-                    } else {
-                        BasicTextField(
-                            value = bodyValue,
-                            onValueChange = {
-                                if (editorMode == EditorMode.Editing) onBodyChange(it)
-                            },
-                            readOnly = editorMode == EditorMode.Locked,
-                            // Keep attachment IDs out of both editable and read-only
-                            // views. The stored body remains the canonical marker text.
-                            visualTransformation = VoiceMarkerVisualTransformation(
-                                colors.primaryContainer,
-                                colors.onPrimaryContainer,
-                                voiceNames
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                                .weight(1f)
-                                .padding(top = 3.dp)
-                                .testTag("editor_body_field"),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                fontSize = textSize.bodySp.sp,
-                                lineHeight = (textSize.bodySp * 1.45f).sp,
-                                color = ink
-                            ),
-                            minLines = 1,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences
-                            ),
-                            decorationBox = { innerTextField ->
-                                Box(Modifier.fillMaxWidth()) {
-                                    if (bodyValue.text.isEmpty()) {
-                                        Text(
-                                            "Note",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = muted
-                                        )
-                                    }
-                                    innerTextField()
-                                }
                             }
                         )
                     }
+
+                    EditorBodySection(
+                        bodyValue = bodyValue,
+                        onBodyChange = ::onBodyChange,
+                        editable = editable,
+                        noteFormat = noteFormat,
+                        previewVisible = previewVisible,
+                        onPreviewVisibleChange = { previewVisible = it },
+                        editVoiceText = editVoiceText,
+                        onEditVoiceTextChange = { editVoiceText = it },
+                        voiceNoteId = voiceNoteId,
+                        textSize = textSize,
+                        ink = ink,
+                        muted = muted,
+                        visualTransformation = voiceChipTransformation,
+                        activePlayerId = activeVoicePlayerId,
+                        onPlayRequested = { id -> activeVoicePlayerId = id },
+                        onStopRequested = { activeVoicePlayerId = null },
+                        onDeleteRequested = { id -> pendingVoiceDeletion = id }
+                    )
 
                     Spacer(Modifier.height(if (compactDialog) 6.dp else 12.dp))
 
-                    Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        AssistChip(
-                            onClick = { if (editorMode == EditorMode.Editing) categoryMenu = true },
-                            label = { Text("Category · $category") },
-                            trailingIcon = {
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                            },
-                            border = BorderStroke(1.dp, colors.outlineVariant),
-                            modifier = Modifier.testTag("category_chip")
-                        )
-                        DropdownMenu(
-                            expanded = categoryMenu,
-                            onDismissRequest = { categoryMenu = false }
-                        ) {
-                            categories.forEach { item ->
-                                DropdownMenuItem(
-                                    text = { Text(item) },
-                                    onClick = { category = item; categoryMenu = false },
-                                    trailingIcon = {
-                                        if (category == item) {
-                                            Icon(Icons.Default.Check, null, tint = accent)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    if (reminder.isNotBlank()) {
-                        Surface(
-                            onClick = { pickReminder() },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            color = colors.surfaceVariant.copy(
-                                alpha = if (darkEditor) 0.72f else 0.6f
-                            )
-                        ) {
-                            Row(
-                                Modifier.padding(
-                                    start = 14.dp, top = 4.dp, bottom = 4.dp, end = 4.dp
-                                ),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.NotificationsNone, contentDescription = null, tint = accent)
-                                Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                                    Text(
-                                        "Reminder · $reminder",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = ink
-                                    )
-                                    Text(
-                                        "You'll be notified at this time.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = muted
-                                    )
-                                }
-                                IconButton(onClick = { reminder = "" }) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Clear reminder",
-                                        tint = colors.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (original != null) {
-                        val format = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-                        Text(
-                            "Edited ${format.format(Date(original.updated))} · Created " +
-                                SimpleDateFormat("MMM d", Locale.getDefault())
-                                    .format(Date(original.created)),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = muted
-                        )
-                    }
+                    EditorFooter(
+                        editable = editable,
+                        category = category,
+                        onCategoryChange = { category = it },
+                        reminder = reminder,
+                        onPickReminder = ::pickReminder,
+                        onClearReminder = { reminder = "" },
+                        original = original,
+                        darkEditor = darkEditor,
+                        accent = accent,
+                        ink = ink,
+                        muted = muted
+                    )
 
                     Spacer(Modifier.height(if (compactDialog) 4.dp else 8.dp))
                 }
@@ -1477,8 +744,8 @@ internal fun NoteEditorContent(
                 FormatAction.Quote -> applyLineEdit { text, cursor ->
                     NoteText.toggleBlockquote(text, cursor)
                 }
-                FormatAction.Bold -> applyInlineEdit("**")
-                FormatAction.Italic -> applyInlineEdit("_")
+                FormatAction.Bold -> applyInlineEdit("**", switchToMarkdown = true)
+                FormatAction.Italic -> applyInlineEdit("_", switchToMarkdown = true)
                 FormatAction.Strike -> applyInlineEdit("~~")
                 FormatAction.Code -> applyInlineEdit("`")
                 FormatAction.Link -> applyMarkdownLink()
@@ -1496,283 +763,98 @@ internal fun NoteEditorContent(
     )
 
     if (qrCodeDialog) {
-        val qrPayload = remember(title, body) { NoteQrCode.sharePayload(title, body) }
-        val qrBitmap = remember(qrPayload) {
-            runCatching { NoteQrCode.createBitmap(qrPayload) }.getOrNull()
-        }
-        AlertDialog(
-            onDismissRequest = { qrCodeDialog = false },
-            title = { Text("Share with QR code") },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                ) {
-                    if (qrBitmap != null) {
-                        Image(
-                            bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "QR code containing this note text. Scanning it reveals the note text.",
-                            modifier = Modifier.size(220.dp)
-                        )
-                    } else {
-                        Text("This note is too long to fit in a single QR code. Shorten the note and try again.")
-                    }
-                    Text(
-                        "Anyone who scans this code can read the note. The QR code contains the text directly; it is not an encrypted link.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { qrCodeDialog = false }) { Text("Close") }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = qrBitmap != null,
-                    onClick = {
-                        qrPayloadToSave = qrPayload
-                        qrImageExportLauncher.launch("nestnote-qr.png")
-                    }
-                ) { Text("Save QR image") }
-            },
+        NoteQrDialog(
+            title = title,
+            body = body,
+            onDismiss = { qrCodeDialog = false },
+            onSaveImage = { payload ->
+                qrPayloadToSave = payload
+                qrImageExportLauncher.launch("nestnote-qr.png")
+            }
         )
     }
 
     if (deleteConfirmation && onDelete != null) {
-        AlertDialog(
-            onDismissRequest = { deleteConfirmation = false },
-            title = { Text("Delete this note?") },
-            text = {
-                Text(
-                    "The note will be removed. You can undo deletion during the brief Undo " +
-                        "window. Voice recordings are removed only after that window expires."
-                )
+        DeleteNoteDialog(
+            onConfirm = {
+                deleteConfirmation = false
+                onDelete()
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    deleteConfirmation = false
-                    onDelete()
-                }) { Text("Delete note") }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteConfirmation = false }) { Text("Keep note") }
-            }
+            onDismiss = { deleteConfirmation = false }
         )
     }
 
     if (discardConfirmation) {
-        AlertDialog(
-            onDismissRequest = { discardConfirmation = false },
-            title = { Text("Discard changes?") },
-            text = { Text("Your unsaved changes will be lost.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    discardConfirmation = false
-                    onDismiss()
-                }) { Text("Discard") }
+        DiscardChangesDialog(
+            onConfirm = {
+                discardConfirmation = false
+                onDismiss()
             },
-            dismissButton = {
-                TextButton(onClick = { discardConfirmation = false }) { Text("Keep editing") }
-            }
+            onDismiss = { discardConfirmation = false }
         )
     }
 
     // Existing-note draft recovery dialog (Phase 7a). Orphaned new-note drafts are
     // handled by NestNoteApp on app start (Phase 7b).
-    if (showDraftRecoveryDialog && pendingDraft != null) {
-        val draft = pendingDraft!!
-        AlertDialog(
-            onDismissRequest = {
+    pendingDraft?.takeIf { showDraftRecoveryDialog }?.let { draft ->
+        DraftRecoveryDialog(
+            draft = draft,
+            timeFormatter = draftTimeFormatter,
+            onRecover = {
+                title = draft.title
+                bodyValue = TextFieldValue(
+                    text = draft.body,
+                    selection = TextRange(draft.body.length)
+                )
+                category = draft.category
+                colorIndex = draft.color.coerceIn(0, noteAccents.lastIndex)
+                backgroundIndex = draft.background.coerceIn(0, 9)
+                pinned = draft.pinned
+                reminder = draft.reminder
+                customWallpaperUri = draft.wallpaperUri
+                noteFormat = draft.format
+                undoManager.clear()
+                canUndo = false
+                canRedo = false
                 showDraftRecoveryDialog = false
                 pendingDraft = null
             },
-            title = { Text("Recover unsaved changes?") },
-            text = {
-                Text(
-                    "A draft from ${draftTimeFormatter.format(Date(draft.savedAtMillis))} " +
-                        "was found. Recover it?"
-                )
+            onDiscard = {
+                runCatching { DraftStore(context).clear(voiceNoteId) }
+                showDraftRecoveryDialog = false
+                pendingDraft = null
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    title = draft.title
-                    bodyValue = TextFieldValue(
-                        text = draft.body,
-                        selection = TextRange(draft.body.length)
-                    )
-                    category = draft.category
-                    colorIndex = draft.color.coerceIn(0, noteAccents.lastIndex)
-                    backgroundIndex = draft.background.coerceIn(0, 9)
-                    pinned = draft.pinned
-                    reminder = draft.reminder
-                    customWallpaperUri = draft.wallpaperUri
-                    undoManager.clear()
-                    canUndo = false
-                    canRedo = false
-                    showDraftRecoveryDialog = false
-                    pendingDraft = null
-                }) { Text("Recover") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    runCatching { DraftStore(context).clear(voiceNoteId) }
-                    showDraftRecoveryDialog = false
-                    pendingDraft = null
-                }) { Text("Discard draft") }
+            onDismiss = {
+                showDraftRecoveryDialog = false
+                pendingDraft = null
             }
         )
     }
 
     if (voiceNoteDialog && editorMode == EditorMode.Editing) {
-        ModalBottomSheet(
-            onDismissRequest = { voiceNoteDialog = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 28.dp)) {
-                Text("Voice note", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "Recorded and stored encrypted on this device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
+        VoiceNoteSheet(
+            noteId = voiceNoteId,
+            cursorAtRecordStart = { bodyValue.selection.start },
+            addedThisSession = sessionIdSet,
+            onDismiss = { voiceNoteDialog = false },
+            onRecordingAttached = { attachmentId, cursor ->
+                val (newText, newCursor) = NoteText.insertVoiceMarker(
+                    bodyValue.text, cursor, attachmentId
                 )
-                VoiceNoteControls(
-                    noteId = voiceNoteId,
-                    cursorAtRecordStart = { bodyValue.selection.start },
-                    onRecordingAttached = { attachmentId, cursor ->
-                        val (newText, newCursor) = NoteText.insertVoiceMarker(
-                            bodyValue.text, cursor, attachmentId
-                        )
-                        setBody(TextFieldValue(newText, TextRange(newCursor)))
-                        voiceChangesPending = true
-                        voiceNoteDialog = false
-                    },
-                    addedThisSession = sessionIdSet
-                )
-            }
-        }
-    }
-
-    if (pendingVoiceDeletion != null) {
-        AlertDialog(
-            onDismissRequest = { pendingVoiceDeletion = null },
-            title = { Text("Delete voice note?") },
-            text = {
-                Text(
-                    "The voice note will be removed from the note and its encrypted audio " +
-                        "will be permanently deleted when you save. If you discard your " +
-                        "changes instead, the voice note will be preserved."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingVoiceDeletion?.let { deleteInlineVoice(it) }
-                    pendingVoiceDeletion = null
-                }) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingVoiceDeletion = null }) { Text("Keep") }
+                setBody(TextFieldValue(newText, TextRange(newCursor)))
+                voiceChangesPending = true
+                voiceNoteDialog = false
             }
         )
     }
-}
 
-@Composable
-private fun InlineVoicePlayersForBody(
-    body: String,
-    noteId: Long,
-    activePlayerId: String?,
-    onPlayRequested: (String) -> Unit,
-    onStopRequested: () -> Unit,
-    onDeleteRequested: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val attachmentIds = remember(body) {
-        NoteText.voiceSegments(body).mapNotNull { it.attachmentId }.distinct()
-    }
-
-    Column(modifier.verticalScroll(rememberScrollState())) {
-        attachmentIds.forEach { attachmentId ->
-            InlineVoicePlayer(
-                noteId = noteId,
-                attachmentId = attachmentId,
-                activePlayerId = activePlayerId,
-                onPlayRequested = onPlayRequested,
-                onStopRequested = onStopRequested,
-                onDeleteRequested = onDeleteRequested,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            )
-        }
-    }
-}
-
-@Composable
-internal fun PreviewWithInlineVoice(
-    body: String,
-    noteId: Long,
-    textSize: EditorTextSize,
-    ink: Color,
-    activePlayerId: String?,
-    onPlayRequested: (String) -> Unit,
-    onStopRequested: () -> Unit,
-    onDeleteRequested: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    renderMarkdown: Boolean = true
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val segments = remember(body) { NoteText.voiceSegments(body) }
-    val bodySp = textSize.bodySp.toFloat()
-    Column(modifier.verticalScroll(rememberScrollState())) {
-        segments.forEachIndexed { segmentIndex, segment ->
-            if (segment.attachmentId == null) {
-                if (segment.text.isNotEmpty()) {
-                    val spanned = remember(segment.text, bodySp, ink, renderMarkdown) {
-                        if (renderMarkdown) MarkdownPreview.toSpanned(context, segment.text, ink.toArgb())
-                        else android.text.SpannableString(segment.text)
-                    }
-                    AndroidView(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            .testTag("voice_preview_text_$segmentIndex"),
-                        factory = { viewContext ->
-                            TextView(viewContext).apply {
-                                setTextColor(ink.toArgb())
-                                // Markdown links must remain legible against the active note surface.
-                                setLinkTextColor(ink.toArgb())
-                                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, bodySp)
-                                setTextIsSelectable(true)
-                                movementMethod = LinkMovementMethod.getInstance()
-                                ViewCompat.setAccessibilityHeading(
-                                    this,
-                                    isStandaloneMarkdownHeading(segment.text, renderMarkdown)
-                                )
-                            }
-                        },
-                        update = { textView ->
-                            textView.setTextColor(ink.toArgb())
-                            textView.setLinkTextColor(ink.toArgb())
-                            textView.textSize = bodySp
-                            textView.text = spanned
-                            ViewCompat.setAccessibilityHeading(
-                                textView,
-                                isStandaloneMarkdownHeading(segment.text, renderMarkdown)
-                            )
-                        }
-                    )
-                }
-            } else {
-                InlineVoicePlayer(
-                    noteId = noteId,
-                    attachmentId = segment.attachmentId!!,
-                    activePlayerId = activePlayerId,
-                    onPlayRequested = onPlayRequested,
-                    onStopRequested = onStopRequested,
-                    onDeleteRequested = onDeleteRequested,
-                    modifier = Modifier.padding(vertical = 6.dp)
-                        .testTag("voice_preview_player")
-                )
-            }
-        }
+    pendingVoiceDeletion?.let { id ->
+        DeleteVoiceNoteDialog(
+            onConfirm = {
+                deleteInlineVoice(id)
+                pendingVoiceDeletion = null
+            },
+            onDismiss = { pendingVoiceDeletion = null }
+        )
     }
 }

@@ -195,7 +195,8 @@ internal fun EditorToolRail(
                                     }
                                 }
                                 backgroundNames.forEachIndexed { index, name ->
-                                val isSelected = index == backgroundIndex
+                                // An imported wallpaper overrides the presets, so none of them is selected then.
+                                val isSelected = index == backgroundIndex && customWallpaperUri.isBlank()
                                 Box(
                                     Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
                                         .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F), RoundedCornerShape(12.dp))
