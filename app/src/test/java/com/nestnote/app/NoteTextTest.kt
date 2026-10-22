@@ -8,6 +8,19 @@ import org.junit.Test
 
 class NoteTextTest {
     @Test
+    fun accessibilityHeadingIsExposedOnlyForStandaloneMarkdownHeadingSegments() {
+        assertEquals(true, isStandaloneMarkdownHeading("# Heading"))
+        assertEquals(true, isStandaloneMarkdownHeading("  ### Nested heading  "))
+        assertEquals(true, isStandaloneMarkdownHeading("###### Deep heading"))
+        assertEquals(false, isStandaloneMarkdownHeading("Heading without marker"))
+        assertEquals(false, isStandaloneMarkdownHeading("# Heading\nBody paragraph"))
+        assertEquals(false, isStandaloneMarkdownHeading("# First\n\n## Second"))
+        assertEquals(false, isStandaloneMarkdownHeading("Paragraph\n# Heading"))
+        assertEquals(false, isStandaloneMarkdownHeading("```md\n# Not a heading node\n```"))
+        assertEquals(false, isStandaloneMarkdownHeading("# Heading", renderMarkdown = false))
+    }
+
+    @Test
     fun markdownExportPreservesMeaningfulWhitespaceAndTrailingNewlines() {
         val body = "  indented text\n\ncode  \nlast line\n"
         assertEquals(body, NoteText.toMarkdown("", body))
