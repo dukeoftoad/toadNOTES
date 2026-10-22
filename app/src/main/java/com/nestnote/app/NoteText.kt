@@ -98,7 +98,8 @@ object NoteText {
     private fun prefixOf(line: String): String? {
         val content = line.substring(indentOf(line).length)
         return listPrefixes.firstOrNull { content.startsWith(it) }
-            ?: Regex("""^\d+\. """).find(content)?.value
+            ?: Regex("""^[-*] """).find(content)?.value
+            ?: Regex("""^\d+[.)] """).find(content)?.value
     }
 
     /** Replaces the list prefix of the cursor's line. Returns new text and new cursor. */
@@ -121,28 +122,60 @@ object NoteText {
      */
     fun toggleInlineFormat(text: String, selectionStart: Int, selectionEnd: Int, marker: String): Triple<String, Int, Int> {
         require(marker.isNotEmpty())
-        val start = selectionStart.coerceIn(0, text.length)
-        val end = selectionEnd.coerceIn(start, text.length)
+        val rawStart = selectionStart.coerceIn(0, text.length)
+        val rawEnd = selectionEnd.coerceIn(0, text.length)
+        val reversed = rawStart > rawEnd
+        val start = minOf(rawStart, rawEnd)
+        val end = maxOf(rawStart, rawEnd)
         if (start == end) {
             val updated = text.substring(0, start) + marker + marker + text.substring(end)
             return Triple(updated, start + marker.length, start + marker.length)
         }
-        val alreadyWrapped = start >= marker.length && end + marker.length <= text.length &&
-            text.substring(start - marker.length, start) == marker &&
-            text.substring(end, end + marker.length) == marker
+        val alreadyWrapped = if (marker.all { it == marker.first() }) {
+            // For repeated-character markers (*, **, _, __, ~~), distinguish a
+            // single formatting layer from a longer adjacent run. Without this,
+            // italic on **bold** mistakes one star from each strong marker for an
+            // italic wrapper and destructively changes the existing formatting.
+            val char = marker.first()
+            var leftRun = 0
+            var index = start - 1
+            while (index >= 0 && text[index] == char) {
+                leftRun++
+                index--
+            }
+            var rightRun = 0
+            index = end
+            while (index < text.length && text[index] == char) {
+                rightRun++
+                index++
+            }
+            leftRun >= marker.length && rightRun >= marker.length &&
+                (leftRun / marker.length) % 2 == 1 &&
+                (rightRun / marker.length) % 2 == 1
+        } else {
+            start >= marker.length && end + marker.length <= text.length &&
+                text.substring(start - marker.length, start) == marker &&
+                text.substring(end, end + marker.length) == marker
+        }
         return if (alreadyWrapped) {
             val updated = text.removeRange(end, end + marker.length).removeRange(start - marker.length, start)
-            Triple(updated, start - marker.length, end - marker.length)
+            val innerStart = start - marker.length
+            val innerEnd = end - marker.length
+            Triple(updated, if (reversed) innerEnd else innerStart, if (reversed) innerStart else innerEnd)
         } else {
             val updated = text.substring(0, start) + marker + text.substring(start, end) + marker + text.substring(end)
-            Triple(updated, start + marker.length, end + marker.length)
+            val innerStart = start + marker.length
+            val innerEnd = end + marker.length
+            Triple(updated, if (reversed) innerEnd else innerStart, if (reversed) innerStart else innerEnd)
         }
     }
 
     /** Inserts a Markdown link; selected text becomes its label, with the URL ready to edit. */
     fun insertMarkdownLink(text: String, selectionStart: Int, selectionEnd: Int): Triple<String, Int, Int> {
-        val start = selectionStart.coerceIn(0, text.length)
-        val end = selectionEnd.coerceIn(start, text.length)
+        val first = selectionStart.coerceIn(0, text.length)
+        val second = selectionEnd.coerceIn(0, text.length)
+        val start = minOf(first, second)
+        val end = maxOf(first, second)
         val label = if (start == end) "text" else text.substring(start, end)
         val replacement = "[$label](https://)"
         val updated = text.substring(0, start) + replacement + text.substring(end)
@@ -200,7 +233,7 @@ object NoteText {
         val indent = indentOf(line)
         val contentStart = start + indent.length
         val content = text.substring(contentStart, end)
-        val match = Regex("""^\d+\. """).find(content)
+        val match = Regex("""^\d+[.)] """).find(content)
         val replacement = if (match != null) {
             content.removeRange(0, match.value.length)
         } else {
@@ -258,7 +291,11 @@ object NoteText {
         // Keep the item's indentation so nested lists continue at the same level.
         val continuedPrefix = when {
             prefix == CHECKED -> UNCHECKED
-            Regex("""^\d+\. """).matches(prefix) -> "${prefix.substringBefore('.').toInt() + 1}. "
+            Regex("""^\d+[.)] """).matches(prefix) -> {
+                val number = Regex("""^\d+""").find(prefix)?.value?.toIntOrNull() ?: 1
+                val delimiter = if (prefix.contains(')')) ")" else "."
+                "${number + 1}$delimiter "
+            }
             else -> prefix
         }
         val nextPrefix = indent + continuedPrefix
@@ -301,8 +338,13 @@ object NoteText {
         val oldChangedEnd = oldText.length - suffix
         val newChangedEnd = newText.length - suffix
         val delta = newText.length - oldText.length
-        fun map(position: Int): Int {
+        fun map(position: Int, isSelectionStart: Boolean): Int {
             val mapped = when {
+                // A pure insertion at a selection boundary needs endpoint affinity:
+                // keep an ending endpoint before inserted text, but move a starting
+                // endpoint after it so the selection continues to cover the same text.
+                oldChangedEnd == prefix && position == prefix ->
+                    if (isSelectionStart) newChangedEnd else prefix
                 position <= prefix -> position
                 position >= oldChangedEnd -> position + delta
                 else -> newChangedEnd
@@ -310,9 +352,9 @@ object NoteText {
             return mapped.coerceIn(0, newText.length)
         }
 
-        // Keep reversed selections reversed; TextFieldValue uses them to represent
-        // selection direction as well as the selected range.
-        return map(start) to map(end)
+        // Preserve selection direction while keeping both endpoints anchored to the
+        // original text. TextFieldValue uses reversed ranges to represent direction.
+        return map(start, isSelectionStart = true) to map(end, isSelectionStart = false)
     }
 
     data class ChecklistItem(val lineIndex: Int, val text: String, val checked: Boolean)

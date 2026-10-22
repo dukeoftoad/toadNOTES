@@ -78,6 +78,17 @@ class NoteTextTest {
     }
 
     @Test
+    fun inlineFormatPreservesReversedSelectionDirectionWhenWrappingAndUnwrapping() {
+        val wrapped = NoteText.toggleInlineFormat("hello world", 11, 6, "**")
+        assertEquals("hello **world**", wrapped.first)
+        assertEquals(13 to 8, wrapped.second to wrapped.third)
+
+        val unwrapped = NoteText.toggleInlineFormat(wrapped.first, wrapped.second, wrapped.third, "**")
+        assertEquals("hello world", unwrapped.first)
+        assertEquals(11 to 6, unwrapped.second to unwrapped.third)
+    }
+
+    @Test
     fun inlineFormatInsertsMarkerPairAtCollapsedCursor() {
         val result = NoteText.toggleInlineFormat("abcd", 2, 2, "_")
         assertEquals("ab__cd", result.first)
@@ -174,6 +185,10 @@ class NoteTextTest {
         assertEquals(selected.second, selected.third)
         assertEquals("visit [site](https://) now".indexOf("https://") + "https://".length, selected.second)
 
+        val reversed = NoteText.insertMarkdownLink("visit site now", 10, 6)
+        assertEquals(selected.first, reversed.first)
+        assertEquals(selected.second to selected.third, reversed.second to reversed.third)
+
         val empty = NoteText.insertMarkdownLink("abc", 1, 1)
         assertEquals("a[text](https://)bc", empty.first)
         assertEquals(empty.first.indexOf("https://") + "https://".length, empty.second)
@@ -192,6 +207,15 @@ class NoteTextTest {
     @Test
     fun numberedListToggleOnlyChangesCurrentLineAndReplacesOtherListPrefix() {
         assertEquals("☐ first\n1. second\nthird", NoteText.toggleNumberedList("☐ first\n• second\nthird", 12).first)
+    }
+
+    @Test
+    fun listActionsReplaceMarkdownBulletPrefixesInsteadOfStackingThem() {
+        assertEquals("• item", NoteText.toggleBullet("- item", 4).first)
+        assertEquals("• item", NoteText.toggleBullet("* item", 4).first)
+        assertEquals("1. item", NoteText.toggleNumberedList("- item", 4).first)
+        assertEquals("1. item", NoteText.toggleNumberedList("* item", 4).first)
+        assertEquals("☐ item", NoteText.cycleChecklist("- item", 4).first)
     }
 
     @Test
@@ -481,6 +505,118 @@ class NoteTextTest {
             ),
             NoteText.voiceSegments(body)
         )
+    }
+
+    @Test
+    fun inlineFormattingHandlesAdjacentAndNestedMarkersWithoutEatingNeighborText() {
+        val adjacent = NoteText.toggleInlineFormat("ab cd", 0, 2, "**")
+        assertEquals("**ab** cd", adjacent.first)
+        assertEquals("ab cd", NoteText.toggleInlineFormat(adjacent.first, 2, 4, "**").first)
+
+        val nested = NoteText.toggleInlineFormat("bold italic", 5, 11, "_")
+        assertEquals("bold _italic_", nested.first)
+        val nestedBold = NoteText.toggleInlineFormat(nested.first, 0, nested.first.length, "**")
+        assertEquals("**bold _italic_**", nestedBold.first)
+        assertEquals(nested.first, NoteText.toggleInlineFormat(nestedBold.first, 2, nestedBold.first.length - 2, "**").first)
+    }
+
+    @Test
+    fun inlineFormattingNestsItalicInsideBoldWithoutRemovingExistingMarkers() {
+        val bold = NoteText.toggleInlineFormat("bold", 0, 4, "**")
+        assertEquals("**bold**", bold.first)
+
+        val italicInsideBold = NoteText.toggleInlineFormat(bold.first, 2, 6, "*")
+        assertEquals("***bold***", italicInsideBold.first)
+        assertEquals(3 to 7, italicInsideBold.second to italicInsideBold.third)
+
+        val toggledOff = NoteText.toggleInlineFormat(
+            italicInsideBold.first,
+            italicInsideBold.second,
+            italicInsideBold.third,
+            "*"
+        )
+        assertEquals("**bold**", toggledOff.first)
+        assertEquals(2 to 6, toggledOff.second to toggledOff.third)
+    }
+
+    @Test
+    fun numberedListContinuationHandlesDigitBoundariesAndIndentedEmptyItems() {
+        val old = "  9. item"
+        assertEquals("  9. item\n  10. ", NoteText.continueList(old, "$old\n", old.length + 1)!!.first)
+        val parenthesized = "  9) item"
+        assertEquals("  9) item\n  10) ", NoteText.continueList(parenthesized, "$parenthesized\n", parenthesized.length + 1)!!.first)
+        assertEquals("item", NoteText.toggleNumberedList("9) item", 7).first)
+
+        val empty = "first\n  10. "
+        val result = NoteText.continueList(empty, "$empty\n", empty.length + 1)!!
+        assertEquals("first\n", result.first)
+        assertEquals("first\n".length, result.second)
+    }
+
+    @Test
+    fun selectionMappingKeepsSelectedTextOutsideInsertedLinePrefixes() {
+        val old = "heading"
+        val insertedHeading = "## heading"
+        assertEquals(3 to 10, NoteText.selectionAfterLineEdit(old, insertedHeading, 0, old.length, 3))
+
+        // If the selection ends exactly where text is inserted, it must not absorb the insertion.
+        assertEquals(0 to 1, NoteText.selectionAfterLineEdit("abc", "aXbc", 0, 1, 0))
+
+        // A selection beginning at the insertion point must move after the inserted prefix.
+        assertEquals(2 to 4, NoteText.selectionAfterLineEdit("abc", "aXbc", 1, 3, 2))
+
+        // Reversed selection direction is preserved as well.
+        assertEquals(4 to 1, NoteText.selectionAfterLineEdit("abc", "aXbc", 3, 1, 2))
+    }
+
+    @Test
+    fun numberedListTogglePreservesSelectionAcrossPrefixInsertionAndRemoval() {
+        val old = "before\n• selected text\nafter"
+        val selectionStart = old.indexOf("selected")
+        val selectionEnd = selectionStart + "selected text".length
+        val (numbered, cursor) = NoteText.toggleNumberedList(old, selectionEnd)
+        assertEquals("before\n1. selected text\nafter", numbered)
+        val mapped = NoteText.selectionAfterLineEdit(old, numbered, selectionStart, selectionEnd, cursor)
+        assertEquals("selected text", numbered.substring(mapped.first, mapped.second))
+
+        val (plain, plainCursor) = NoteText.toggleNumberedList(numbered, cursor)
+        val restored = NoteText.selectionAfterLineEdit(numbered, plain, mapped.first, mapped.second, plainCursor)
+        assertEquals("selected text", plain.substring(restored.first, restored.second))
+    }
+
+    @Test
+    fun checklistAndBulletConversionsReplacePrefixesAndKeepIndentationAcrossEnter() {
+        assertEquals("  ☐ task", NoteText.cycleChecklist("  - task", 7).first)
+        assertEquals("  • task", NoteText.toggleBullet("  * task", 7).first)
+        val markdownBullet = "- task"
+        assertEquals("- task\n- ", NoteText.continueList(markdownBullet, "$markdownBullet\n", markdownBullet.length + 1)!!.first)
+    }
+
+    @Test
+    fun markdownLinksPreserveUnicodePunctuationAndDocumentBoundaries() {
+        val text = "😀 café, 世界!"
+        val start = text.indexOf("café")
+        val end = text.indexOf("!", start)
+        val linked = NoteText.insertMarkdownLink(text, start, end)
+        assertEquals("😀 [café, 世界](https://)!", linked.first)
+        assertEquals(linked.first.indexOf("https://") + "https://".length, linked.second)
+
+        val beginning = NoteText.insertMarkdownLink("site", 0, 4)
+        assertEquals("[site](https://)", beginning.first)
+        val ending = NoteText.insertMarkdownLink("site", 0, 4)
+        assertEquals(ending.first.length - 1, ending.second)
+    }
+
+    @Test
+    fun markdownLinkInsertionAtEmptyDocumentAndIncompleteMarkdownRemainsSafe() {
+        val emptyDocument = NoteText.insertMarkdownLink("", 0, 0)
+        assertEquals("[text](https://)", emptyDocument.first)
+        assertEquals(emptyDocument.first.indexOf("https://") + "https://".length, emptyDocument.second)
+
+        val partial = "[label](https://"
+        val linked = NoteText.insertMarkdownLink(partial, 1, 6)
+        assertEquals("[[label](https://)](https://", linked.first)
+        assertEquals(linked.first.indexOf("https://") + "https://".length, linked.second)
     }
 
 }
