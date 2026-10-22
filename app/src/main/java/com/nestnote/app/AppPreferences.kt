@@ -24,6 +24,8 @@ internal const val PREF_EDITOR_FONT_FILE = "editor_font_file"
 internal const val PREF_DEFAULT_NOTE_FORMAT = "default_note_format"
 internal const val PREF_EDITOR_COUNTS = "editor_show_counts"
 internal const val PREF_VOICE_PLAYER_COMPACT = "voice_player_compact"
+internal const val PREF_VOICE_PLAYER_SPEED = "voice_player_speed"
+internal val VoicePlayerSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
 // Backup keys. The string values match what NestNoteApp already writes, so existing
 // user preferences keep working. The worker reads these same names — sharing them

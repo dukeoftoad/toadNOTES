@@ -793,6 +793,8 @@ internal fun VoiceNoteControls(
                                             reviewDurationMs = 0
                                             val player = PcmVoicePlayback(
                                                 context, attachmentStore, reviewAttachment,
+                                                playbackSpeed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                                    .getFloat(PREF_VOICE_PLAYER_SPEED, 1f),
                                                 onProgress = { positionMs, durationMs ->
                                                     if (!seekingReview) {
                                                         reviewPositionMs = positionMs

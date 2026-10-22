@@ -2399,6 +2399,12 @@ private fun VoicePlayerSettingsDialog(onDismiss: () -> Unit) {
                 .getBoolean(PREF_VOICE_PLAYER_COMPACT, true)
         )
     }
+    var voicePlaybackSpeed by rememberSaveable {
+        mutableFloatStateOf(
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getFloat(PREF_VOICE_PLAYER_SPEED, 1f)
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -2414,6 +2420,7 @@ private fun VoicePlayerSettingsDialog(onDismiss: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -2430,6 +2437,32 @@ private fun VoicePlayerSettingsDialog(onDismiss: () -> Unit) {
                             "Choose how recordings appear in your notes",
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = colors.outlineVariant)
+
+                Text("Default playback speed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "New and previewed recordings use this speed. You can still seek normally.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant
+                )
+                Row(
+                    Modifier.fillMaxWidth().selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    VoicePlayerSpeeds.forEach { speed ->
+                        FilterChip(
+                            selected = voicePlaybackSpeed == speed,
+                            onClick = {
+                                voicePlaybackSpeed = speed
+                                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                                    .putFloat(PREF_VOICE_PLAYER_SPEED, speed).apply()
+                            },
+                            label = { Text("${speed}×") },
+                            modifier = Modifier.weight(1f).testTag("voice_player_speed_${speed}")
                         )
                     }
                 }
@@ -2526,7 +2559,7 @@ private fun VoicePlayerSettingsDialog(onDismiss: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(4.dp))
 
                 Text(
                     "Your choice is saved automatically.",

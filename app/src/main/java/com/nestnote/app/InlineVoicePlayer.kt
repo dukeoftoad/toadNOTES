@@ -125,6 +125,10 @@ internal fun InlineVoicePlayer(
         ?: estimatedDurationMs
 
     val isActive = activePlayerId == attachmentId
+    val playbackSpeed = remember(context) {
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            .getFloat(PREF_VOICE_PLAYER_SPEED, 1f)
+    }
 
     // All playback state is keyed by attachmentId so a recompose with a different
     // marker at the same slot never leaks stale state between voice notes.
@@ -161,6 +165,7 @@ internal fun InlineVoicePlayer(
                 context,
                 store,
                 attachment,
+                playbackSpeed = playbackSpeed,
                 onProgress = { pos, dur ->
                     positionMs = pos.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                     durationMs = dur.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()

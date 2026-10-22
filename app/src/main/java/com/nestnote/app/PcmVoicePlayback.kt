@@ -24,6 +24,7 @@ internal class PcmVoicePlayback(
     private val store: VoiceAttachmentStore,
     private val attachment: VoiceAttachment,
     private val startAtMs: Long = 0L,
+    private val playbackSpeed: Float = 1f,
     private val onProgress: (Long, Long) -> Unit = { _, _ -> },
     private val onFinished: (String?) -> Unit
 ) {
@@ -151,6 +152,11 @@ internal class PcmVoicePlayback(
 
             mp.setOnPreparedListener { preparedPlayer ->
                 if (stopped) return@setOnPreparedListener
+
+                val safeSpeed = (playbackSpeed.takeIf { it.isFinite() } ?: 1f).coerceIn(0.5f, 2f)
+                if (safeSpeed != 1f) {
+                    preparedPlayer.playbackParams = preparedPlayer.playbackParams.setSpeed(safeSpeed)
+                }
 
                 if (startAtMs > 0L) {
                     preparedPlayer.seekTo(
