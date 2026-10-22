@@ -2,9 +2,9 @@
 
 All notable changes to NESTNOTE are documented here.
 
-## [1.3.11] - Current branch record (2026-10-22)
+## [1.3.11] - Current repository release record (2026-10-22)
 
-This is the current v1.3.11 release record for the branch prepared by PR #76, covering note-editor and Markdown work associated with [issue #61](https://github.com/dukeoftoad/toadNOTES/issues/61). The codebase/documentation entry is current for this PR; the public release tag and signed APK are separate publication steps and are not claimed to exist yet.
+This is the current v1.3.11 release record on `main`, synchronized by merged PR #76, covering note-editor and Markdown work associated with [issue #61](https://github.com/dukeoftoad/toadNOTES/issues/61). The public release tag and signed APK are separate publication steps and are not claimed to exist yet.
 
 ### Fixed
 - Corrected editor text contrast selection for dark surfaces by using surface luminance and theme-provided foreground colors.
