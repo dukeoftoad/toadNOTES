@@ -1,6 +1,12 @@
 package com.nestnote.app
 
+import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.text.style.LineBackgroundSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.QuoteSpan
 import androidx.core.text.HtmlCompat
 import com.nestnote.app.opensource.GsSimpleMarkdownParser
 
@@ -10,14 +16,137 @@ import com.nestnote.app.opensource.GsSimpleMarkdownParser
  * The upstream parser supports common inline formatting and simple headings/lists only.
  */
 internal object MarkdownPreview {
-    fun toSpanned(markdown: String): Spanned {
-        val escaped = markdown
+    private const val HORIZONTAL_RULE_MARKER = "\u200B"
+
+    private class HorizontalRuleSpan(private val color: Int) : LineBackgroundSpan {
+        override fun drawBackground(
+            canvas: Canvas,
+            paint: Paint,
+            left: Int,
+            right: Int,
+            top: Int,
+            baseline: Int,
+            bottom: Int,
+            text: CharSequence,
+            start: Int,
+            end: Int,
+            lineNumber: Int
+        ) {
+            val oldColor = paint.color
+            val oldStyle = paint.style
+            val oldStrokeWidth = paint.strokeWidth
+            paint.color = color
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f
+            val y = (top + bottom) / 2f
+            canvas.drawLine(left.toFloat(), y, right.toFloat(), y, paint)
+            paint.color = oldColor
+            paint.style = oldStyle
+            paint.strokeWidth = oldStrokeWidth
+        }
+    }
+    fun toSpanned(markdown: String, foregroundColor: Int = android.graphics.Color.BLACK): Spanned {
+        // This small upstream parser doesn't implement blockquotes, so remove only
+        // Markdown quote prefixes at the beginning of lines before parsing. HTML-like
+        // content is still escaped and remains inert.
+        val quotePrefix = Regex("""^\s*>\s?(.*)$""")
+        val horizontalRule = Regex("""^\s*(?:-{3,}|_{3,})\s*$""")
+        val quoteLines = mutableListOf<String>()
+        val markdownWithoutBlockMarkers = buildString {
+            var fenceCharacter: Char? = null
+            var fenceLength = 0
+            markdown.lineSequence().forEachIndexed { index, line ->
+                val trimmed = line.trimStart()
+                val fenceRun = trimmed.takeWhile { it == '`' || it == '~' }
+                val opensOrClosesFence = fenceRun.length >= 3 &&
+                    (trimmed.firstOrNull() == '`' || trimmed.firstOrNull() == '~')
+                val wasInsideFence = fenceCharacter != null
+                if (opensOrClosesFence) {
+                    val character = fenceRun.first()
+                    if (!wasInsideFence) {
+                        fenceCharacter = character
+                        fenceLength = fenceRun.length
+                    } else if (character == fenceCharacter && fenceRun.length >= fenceLength) {
+                        fenceCharacter = null
+                        fenceLength = 0
+                    }
+                }
+                val inFence = wasInsideFence || fenceCharacter != null
+                val fenceDelimiterLine = opensOrClosesFence
+                val quoteMatch = if (!inFence && !fenceDelimiterLine) quotePrefix.matchEntire(line) else null
+                val normalizedLine = when {
+                    !inFence && !fenceDelimiterLine && horizontalRule.matches(line) -> HORIZONTAL_RULE_MARKER
+                    quoteMatch != null -> quoteMatch.groupValues[1].also { quotedLine ->
+                        // Search the rendered text, not the raw Markdown source. Inline
+                        // emphasis delimiters disappear during parsing, so normalize them
+                        // before locating the range that receives QuoteSpan.
+                        val renderedText = quotedLine.replace(Regex("""(\*\*|__|[*_`])"""), "")
+                        if (renderedText.isNotEmpty()) quoteLines.add(renderedText)
+                    }
+                    else -> line
+                }
+                if (index > 0) append("\n")
+                append(normalizedLine)
+            }
+        }
+        val escaped = markdownWithoutBlockMarkers
             .replace("&", "&amp;")
             .replace("<", "&lt;")
-            .replace(">", "&gt;")
         val html = GsSimpleMarkdownParser()
             .parse(escaped, "", GsSimpleMarkdownParser.FILTER_ANDROID_TEXTVIEW)
             .html
-        return HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        val parsed = SpannableStringBuilder(
+            HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        )
+        // The upstream parser hardcodes black for heading and list-marker HTML. That
+        // overrides TextView's theme-aware text color and makes those spans unreadable
+        // on dark surfaces. Recolor only explicit black spans generated by the parser.
+        if (foregroundColor != android.graphics.Color.BLACK) {
+            parsed.getSpans(0, parsed.length, ForegroundColorSpan::class.java)
+                .filter { it.foregroundColor == android.graphics.Color.BLACK }
+                .forEach { span ->
+                    val start = parsed.getSpanStart(span)
+                    val end = parsed.getSpanEnd(span)
+                    val flags = parsed.getSpanFlags(span)
+                    parsed.removeSpan(span)
+                    parsed.setSpan(ForegroundColorSpan(foregroundColor), start, end, flags)
+                }
+        }
+
+        // Draw thematic breaks with a native line span, keeping Markdown markers hidden.
+        val result = SpannableStringBuilder(parsed)
+        var ruleSearchFrom = 0
+        while (true) {
+            val markerStart = result.toString().indexOf(HORIZONTAL_RULE_MARKER, ruleSearchFrom)
+            if (markerStart < 0) break
+            val markerEnd = markerStart + HORIZONTAL_RULE_MARKER.length
+            result.setSpan(
+                HorizontalRuleSpan(foregroundColor),
+                markerStart,
+                markerEnd,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            ruleSearchFrom = markerEnd
+        }
+
+        // Add native quote styling to the matching rendered ranges because the
+        // upstream parser has no blockquote support.
+        var searchFrom = 0
+        quoteLines.forEach { quotedText ->
+            if (quotedText.isNotEmpty()) {
+                val start = result.toString().indexOf(quotedText, searchFrom)
+                if (start >= 0) {
+                    val end = start + quotedText.length
+                    result.setSpan(
+                        QuoteSpan(0xFF8A80C8.toInt()),
+                        start,
+                        end,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    searchFrom = end
+                }
+            }
+        }
+        return result
     }
 }

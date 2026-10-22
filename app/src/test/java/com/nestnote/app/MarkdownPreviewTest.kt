@@ -1,6 +1,10 @@
 package com.nestnote.app
 
+import android.graphics.Color
+import android.text.style.ForegroundColorSpan
 import android.text.style.ImageSpan
+import android.text.style.LineBackgroundSpan
+import android.text.style.QuoteSpan
 import android.text.style.URLSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,15 +32,69 @@ class MarkdownPreviewTest {
     }
 
     @Test
+    fun blockquotesWithInlineFormattingReceiveQuoteStyling() {
+        val result = MarkdownPreview.toSpanned("> **important**\n> *quoted text*")
+        val quoteSpans = result.getSpans(0, result.length, QuoteSpan::class.java)
+
+        assertTrue(result.toString().contains("important"))
+        assertTrue(result.toString().contains("quoted text"))
+        assertEquals(2, quoteSpans.size)
+    }
+
+    @Test
     fun emptyAndPlainTextPreviewAreHandled() {
         assertTrue(MarkdownPreview.toSpanned("").isEmpty())
         assertTrue(MarkdownPreview.toSpanned("ordinary note").toString().contains("ordinary note"))
     }
 
     @Test
+    fun explicitBlackMarkdownSpansUseThemeForegroundInDarkMode() {
+        val result = MarkdownPreview.toSpanned("# Dark heading\n\n- dark list item", Color.WHITE)
+        val spans = result.getSpans(0, result.length, ForegroundColorSpan::class.java)
+        assertTrue(spans.isNotEmpty())
+        assertTrue(spans.all { it.foregroundColor == Color.WHITE })
+    }
+
+    @Test
+    fun horizontalRulesRenderAsThematicBreaks() {
+        val result = MarkdownPreview.toSpanned("before\n---\nafter\n\n___\nend", Color.WHITE)
+
+        assertFalse(result.toString().contains("---"))
+        assertFalse(result.toString().contains("___"))
+        assertTrue(result.getSpans(0, result.length, LineBackgroundSpan::class.java).isNotEmpty())
+    }
+
+    @Test
+    fun horizontalRuleLikeTextInsideFencedCodeIsNotConverted() {
+        val result = MarkdownPreview.toSpanned("```text\n---\n```")
+
+        assertTrue(result.toString().contains("---"))
+        assertTrue(result.getSpans(0, result.length, LineBackgroundSpan::class.java).isEmpty())
+    }
+
+    @Test
+    fun differentFenceDelimiterDoesNotCloseAnOpenCodeFence() {
+        val result = MarkdownPreview.toSpanned("```text\n~~~\n> literal quote\n---\n```")
+
+        assertTrue(result.toString().contains("~~~"))
+        assertTrue(result.toString().contains("> literal quote"))
+        assertTrue(result.toString().contains("---"))
+        assertTrue(result.getSpans(0, result.length, QuoteSpan::class.java).isEmpty())
+        assertTrue(result.getSpans(0, result.length, LineBackgroundSpan::class.java).isEmpty())
+    }
+
+    @Test
+    fun blockquoteMarkerIsParsedAsMarkdownRatherThanDisplayedLiterally() {
+        val result = MarkdownPreview.toSpanned("> A quoted thought")
+        assertTrue(result.toString().contains("A quoted thought"))
+        assertFalse(result.toString().contains(">"))
+        assertTrue(result.getSpans(0, result.length, QuoteSpan::class.java).isNotEmpty())
+    }
+
+    @Test
     fun markdownFormattingIsPreservedInTextSegmentsAroundVoiceNotes() {
         val id = "11111111-1111-4111-8111-111111111111"
-        val body = "**before**\\n[[voice:$id]]\\n*after*"
+        val body = "**before**\n[[voice:$id]]\n*after*"
         val segments = NoteText.voiceSegments(body)
 
         assertEquals(3, segments.size)
@@ -44,5 +102,4 @@ class MarkdownPreviewTest {
         assertEquals(id, segments[1].attachmentId)
         assertTrue(MarkdownPreview.toSpanned(segments[2].text).toString().contains("after"))
     }
-
 }
