@@ -85,7 +85,7 @@ internal fun PrivateVaultSettingsScreen(
                     color = colors.onPrimaryContainer
                 )
                 Text(
-                    "$privateNoteCount private note" + if (privateNoteCount == 1) "" else "s" + " stored in this vault",
+                    "$privateNoteCount private note${if (privateNoteCount == 1) "" else "s"} stored in this vault",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onPrimaryContainer
                 )
