@@ -84,7 +84,7 @@ internal fun PrivateVaultGateDialog(
 ) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
-    val biometricAvailable = remember(activity, passwordConfigured) {
+    val biometricAvailable = remember(activity, passwordConfigured, biometricEnabled) {
         passwordConfigured && biometricEnabled && activity != null &&
             BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
             BiometricManager.BIOMETRIC_SUCCESS
