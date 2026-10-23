@@ -50,9 +50,9 @@ internal fun PrivateVaultSettingsScreen(
     onChangePassword: (current: String, new: String, confirmation: String) -> Boolean
 ) {
     var showPasswordDialog by rememberSaveable { mutableStateOf(false) }
-    var currentPassword by rememberSaveable { mutableStateOf("") }
-    var newPassword by rememberSaveable { mutableStateOf("") }
-    var confirmation by rememberSaveable { mutableStateOf("") }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
     var passwordError by rememberSaveable { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
 
