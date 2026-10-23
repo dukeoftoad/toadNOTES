@@ -24,6 +24,7 @@ The supplied HTML redesign is implemented as a native Compose adaptation. The re
 - Persist a private-note flag in encrypted local storage and versioned/plain-array JSON backup formats; older records default to visible notes.
 - Exclude private notes from normal views and provide an editor More-menu action to hide/reveal them while the vault is unlocked.
 - Password gate uses a random salt and PBKDF2-HMAC-SHA256; the vault password is not an encryption key. Exported JSON backups remain plaintext.
+- Added a dedicated Private Vault settings page linked from More and Settings → Privacy, with biometric enable/disable, verified password change, quick-access guidance, and export-security notes.
 - Added AndroidX BiometricPrompt unlock (fingerprint where enrolled and supported) after password setup; password fallback remains available. Device-level biometric paths still require verification.
 - Required validation before merge: Android CI, password-hash tests, note persistence/backup tests, view-filter tests, and manual gesture/lifecycle checks.
 
