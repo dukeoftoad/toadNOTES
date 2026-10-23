@@ -90,6 +90,8 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -213,6 +215,17 @@ internal fun NestNoteApp(
     var showPrivateVaultGate by remember { mutableStateOf(false) }
     var privateVaultUnlocked by remember { mutableStateOf(false) }
     fun requestPrivateVault() { showPrivateVaultGate = true }
+    DisposableEffect(context, selectedView) {
+        val lifecycle = (context as? ComponentActivity)?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && selectedView == "Private") {
+                privateVaultUnlocked = false
+                selectedView = "Home"
+            }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
     LaunchedEffect(selectedView) {
         if (selectedView != "Private") privateVaultUnlocked = false
         if (selectedView == "Backup") {
@@ -506,7 +519,11 @@ internal fun NestNoteApp(
                         }
                     },
                     navigationIcon = {
-                        if (selectedView in moreSubViews) {
+                        if (selectedView == "Private") {
+                            IconButton(onClick = { privateVaultUnlocked = false; selectedView = "Home" }) {
+                                Icon(Icons.Default.LockOpen, contentDescription = "Lock Private Vault")
+                            }
+                        } else if (selectedView in moreSubViews) {
                             IconButton(onClick = { selectedView = "More" }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to More")
                             }
