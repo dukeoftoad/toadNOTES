@@ -1,6 +1,6 @@
 # NESTNOTE Product Roadmap
 
-Last updated: 2026-10-19
+Last updated: 2026-10-23
 
 ## Product direction
 Build a calm, compact, personal note-taking experience using native Android, Jetpack Compose, and Material 3. Keep common actions fast, preserve local user data, and deliver in small, testable increments.
