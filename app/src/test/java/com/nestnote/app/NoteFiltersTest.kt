@@ -51,6 +51,13 @@ class NoteFiltersTest {
     }
 
     @Test
+    fun privateNotesAreExcludedFromHomeAndOnlyAppearInPrivateView() {
+        val secret = all.first().copy(id = 999L, title = "Secret", privateNote = true)
+        assertFalse(NoteFilters.visibleNotes(all + secret, "Home", "", false, false).any { it.id == secret.id })
+        assertTrue(NoteFilters.visibleNotes(all + secret, "Private", "", false, false).any { it.id == secret.id })
+    }
+
+    @Test
     fun searchAppliesWithinTheSelectedView() {
         val visible = NoteFilters.visibleNotes(all, "Work", "ship", false, false)
         assertEquals(listOf(work), visible)
