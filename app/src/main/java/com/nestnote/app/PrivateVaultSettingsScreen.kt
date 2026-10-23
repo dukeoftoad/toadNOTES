@@ -45,8 +45,10 @@ internal fun PrivateVaultSettingsScreen(
     passwordConfigured: Boolean,
     biometricAvailable: Boolean,
     biometricEnabled: Boolean,
+    privateNoteCount: Int,
     onBiometricEnabledChange: (Boolean) -> Unit,
     onSetUpPassword: () -> Unit,
+    onOpenVault: () -> Unit,
     onChangePassword: (current: String, new: String, confirmation: String) -> Boolean
 ) {
     var showPasswordDialog by rememberSaveable { mutableStateOf(false) }
@@ -82,11 +84,22 @@ internal fun PrivateVaultSettingsScreen(
                     style = MaterialTheme.typography.labelLarge,
                     color = colors.onPrimaryContainer
                 )
+                Text(
+                    "$privateNoteCount private note" + if (privateNoteCount == 1) "" else "s" + " stored in this vault",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onPrimaryContainer
+                )
                 if (!passwordConfigured) {
                     Button(onClick = onSetUpPassword, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.size(8.dp))
                         Text("Set up vault password")
+                    }
+                } else {
+                    Button(onClick = onOpenVault, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(8.dp))
+                        Text("Open Private Vault")
                     }
                 }
             }
