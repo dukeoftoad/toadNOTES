@@ -1124,6 +1124,14 @@ internal fun NestNoteApp(
                         showPrivateVaultGate = false
                     }
                     accepted
+                },
+                onBiometricUnlock = {
+                    privateVaultUnlocked = true
+                    selectedView = "Private"
+                    search = ""
+                    searchVisible = false
+                    selectedNoteIds = emptySet()
+                    showPrivateVaultGate = false
                 }
             )
         }
