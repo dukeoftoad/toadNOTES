@@ -1,3 +1,12 @@
+## 2026-10-23 — Private Vault feature PR #88
+
+- Opened [PR #88](https://github.com/dukeoftoad/toadNOTES/pull/88) for a swipe-down, password-gated Private Vault.
+- Added a backward-compatible `privateNote` model field, JSON serialization/backup preservation, default-view exclusion, editor hide/reveal action, and salted PBKDF2-HMAC-SHA256 password verification.
+- Added tests for persistence/backup, filtering, password verification, and short-password rejection. Android CI and manual gesture/lifecycle checks must pass before merge; no device validation is claimed yet.
+- Security boundary: the password gates UI access; existing Android Keystore encryption protects local storage. Exported backup JSON remains plaintext and can include private notes.
+
+---
+
 # NESTNOTE Work Log
 
 ## 2026-10-22 — PRs #74 and #76 merged; v1.3.11 metadata sync
