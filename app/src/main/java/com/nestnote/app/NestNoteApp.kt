@@ -1195,7 +1195,11 @@ internal fun NestNoteApp(
                         }
                         return@saveNote
                     }
-                    val updated = draft.copy(id = savedId, updated = System.currentTimeMillis())
+                    val updated = draft.copy(
+                        id = savedId,
+                        updated = System.currentTimeMillis(),
+                        privateNote = if (existing == null && selectedView == "Private") true else draft.privateNote
+                    )
                     val next = if (existing == null) notes + updated else notes.map {
                         if (it.id == existing.id) updated.copy(id = existing.id) else it
                     }
