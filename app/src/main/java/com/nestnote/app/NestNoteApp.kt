@@ -681,8 +681,8 @@ internal fun NestNoteApp(
                 }
                 if (selectedView == "More") {
                     MoreScreen(
-                        pinnedCount = notes.count { it.pinned && !it.archived },
-                        archivedCount = notes.count { it.archived },
+                        pinnedCount = notes.count { it.pinned && !it.archived && !it.privateNote },
+                        archivedCount = notes.count { it.archived && !it.privateNote },
                         categoryCount = categoryOptions.size,
                         versionLabel = AboutInfo.versionLabel(appVersion),
                         onOpen = { selectedView = it; selectedNoteIds = emptySet() }
@@ -696,7 +696,7 @@ internal fun NestNoteApp(
                         editorVisible = true
                     }
                 } else if (selectedView == "Insights") {
-                    NoteInsightsScreen(notes, onOpenCategory = { selectedView = it }) { noteId ->
+                    NoteInsightsScreen(notes.filterNot { it.privateNote }, onOpenCategory = { selectedView = it }) { noteId ->
                         editorNoteId = noteId
                         editorDraftId = noteId
                         selectedView = "Home"
@@ -706,9 +706,9 @@ internal fun NestNoteApp(
                     KeyboardShortcutsScreen()
                 } else if (selectedView == "Backup") {
                     BackupRestoreScreen(
-                        totalNotes = notes.size,
-                        archivedNotes = notes.count { it.archived },
-                        pinnedNotes = notes.count { it.pinned && !it.archived },
+                        totalNotes = notes.count { !it.privateNote },
+                        archivedNotes = notes.count { it.archived && !it.privateNote },
+                        pinnedNotes = notes.count { it.pinned && !it.archived && !it.privateNote },
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
                         automaticBackupEnabled = automaticBackupEnabled,
@@ -780,7 +780,7 @@ internal fun NestNoteApp(
                     AboutScreen(version = appVersion)
                 } else if (selectedView == "Categories") {
                     val activeCategoryCounts = remember(notes) {
-                        categoryOptions.associateWith { category -> notes.count { it.category == category && !it.archived } }
+                        categoryOptions.associateWith { category -> notes.count { it.category == category && !it.archived && !it.privateNote } }
                     }
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Categories", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
