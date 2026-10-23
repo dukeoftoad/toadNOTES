@@ -17,6 +17,7 @@ Use this checklist for every candidate. A successful build is necessary but does
 ## 2. Core notes and editor
 - [ ] Create, edit, save, cancel, pin, archive, restore, search, sort, and delete/undo work.
 - [ ] Unsaved changes remain protected through Back, Cancel, rotation, activity recreation, and sheet dismissal.
+- [ ] Verify lifecycle `ON_STOP` and editor disposal synchronously flush the latest draft before the editor is hidden; test immediate backgrounding/removal during the debounce interval. This reduces lifecycle-loss risk but cannot guarantee writes when the process is killed without callbacks.
 - [ ] Stale editor drafts cannot overwrite a newer saved note.
 - [ ] Checklist toggling, list continuation, cursor/selection, and trailing newlines behave correctly.
 - [ ] Settings and appearance choices persist after restart.
@@ -33,9 +34,21 @@ Use this checklist for every candidate. A successful build is necessary but does
 - [ ] Verify long content remains readable/scrollable and check narrow screens, font scaling, TalkBack semantics, and light/dark themes.
 - [ ] Record exact-head CI and device/emulator results; do not mark unchecked items complete without evidence.
 
+## Private Vault release gate
+- [ ] **Release blocker:** private editor drafts must not be persisted as plaintext. `DraftStore` currently writes UTF-8/Properties draft files without `NoteStore` encryption and does not preserve a private/public classification. Implement encrypted private drafts with a dedicated classification-aware path (or safely disable disk persistence for private drafts), plus orphan-recovery tests proving private content never reappears outside the authenticated vault. Do not mark this gate complete until exact-head CI passes.
+- [ ] Background the app while the vault list is open; verify return requires authentication.
+- [ ] Background the app while a private note editor is visible; verify no editor content reappears before reauthentication.
+- [ ] Recreate the activity/process during vault/editor use; verify private content is not restored into a visible editor while locked.
+- [ ] Verify biometric success, cancellation, failure, unavailable hardware, enrollment changes, and disabled-biometric password fallback; only explicit success unlocks.
+- [ ] Round-trip mixed public/private backup data; verify private notes stay excluded from ordinary views/search/insights and from user-facing plaintext export. Also verify direct serializer callers are documented as unsafe for private records and private drafts are not written/read as plaintext.
+- [ ] Verify lockout escalation, cooldown boundary, persistence after restart, 15-minute cap, monotonic behavior under forward/backward wall-clock changes, and bounded behavior after device reboot. Automated regression coverage exists; device verification remains required.
+- [ ] Verify FLAG_SECURE on vault and private editor through Recents snapshots, rapid navigation, and lifecycle transitions on supported Android versions.
+- [ ] Confirm security copy says the vault password is a UI gate, not a separate encryption key, and exported JSON is plaintext; verify private notes are excluded from user-facing export.
+- [ ] Record exact-head CI result and device/emulator evidence; source inspection alone is not sufficient.
+
 ## 3. Backup, encryption, and recovery
 - [ ] Export a backup and confirm expected note fields round-trip.
-- [ ] Verify backup/restore is **notes-only**: voice audio attachments are excluded, and the export/restore UI clearly warns that recordings are not included.
+- [ ] Verify backup/restore is **notes-only**: voice audio attachments are excluded, private notes are excluded from user-facing plaintext export, and the UI warns that recordings are not included.
 - [ ] Restore versioned backup and legacy JSON-array backup.
 - [ ] Preview restore additions/updates before applying.
 - [ ] Confirm newer incoming notes update existing notes; older/equal timestamps do not overwrite.
@@ -94,3 +107,14 @@ Release workflow: https://github.com/dukeoftoad/toadNOTES/actions/workflows/andr
 - Owner approval and date:
 
 Do not publish or merge automatically because a checklist is filled out. Unrun manual checks must be marked Not run. An unsigned inspection artifact or historical CI-signed APK is not a production release.
+
+
+## Private draft confidentiality release gate
+
+- [ ] Private draft files use AES-GCM with the dedicated Android Keystore draft key; inspect on-disk bytes to verify title/body are absent.
+- [ ] Missing/unavailable keys, wrong keys, tampered ciphertext, malformed envelopes, and unsupported schemas fail closed without plaintext fallback.
+- [ ] Draft schema persists `privateNote`; missing classification and both public/private envelope mismatches are rejected.
+- [ ] Ordinary orphan recovery excludes private drafts while the vault is locked; private-draft recovery is only reachable through the authenticated vault editor flow.
+- [ ] Legacy plaintext draft files are never silently migrated as public and are rejected/removed when discovered. Do not claim forensic secure erase.
+- [ ] Automated tests cover ciphertext-at-rest, wrong key, tampering, missing classification, classification mismatches, legacy plaintext rejection, and ordinary orphan filtering.
+- [ ] Exact-head CI passes and the diff has been reviewed. Do not merge with any of these checks unverified.

@@ -37,6 +37,16 @@ Production APKs are created from tags matching v*.*.* (for example, v1.2.0). The
 
 A manually dispatched/non-tag release workflow run is for unsigned inspection output only; it must not be distributed as a production APK. Never commit keystores, passwords, signing keys, or other secret values.
 
+**Security boundary:** Private Vault is a password/optional-biometric **UI access gate**, not a separately encrypted vault. Private notes use the same general Android Keystore-backed local-storage encryption as ordinary notes; the vault password does not derive or unlock a separate encryption key. Exported JSON backups are plaintext and may contain readable private-note titles and bodies. See [Security Model](docs/SECURITY.md) and [Threat Model](docs/THREAT_MODEL.md) before making security or privacy claims.
+
+## Private Vault security boundary
+
+**Private Vault is a UI access gate, not a separately encrypted vault.** The vault password is verified through a salted password hash and does not derive or unlock an independent encryption key for private notes. Private notes use NESTNOTE's general Android Keystore-backed local note-storage encryption, like other notes. This helps restrict access through the app's intended UI flow but is not cryptographic isolation against UI bypass or a compromised runtime.
+
+User-exported JSON backups are **plaintext** and may contain readable private-note titles and bodies. The private-note flag is preserved as metadata; it is not encryption. Treat exported backups as sensitive files.
+
+See [Security Model](docs/SECURITY.md) and [Threat Model](docs/THREAT_MODEL.md) for the precise guarantees, residual risks, and required validation. Do not describe the current vault as independently encrypted.
+
 ## Data, backups, and recovery
 Local notes use AES-256-GCM with a 96-bit random nonce and 128-bit authentication tag; the key is generated and held by Android Keystore. The current v2 storage format authenticates the app/storage purpose as additional authenticated data and uses a dedicated v2 key alias. Existing v1 encrypted records and legacy plaintext SharedPreferences records are migrated to v2 only after the new ciphertext is committed; the old record is removed in that same successful preferences commit. Failed decryption or authentication preserves the stored bytes and requires recovery rather than silently replacing notes. If stored content cannot be read or decrypted, NESTNOTE preserves the original data and exposes a recovery path rather than silently replacing it with starter notes.
 

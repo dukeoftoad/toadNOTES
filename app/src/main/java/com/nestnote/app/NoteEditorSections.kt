@@ -785,8 +785,14 @@ internal fun EditorRelatedNotes(
     notes: List<NestNote>,
     onOpen: (NestNote) -> Unit
 ) {
-    val links = remember(body, notes, currentId) { resolveNoteLinks(body, notes, currentId) }
-    val backlinks = remember(title, notes, currentId) { notesLinkingTo(title, notes, currentId) }
+    // Linked-note metadata is a disclosure channel: public notes must not reveal private
+    // titles or backlinks merely because the vault happens to be unlocked.
+    val relatedNotes = remember(notes, currentId) {
+        val currentIsPrivate = notes.firstOrNull { it.id == currentId }?.privateNote ?: false
+        notes.filter { it.privateNote == currentIsPrivate }
+    }
+    val links = remember(body, relatedNotes, currentId) { resolveNoteLinks(body, relatedNotes, currentId) }
+    val backlinks = remember(title, relatedNotes, currentId) { notesLinkingTo(title, relatedNotes, currentId) }
     val resolvedTitles = remember(links) { links.map { it.label.lowercase() }.toSet() }
     val missing = remember(body, resolvedTitles) { noteLinkTitles(body).filterNot { it.lowercase() in resolvedTitles } }
     if (links.isNotEmpty() || backlinks.isNotEmpty() || missing.isNotEmpty()) {

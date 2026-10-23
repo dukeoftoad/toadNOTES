@@ -85,4 +85,31 @@ class NoteFiltersTest {
         assertEquals(work, visible.first())
         assertEquals(listOf("App ideas", "Piano"), visible.drop(1).map { it.title })
     }
+
+    @Test
+    fun privateNotesNeverLeakThroughOrdinarySearchOrQueryOperators() {
+        val secret = NestNote(
+            id = 990L, title = "Vault launch checklist", body = "confidential widget token",
+            category = "Work", pinned = true, reminder = "2030-01-01",
+            archived = false, privateNote = true, updated = 900L, created = 800L
+        )
+        val archivedSecret = secret.copy(id = 991L, title = "Archived vault token", archived = true)
+        val notes = all + secret + archivedSecret
+
+        val ordinaryQueries = listOf(
+            "", "vault", "confidential", "is:pinned", "is:archived",
+            "has:reminder", "category:Work", "in:Work"
+        )
+        listOf("Home", "All notes", "Pinned", "Reminders", "Work", "Archived").forEach { view ->
+            ordinaryQueries.forEach { query ->
+                assertFalse(
+                    "private note leaked in view=$view query=$query",
+                    NoteFilters.visibleNotes(notes, view, query, false, false)
+                        .any { it.privateNote }
+                )
+            }
+        }
+        assertEquals(listOf(secret), NoteFilters.visibleNotes(notes, "Private", "", false, false))
+    }
+
 }

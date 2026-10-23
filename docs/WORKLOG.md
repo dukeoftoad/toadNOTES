@@ -1,3 +1,71 @@
+## 2026-10-23 — Private Vault security-critical path follow-up
+
+- Hardened `PrivateNoteCrypto.initialize` to fail if wrapped-key metadata cannot be committed.
+- Hardened `PrivateNoteStore` load/save validation for duplicate IDs, collection bounds, note validity, and private classification.
+- Filtered linked-note chips and backlinks by the current note's privacy class to prevent public-note metadata from revealing private titles while the vault is unlocked.
+- Confirmed plaintext backup selection excludes private notes; added regression coverage for backup title/body exclusion, AES-GCM ciphertext tampering, record-ID AAD, wrong-password rejection, migration second-phase failure preserving the legacy copy, and isolated-store reload after creating new crypto/store objects.
+- Biometric unlock remains intentionally disabled. The current password-derived vault key does not have an authentication-bound Android Keystore wrapping key and `BiometricPrompt.CryptoObject` unwrap path. Do not re-enable until that implementation and device tests land.
+- Still required before merge: run exact-head CI; test password-change failure atomicity; audit every restore/draft/link pathway on-device; exercise process death and force-stop migration recovery; verify backup/restore behavior with legacy and malformed stores.
+
+## 2026-10-23 — Independent Private Vault store integration
+
+- Wired the isolated private-record store into app password unlock, note loading/saving, legacy migration, and lifecycle/route locking on `feat/private-vault-crypto-isolation`.
+- Startup keeps only public notes in the normal active list and retains legacy private records for migration; ordinary saves preserve those records in the old encrypted NoteStore blob until the vault password is verified.
+- On unlock, the app unlocks the independent vault data key, merges any previously isolated records with legacy private records, commits all private records to the isolated encrypted store, then commits only public records to NoteStore. Failure denies unlock and does not intentionally fall back to plaintext.
+- Normal saves write private records only through `PrivateNoteStore` with an unlocked session and public records through `NoteStore`; if the public commit fails after the private commit, the app attempts to restore the prior encrypted private snapshot.
+- Locking drops the in-memory crypto session and removes private records from the active note list. Biometric unlock is disabled until it can cryptographically unlock the isolated key.
+- Added a migration integration test for private-store ciphertext and public-store separation.
+- Remaining release blockers: exact-head CI; authenticated biometric key wrapping; audit/verification of backups, linked-note flows, cross-store crash recovery, and password-change failure atomicity; emulator/device checks.
+
+## 2026-10-23 — Editor draft flush on lifecycle stop/removal
+
+- Added a latest-state draft snapshot helper and a synchronous final `DraftStore.write` flush on Activity `ON_STOP` and editor composable disposal. This closes the debounce window where the editor could be hidden before the 2-second autosave timer fired.
+- Kept the 2-second debounced and 15-second periodic writes as background safety nets; lifecycle/disposal flush uses the existing atomic temp-file, fsync, and rename behavior.
+- Added a regression test modelling a latest draft flushed immediately before editor removal and verifying recovery returns the final title/body.
+- This addresses lifecycle-time draft preservation, not the separate confidentiality blocker: `DraftStore` still stores draft contents as plaintext and lacks a private/public classification. A process kill that bypasses lifecycle callbacks can still lose edits newer than the last completed write; this is not a transactional guarantee for every crash scenario.
+- Exact-head CI is pending after these changes; do not claim validation until it passes.
+
+---
+
+## 2026-10-23 — Private-data leakage audit follow-up
+
+- Rechecked `NoteFilters.visibleNotes`: Home, All notes, Pinned, Reminders, category views, Archived, and query terms/operators apply the private-note exclusion for ordinary views; Private view is the only intended list view that includes active private notes.
+- Rechecked insights defense-in-depth and Settings archived counts: calculations/counts now use public notes only.
+- Rechecked the user-facing JSON export path: it calls `NoteStore.notesForBackup`, excluding private notes regardless of the archived-note option. Regression tests cover active/archived public and private records.
+- **New release-blocking finding:** `DraftStore` writes editor draft text as plaintext files and does not persist `privateNote`. Private editor drafts therefore do not inherit `NoteStore` AES-GCM encryption and orphan recovery cannot reliably retain the vault boundary. This needs a dedicated code fix and regression tests; this documentation update does not claim it is fixed.
+- Serializer boundary: `encodeBackup` itself can serialize private records if a caller passes them directly. Keep all user-facing exports routed through the filtering selector and test this call boundary; do not claim the serializer encrypts or filters by itself.
+- Exact-head CI must be rerun after these test/documentation updates. Device-only lifecycle/biometric/screenshot checks remain outstanding.
+
+---
+
+## 2026-10-23 — Priority audit pass: plaintext export and metadata isolation
+
+- Fixed user-facing backup selection to exclude all private notes from plaintext JSON exports, whether archived notes are included or not.
+- Added regression coverage for both export modes, including archived private records.
+- Added defense-in-depth filtering inside `NoteInsightsScreen` and fixed the Settings archived count so private note data does not influence ordinary-user metadata.
+- Updated the threat model and release checklist to distinguish plaintext export of ordinary notes from independent vault encryption. The backup serialization format is still not encrypted; callers that explicitly serialize private notes can still produce plaintext.
+- Current PR-head Android CI is required before considering these code changes validated. Emulator/device lifecycle, biometric, and screenshot/Recents checks remain outstanding.
+
+---
+
+## 2026-10-23 — Private-note metadata leak fixes
+
+- Fixed the Settings screen's archived-note count so archived private notes are excluded from ordinary Settings totals.
+- Added defense-in-depth filtering inside `NoteInsightsScreen`, not just at its current caller, so private titles/bodies cannot affect insight counts, word totals, deepest/rediscovery note selection, or category summaries if a future caller passes the full collection.
+- These are UI metadata/content-exposure fixes; they do not change the documented cryptographic boundary. Latest-head Android CI must pass, and device-only lifecycle/biometric/screenshot checks remain required.
+
+---
+
+## 2026-10-23 — PR #90 follow-up: monotonic lockout and regression coverage
+
+- Replaced wall-clock-based password cooldown deadlines with Android elapsed-realtime deadlines so manual clock/time-zone changes do not bypass or extend an active cooldown.
+- Persisted Android boot count alongside active cooldowns. If a reboot changes the monotonic clock's time base, the first read re-establishes a bounded 15-minute cooldown; lockout attempt escalation remains persisted.
+- Added regression coverage for reboot/time-base changes and expanded private-note exclusion checks across ordinary views, archived queries, search terms, and supported query operators.
+- Follow-up code/test changes are on branch `fix/private-vault-lifecycle-hardening`; current head at this log update: `a411087cbd74355f6715a4b867a95c27a1b377cc`. Android CI run [#885](https://github.com/dukeoftoad/toadNOTES/actions/runs/39938507715) was pending at the last check; re-check the exact final head before merge.
+- Emulator/device checks for process/activity recreation, biometric outcomes, screenshot/Recents, and hardware-specific behavior remain unverified and are not marked complete.
+
+---
+
 ## 2026-10-23 — Private Vault security hardening
 
 - Added persisted password-attempt throttling: five consecutive failures trigger a 30-second cooldown, with exponential backoff up to 15 minutes on subsequent failures. The retry deadline survives app restarts; successful password or biometric authentication clears the failed-attempt streak.
@@ -842,3 +910,44 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - The appearance rail now snapshots the imported wallpaper URI when opened and restores it on Cancel/outside-tap/system Back, matching the existing colour/background draft contract.
 - Extended NoteStore round-trip coverage so an imported content URI is asserted to survive save/load.
 - Validation boundary: repository source and test edits were committed to the feature branch; Android CI and real-device picker/permission behavior have not yet been run for this branch.
+
+
+## 2026-10-23 — Private Vault lifecycle remediation (PR candidate)
+- Created `fix/private-vault-lifecycle-hardening` from current `main` after confirming PR #88 was already merged.
+- Updated the lifecycle stop handler so backgrounding while the Private view or a private-note editor is visible relocks the vault, navigates away, and closes the editor UI. This addresses the identified mismatch between vault route state and independently saveable editor visibility state.
+- Added regression coverage for lockout escalation through the 15-minute cap, active-cooldown boundary behavior, mixed public/private backup round trips, and exclusion of private notes from ordinary note views/search.
+- **Validation:** Android CI passed for the earlier head `d1ddff8b97fd88cc311c71d0c5c0a58ec2320828` (run [#873](https://github.com/dukeoftoad/toadNOTES/actions/runs/39909930289)). Follow-up changes fixed FLAG_SECURE ownership across route changes, aligned security documentation, and blocked linked-note navigation from opening a private target without vault authentication. Exact-head CI for the latest commit must pass before merge. Activity/process recreation, biometric outcomes, FLAG_SECURE/Recents behavior, wall-clock manipulation, and full ordinary-surface filtering still require emulator/device validation. Keep release blocked until evidence is recorded.
+- **Threat-model limitation remains:** vault password gates UI access; it is not a separate content-encryption key. Exported JSON backups may contain readable private-note content.
+
+
+## 2026-10-23 — Document Private Vault UI lock vs cryptographic isolation
+- Added `docs/SECURITY.md` to distinguish Android Keystore-backed local-storage encryption from the vault's password/biometric UI gate.
+- Added `docs/THREAT_MODEL.md` describing assets, trust boundaries, threats, residual risks, and requirements for any future independent vault encryption.
+- Updated README to state explicitly that the vault password does not derive/unlock a separate encryption key and that exported JSON backups may contain readable private-note content.
+- Documentation boundary: these edits clarify the existing design; they do not add cryptographic isolation. Exact-head CI and all device-dependent vault checks remain pending.
+
+
+## 2026-10-23 — Private draft confidentiality hardening
+
+- Draft schema v2 persists `privateNote`; missing classification is rejected.
+- Private draft payloads use AES-GCM with a dedicated Android Keystore key and purpose-bound AAD. Key failure, authentication failure, malformed ciphertext, and envelope/classification mismatch do not fall back to plaintext.
+- Ordinary `listAll()` orphan discovery excludes private drafts. Existing-note recovery also requires the draft privacy classification to match the saved note.
+- Legacy unversioned/schema-v1 plaintext files are not interpreted or reclassified; they are rejected and deleted when discovered. Flash-storage deletion is not represented as forensic secure erasure.
+- Added regression coverage for ciphertext-at-rest, wrong key, tampering, missing classification, both envelope/classification mismatch directions, legacy plaintext rejection, and private-draft exclusion from ordinary orphan listing.
+- Updated threat model and release checklist. This is draft confidentiality, not independent cryptographic isolation of the Private Vault itself.
+- Validation status: automated CI for the final commit still needs confirmation; do not merge until the exact head is green and code review confirms the authenticated recovery path.
+
+## CI follow-up — 2026-10-23
+
+- Maintainer reports the PR CI run succeeded. Treat CI as cleared for that run, while requiring checks on any subsequent commits.
+- Security review remains open: biometric authentication is still deliberately disabled because authentication-bound Keystore key access has not been implemented. Do not merge solely on the basis of green CI.
+- Private draft storage is separately AES-GCM encrypted with an Android Keystore key and excluded from ordinary orphan-draft listing; regression tests already cover at-rest secrecy, wrong-key rejection, tampering, and privacy-classification mismatch.
+
+
+## 2026-10-23 — Private Vault security follow-up: biometric binding and recovery tests
+
+- Added `PrivateVaultBiometricKey`: an Android Keystore AES-GCM key requires per-use authentication, invalidates on biometric enrollment changes, and wraps the existing vault data key. Enrollment and unlock require an authenticated `Cipher`; the prompt callback's authenticated `CryptoObject.cipher` is the only accepted input to unwrap.
+- Changed the gate's biometric prompt path to use `BiometricPrompt.CryptoObject` and strong biometrics. The feature remains **disabled** in both settings and the vault gate; enrollment UX, invalidation recovery, and real-device verification are not complete. Do not enable the preference manually or treat this primitive as release-ready.
+- Extracted cross-store password change compensation into `PrivateVaultPasswordChange` and added tests for key-rewrap failure, verifier-update failure with rollback, rollback failure requiring lock/recovery, and success. Added integration tests for real crypto rewrap preserving records and rejecting the old password after success.
+- Existing migration tests cover the boundary after isolated-store commit and before legacy-store cleanup by creating fresh store/crypto objects. Existing draft tests cover encrypted-at-rest recovery through a fresh store instance; backup tests cover private-note exclusion and restore round trips.
+- **Not yet verified:** a true Android process kill between migration phases, an Android device/emulator biometric prompt and key invalidation, process/activity recreation on device, restore followed by private-draft recovery, or exact-head CI. Robolectric object recreation is not a substitute for actual OS process termination. Keep PR #93 draft until CI and device/emulator evidence are available.

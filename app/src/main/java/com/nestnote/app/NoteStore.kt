@@ -193,6 +193,13 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
             return array.toString()
         }
 
+        /**
+         * Selects notes for a user-facing plaintext backup. Private Vault content is
+         * excluded because this export is not encrypted independently of the app.
+         */
+        fun notesForBackup(notes: List<NestNote>, includeArchived: Boolean): List<NestNote> =
+            notes.filter { !it.privateNote && (includeArchived || !it.archived) }
+
         /** Encodes a versioned user-facing backup envelope. Local storage keeps the legacy array format. */
         fun encodeBackup(notes: List<NestNote>): String {
             require(isValidNoteCollection(notes)) { "invalid note records" }

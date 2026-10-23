@@ -75,21 +75,24 @@ internal fun NoteTemplatesScreen(onUseTemplate: (NoteTemplate) -> Unit) {
 @Composable
 internal fun NoteInsightsScreen(notes: List<NestNote>, onOpenCategory: (String) -> Unit, onOpenNote: (Long) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val active = remember(notes) { notes.filterNot { it.archived } }
+    // Enforce the privacy boundary here too, so a future caller cannot expose private
+    // note titles, bodies, counts, or navigation targets by passing the full collection.
+    val visibleNotes = remember(notes) { notes.filterNot { it.privateNote } }
+    val active = remember(visibleNotes) { visibleNotes.filterNot { it.archived } }
     val pinned = remember(active) { active.count { it.pinned } }
     val withReminders = remember(active) { active.count { it.reminder.isNotBlank() } }
-    val words = remember(notes) { notes.sumOf { NoteText.wordCount(it.body) } }
+    val words = remember(visibleNotes) { visibleNotes.sumOf { NoteText.wordCount(it.body) } }
     val longest = remember(active) { active.maxByOrNull { NoteText.wordCount(it.body) } }
     val recentCutoff = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
-    val recentlyEdited = remember(notes) { notes.count { it.updated >= recentCutoff } }
-    val rediscovery = remember(notes) { notes.filterNot { it.archived }.minByOrNull { it.updated } }
+    val recentlyEdited = remember(visibleNotes) { visibleNotes.count { it.updated >= recentCutoff } }
+    val rediscovery = remember(visibleNotes) { visibleNotes.filterNot { it.archived }.minByOrNull { it.updated } }
     val categoryCounts = remember(active) { active.groupingBy { it.category }.eachCount().entries.sortedByDescending { it.value } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your notes, at a glance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("These insights are calculated on this device from your notes.", color = colors.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             InsightTile("Active", active.size.toString(), Modifier.weight(1f))
-            InsightTile("Archived", notes.count { it.archived }.toString(), Modifier.weight(1f))
+            InsightTile("Archived", visibleNotes.count { it.archived }.toString(), Modifier.weight(1f))
             InsightTile("Pinned", pinned.toString(), Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
