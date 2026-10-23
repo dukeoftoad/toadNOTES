@@ -35,6 +35,11 @@ internal object PrivateVaultSecurity {
     const val MIN_PASSWORD_LENGTH = 6
     private const val ITERATIONS = 160_000
     private const val KEY_BITS = 256
+    private const val PREF_FAILED_ATTEMPTS = "private_vault_failed_attempts"
+    private const val PREF_RETRY_AT_MILLIS = "private_vault_retry_at_millis"
+    private const val LOCKOUT_THRESHOLD = 5
+    private const val INITIAL_LOCKOUT_MILLIS = 30_000L
+    private const val MAX_LOCKOUT_MILLIS = 15 * 60_000L
 
     fun isConfigured(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -50,8 +55,44 @@ internal object PrivateVaultSecurity {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(PREF_PRIVATE_VAULT_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
                 .putString(PREF_PRIVATE_VAULT_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
+                .remove(PREF_FAILED_ATTEMPTS)
+                .remove(PREF_RETRY_AT_MILLIS)
                 .commit()
         }.getOrDefault(false)
+    }
+
+    /** Persisted brute-force backoff so closing/restarting the app cannot reset it. */
+    fun retryAtMillis(context: Context): Long =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(PREF_RETRY_AT_MILLIS, 0L)
+
+    fun isLockedOut(context: Context, nowMillis: Long = System.currentTimeMillis()): Boolean =
+        retryAtMillis(context) > nowMillis
+
+    /**
+     * Record a failed password attempt. After five failures, wait 30 seconds;
+     * subsequent failures increase the wait exponentially, capped at 15 minutes.
+     * Returns the retry deadline (0 when no delay is active).
+     */
+    fun recordFailedAttempt(context: Context, nowMillis: Long = System.currentTimeMillis()): Long {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val currentDeadline = prefs.getLong(PREF_RETRY_AT_MILLIS, 0L)
+        if (currentDeadline > nowMillis) return currentDeadline
+        val attempts = prefs.getInt(PREF_FAILED_ATTEMPTS, 0) + 1
+        val exponent = (attempts - LOCKOUT_THRESHOLD).coerceAtLeast(0).coerceAtMost(5)
+        val delayMillis = if (attempts < LOCKOUT_THRESHOLD) 0L
+            else (INITIAL_LOCKOUT_MILLIS * (1L shl exponent)).coerceAtMost(MAX_LOCKOUT_MILLIS)
+        val deadline = if (delayMillis == 0L) 0L else nowMillis + delayMillis
+        prefs.edit().putInt(PREF_FAILED_ATTEMPTS, attempts)
+            .putLong(PREF_RETRY_AT_MILLIS, deadline).commit()
+        return deadline
+    }
+
+    fun clearFailedAttempts(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(PREF_FAILED_ATTEMPTS)
+            .remove(PREF_RETRY_AT_MILLIS)
+            .commit()
     }
 
     fun verify(context: Context, password: String): Boolean = runCatching {
@@ -167,8 +208,15 @@ internal fun PrivateVaultGateDialog(
         confirmButton = {
             TextButton(onClick = {
                 if (!onSubmit(password, confirmation)) {
-                    error = if (passwordConfigured) "Incorrect password."
-                    else "Passwords must match and contain at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters."
+                    val retryAt = PrivateVaultSecurity.retryAtMillis(context)
+                    error = when {
+                        passwordConfigured && retryAt > System.currentTimeMillis() -> {
+                            val seconds = ((retryAt - System.currentTimeMillis() + 999L) / 1_000L)
+                            "Too many attempts. Try again in $seconds seconds."
+                        }
+                        passwordConfigured -> "Incorrect password."
+                        else -> "Passwords must match and contain at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters."
+                    }
                 }
             }) { Text(if (passwordConfigured) "Unlock with password" else "Create password") }
         },
