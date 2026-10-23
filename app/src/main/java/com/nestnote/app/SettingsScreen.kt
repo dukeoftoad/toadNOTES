@@ -147,6 +147,8 @@ internal fun SettingsScreen(
     onCategoryOptionsChange: (List<String>) -> Unit = {},
     editorTextSize: EditorTextSize,
     onEditorTextSizeChange: (EditorTextSize) -> Unit,
+    defaultMarkdownZoomPercent: Int,
+    onDefaultMarkdownZoomPercentChange: (Int) -> Unit,
     showEditorCounts: Boolean,
     onShowEditorCountsChange: (Boolean) -> Unit,
     onResetDefaults: () -> Unit,
@@ -671,6 +673,24 @@ internal fun SettingsScreen(
                     subtitle = "Markdown formatting, text size, and writing presentation",
                     icon = Icons.Default.Code
                 ) {
+                    SettingLabel("Default Markdown viewer zoom")
+                    Text(
+                        "$defaultMarkdownZoomPercent%",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Slider(
+                        value = defaultMarkdownZoomPercent.toFloat(),
+                        onValueChange = { onDefaultMarkdownZoomPercentChange((it / 5f).toInt() * 5) },
+                        valueRange = 50f..200f,
+                        steps = 29,
+                        modifier = Modifier.fillMaxWidth().testTag("default_markdown_zoom_slider")
+                    )
+                    Text(
+                        "Used when opening Markdown files from Files. You can adjust each file from the viewer's More menu.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     SettingLabel("Open editor as")
                     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         EditorPresentationMode.entries.forEach { mode ->

@@ -14,7 +14,15 @@ Build a calm, compact, personal note-taking experience using native Android, Jet
 - Preserve existing local note storage; avoid unnecessary schema migrations.
 - Do not mark a phase complete until its relevant checks pass.
 
-### Current redesign follow-up — 2026-10-19
+### External Markdown open and zoom — PR #87 (under review, 2026-10-23)
+
+- [x] Implement candidate code for opening external Markdown files in a transient read-only viewer rather than importing them into saved notes.
+- [x] Add viewer zoom controls (50–200%, 5% steps), restore-default action, and a persisted default in Settings → Note editor.
+- [ ] Confirm exact-head Android CI, tests, lint, and compile results.
+- [ ] Verify Android Files `ACTION_VIEW` behavior, zoom controls, preference persistence, and unchanged import behavior on a device/emulator.
+- Status: PR #87 is open; this feature is not merged into `main` or published. See [PR #87](https://github.com/dukeoftoad/toadNOTES/pull/87) and [WORKLOG](WORKLOG.md).
+
+## Current redesign follow-up — 2026-10-19
 
 The supplied HTML redesign is implemented as a native Compose adaptation. The remaining work is tracked in [docs/PROTOTYPE_PARITY_AUDIT.md](docs/PROTOTYPE_PARITY_AUDIT.md): device validation of the editor and rail, accessibility and keyboard/inset checks, cold-start and editor performance profiling, focused interaction coverage, and resolution of the small dashboard/More parity decisions. The prototype is a reference artifact, not production code.
 

@@ -28,11 +28,18 @@ CI is defined in .github/workflows/android-ci.yml. It runs unit tests, builds de
 - app/src/main/java/com/nestnote/app/MainActivity.kt — dashboard, editor, settings, and Compose interactions.
 - app/src/main/java/com/nestnote/app/NoteStore.kt — encrypted local persistence, migration, validation, recovery, and backup/restore.
 - app/src/main/java/com/nestnote/app/NoteText.kt — checklist/list operations, selection mapping, and writing counters.
+- `NestNoteApp.kt` / `SettingsScreen.kt` — external Markdown viewer controls and its persisted default zoom preference (PR #87 candidate).
 - app/src/test/ — unit and local logic tests.
 - app/src/androidTest/ — Compose instrumentation coverage.
 - .github/workflows/android-ci.yml — required build/test checks.
 - .github/workflows/android-ui-tests.yml — manually triggered UI workflow.
 - .github/workflows/android-release.yml — tagged production release pipeline.
+
+## External Markdown viewing (PR #87 candidate)
+- Android external `.md` open is intended to show the file in a transient read-only viewer, not add it to saved notes.
+- Use the existing import workflow when the user explicitly wants to import files.
+- Viewer zoom is configurable in the viewer's More menu; the default is configured under Settings → Note editor.
+- The PR is under review. Verify exact-head CI and actual Android file-provider behavior before treating this as validated or released.
 
 ## Data safety requirements
 1. Preserve user data; do not replace unreadable stored content with starter notes.

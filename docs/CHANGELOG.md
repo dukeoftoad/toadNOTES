@@ -19,6 +19,12 @@ This is the current release record on `main`, synchronized by merged PR #76. Pub
 - Hardened safe link-label escaping and cursor placement, with Unicode, punctuation, selection, and boundary regression cases.
 - PR #74 merged as `479d6a2013a18a6673f179c00e147c24e4ed798f`. Its merge-triggered Android CI run is still in progress; do not call the release validated until it completes successfully.
 
+### External Markdown viewer and zoom — PR #87 (under review)
+- Add direct read-only opening of external `.md` files without creating/importing a saved note.
+- Provide viewer zoom from 50% to 200% in 5% increments, with a vertical control group under the viewer's More menu and a restore-default action.
+- Add a persisted default zoom setting under Settings → Note editor; retain the existing file-import workflow separately.
+- This is proposed v1.3.11 candidate scope only while PR #87 is open. Do not treat it as merged or published until the PR merges and the tagged release workflow completes.
+
 ### Validation status
 - Confirm exact-head Android CI before declaring the release validated.
 - Production APK signing, installation/upgrade checks, and physical-device accessibility checks are not claimed complete by this documentation update.

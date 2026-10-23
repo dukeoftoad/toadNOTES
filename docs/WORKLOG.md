@@ -1,3 +1,14 @@
+## 2026-10-23 — PR #87 documentation sync: external Markdown viewer and zoom
+
+- Updated README, root/documentation changelogs, v1.3.11 candidate release notes, roadmap, development guidance, engineering decisions, and release checklist to describe direct external Markdown viewing and configurable zoom.
+- PR [#87](https://github.com/dukeoftoad/toadNOTES/pull/87) is still open on `fix/open-markdown-files-without-import`. The docs mark this as proposed v1.3.11 candidate scope, not a merged or published feature.
+- Documented behavior: external `.md` files open in a transient read-only viewer rather than being imported as saved notes; viewer zoom is 50–200% in 5% steps; a More-menu control and Settings → Note editor default are provided; existing import remains separate.
+- Validation status: no local Android build, unit test, lint, instrumentation execution, or on-device verification was performed as part of this documentation update. Exact-head CI and UI behavior remain unverified until evidence is recorded.
+
+Last updated: 2026-10-23
+
+---
+
 # NESTNOTE Work Log
 
 ## 2026-10-22 — PRs #74 and #76 merged; v1.3.11 metadata sync

@@ -153,6 +153,13 @@ internal fun NestNoteApp(
     var automaticBackupStatus by remember { mutableStateOf(preferences.getString(PREF_BACKUP_AUTOMATIC_STATUS, "Not run yet") ?: "Not run yet") }
     var storageRecoveryRequired by remember { mutableStateOf(false) }
     var showStorageRecoveryDialog by remember { mutableStateOf(false) }
+    var openedExternalMarkdownTitle by remember { mutableStateOf("") }
+    var openedExternalMarkdownContent by remember { mutableStateOf("") }
+    var defaultMarkdownZoomPercent by remember { mutableIntStateOf(preferences.getLong(PREF_MARKDOWN_ZOOM, 100L).toInt().coerceIn(50, 200)) }
+    var externalMarkdownZoomPercent by remember { mutableIntStateOf(defaultMarkdownZoomPercent) }
+    var showExternalMarkdownZoomControls by remember { mutableStateOf(false) }
+    var externalMarkdownMoreMenuExpanded by remember { mutableStateOf(false) }
+    var showExternalMarkdownDialog by remember { mutableStateOf(false) }
     LaunchedEffect(store) {
         val result = withContext(Dispatchers.IO) { store.loadSafely() }
         notes = result.notes
@@ -304,6 +311,7 @@ internal fun NestNoteApp(
         defaultNoteCategory = "Ideas"
         noteColorStyle = NoteColorStyle.PASTEL
         editorTextSize = EditorTextSize.MEDIUM
+        defaultMarkdownZoomPercent = 100
         showEditorCounts = true
         categoryOptions = categories
         defaultNoteCategory = "Ideas"
@@ -378,7 +386,36 @@ internal fun NestNoteApp(
     LaunchedEffect(externalMarkdownUri, storageLoaded) {
         val uri = externalMarkdownUri
         if (storageLoaded && uri != null) {
-            importMarkdownUris(listOf(uri))
+            val openedDocument = withContext(Dispatchers.IO) {
+                runCatching {
+                    val markdown = context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                        ?: error("Unable to read Markdown file")
+                    val displayName = context.contentResolver.query(
+                        uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
+                    }.orEmpty()
+                    val title = displayName.ifBlank {
+                        uri.lastPathSegment?.substringAfterLast('/') ?: "Markdown document"
+                    }
+                    title to markdown
+                }
+            }
+            openedDocument.onSuccess { (title, markdown) ->
+                openedExternalMarkdownTitle = title
+                openedExternalMarkdownContent = markdown
+                externalMarkdownZoomPercent = defaultMarkdownZoomPercent
+                showExternalMarkdownZoomControls = false
+                externalMarkdownMoreMenuExpanded = false
+                showExternalMarkdownDialog = true
+            }.onFailure {
+                snackbarHostState.showSnackbar("Couldn't open that Markdown file")
+            }
             onExternalMarkdownHandled()
         }
     }
@@ -729,6 +766,11 @@ internal fun NestNoteApp(
                         },
                         editorTextSize = editorTextSize,
                         onEditorTextSizeChange = { editorTextSize = it; saveString(PREF_TEXT_SIZE, it.name) },
+                        defaultMarkdownZoomPercent = defaultMarkdownZoomPercent,
+                        onDefaultMarkdownZoomPercentChange = { value ->
+                            defaultMarkdownZoomPercent = value.coerceIn(50, 200)
+                            saveLong(PREF_MARKDOWN_ZOOM, defaultMarkdownZoomPercent.toLong())
+                        },
                         showEditorCounts = showEditorCounts,
                         onShowEditorCountsChange = { showEditorCounts = it; saveBoolean(PREF_EDITOR_COUNTS, it) },
                         onResetDefaults = { resetPreferences() },
@@ -1063,6 +1105,128 @@ internal fun NestNoteApp(
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        if (showExternalMarkdownDialog) {
+            AlertDialog(
+                onDismissRequest = { showExternalMarkdownDialog = false },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            openedExternalMarkdownTitle,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Box {
+                            IconButton(
+                                onClick = { externalMarkdownMoreMenuExpanded = true },
+                                modifier = Modifier.testTag("external_markdown_more_button")
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More Markdown viewer options")
+                            }
+                            DropdownMenu(
+                                expanded = externalMarkdownMoreMenuExpanded,
+                                onDismissRequest = { externalMarkdownMoreMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (showExternalMarkdownZoomControls) "Hide text size controls" else "Text size") },
+                                    leadingIcon = { Icon(Icons.Default.FormatSize, contentDescription = null) },
+                                    onClick = {
+                                        showExternalMarkdownZoomControls = !showExternalMarkdownZoomControls
+                                        externalMarkdownMoreMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Use default size (${defaultMarkdownZoomPercent}%)") },
+                                    onClick = {
+                                        externalMarkdownZoomPercent = defaultMarkdownZoomPercent
+                                        externalMarkdownMoreMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 560.dp)
+                    ) {
+                        AnimatedVisibility(visible = showExternalMarkdownZoomControls) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    IconButton(
+                                        enabled = externalMarkdownZoomPercent > 50,
+                                        onClick = { externalMarkdownZoomPercent = (externalMarkdownZoomPercent - 5).coerceAtLeast(50) }
+                                    ) { Text("−", style = MaterialTheme.typography.titleLarge) }
+                                    Text(
+                                        text = "$externalMarkdownZoomPercent%",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        modifier = Modifier.widthIn(min = 52.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                    IconButton(
+                                        enabled = externalMarkdownZoomPercent < 200,
+                                        onClick = { externalMarkdownZoomPercent = (externalMarkdownZoomPercent + 5).coerceAtMost(200) }
+                                    ) { Text("+", style = MaterialTheme.typography.titleLarge) }
+                                }
+                                Slider(
+                                    value = externalMarkdownZoomPercent.toFloat(),
+                                    onValueChange = { externalMarkdownZoomPercent = (it / 5f).toInt() * 5 },
+                                    valueRange = 50f..200f,
+                                    steps = 29,
+                                    modifier = Modifier.fillMaxWidth().testTag("external_markdown_zoom_slider")
+                                )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            AndroidView(
+                                factory = { viewContext ->
+                                    TextView(viewContext).apply {
+                                        movementMethod = LinkMovementMethod.getInstance()
+                                        setTextColor(colors.onSurface.toArgb())
+                                        textSize = 16f * externalMarkdownZoomPercent / 100f
+                                        setPadding(4, 4, 4, 4)
+                                    }
+                                },
+                                update = { textView ->
+                                    textView.text = MarkdownPreview.toSpanned(
+                                        context,
+                                        openedExternalMarkdownContent,
+                                        colors.onSurface.toArgb()
+                                    )
+                                    textView.textSize = 16f * externalMarkdownZoomPercent / 100f
+                                    textView.movementMethod = LinkMovementMethod.getInstance()
+                                },
+                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showExternalMarkdownDialog = false }) {
+                        Text("Close")
+                    }
                 }
             )
         }

@@ -19,6 +19,12 @@ This file records durable engineering decisions. Implementation and validation h
 - Restore merges by stable note ID. Add missing IDs, update an existing note only when the incoming edit timestamp is newer, and never delete local notes merely because they are absent from the backup.
 - Reject invalid IDs, duplicate IDs, unsupported schema versions, oversized payloads, and invalid record fields before writing.
 
+## External Markdown viewer decision — 2026-10-23
+- Treat Android external Markdown open/view as a separate, transient read-only flow; opening a file must not silently import it into saved notes.
+- Keep the existing explicit import workflow available independently.
+- Expose viewer zoom in the viewer's More menu and persist the default separately in Settings → Note editor; use bounded 50–200% zoom with 5% steps.
+- Feature implementation is tracked in [PR #87](https://github.com/dukeoftoad/toadNOTES/pull/87). Record exact-head CI and device results before claiming validation; do not describe the open PR as released.
+
 ## UI and accessibility
 - Preserve saved drafts and protect against stale editor drafts overwriting a newer saved note.
 - Keep list/checklist formatting deterministic and preserve surrounding text, indentation, and selection where applicable.

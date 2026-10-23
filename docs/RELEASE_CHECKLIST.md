@@ -1,6 +1,6 @@
 # NESTNOTE Release & Validation Checklist
 
-Last updated: 2026-10-17
+Last updated: 2026-10-23
 
 Use this checklist for every candidate. A successful build is necessary but does not establish release readiness. Record the exact commit, CI run, device, results, and accepted risks in WORKLOG.md. Do not mark a check complete without evidence.
 
@@ -23,6 +23,15 @@ Use this checklist for every candidate. A successful build is necessary but does
 - [ ] Light/dark palettes maintain readable contrast and visible selected states.
 - [ ] Test narrow screens, large font/display scaling, TalkBack labels, and touch targets.
 - [ ] Verify keyboard focus, scrolling, IME insets, and edge-to-edge system bars on device/emulator.
+
+## Markdown external-open and zoom regression checks
+- [ ] Open a `.md` file from Android Files using the app's external-open action; confirm it opens in the viewer and is not silently imported or saved as a note.
+- [ ] Confirm explicit multi-file import still imports files as intended and remains distinct from external open.
+- [ ] Verify decrease/increase, slider, percentage label, 50% and 200% bounds, and 5% steps.
+- [ ] Verify restore-default behavior and that the configured default under Settings → Note editor persists after app restart.
+- [ ] Open another external Markdown file and confirm the configured default is applied.
+- [ ] Verify long content remains readable/scrollable and check narrow screens, font scaling, TalkBack semantics, and light/dark themes.
+- [ ] Record exact-head CI and device/emulator results; do not mark unchecked items complete without evidence.
 
 ## 3. Backup, encryption, and recovery
 - [ ] Export a backup and confirm expected note fields round-trip.

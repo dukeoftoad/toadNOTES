@@ -13,6 +13,7 @@ NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, an
 - Full-screen and quick editors, checklist and bullet tools, list continuation, and optional writing statistics.
 - Editor text-size options, reminder metadata, and copy/share actions.
 - JSON backup and restore through Android's system file picker.
+- Open external Markdown (`.md`) files directly in a read-only viewer without importing them as saved notes; adjust viewer zoom from 50% to 200% and configure the default in Settings.
 - Local-data recovery safeguards and validated, versioned backups.
 
 ## License
@@ -20,7 +21,7 @@ NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, an
 NESTNOTE is intended to be distributed under the GNU General Public License v3.0 only (GPL-3.0-only). See [`LICENSE`](LICENSE) and the [canonical license text](https://www.gnu.org/licenses/gpl-3.0.txt). Confirm contributor/copyright-holder rights before distribution.
 
 ## Current version and release downloads
-The latest published stable release is **v1.3.10**. The current v1.3.11 release record is maintained in [`CHANGELOG.md`](CHANGELOG.md) and [`docs/release-notes/v1.3.11.md`](docs/release-notes/v1.3.11.md); v1.3.11 is not a published release until its stable tag and release workflow complete.
+The latest published stable release is **v1.3.10**. The current v1.3.11 release record is maintained in [`CHANGELOG.md`](CHANGELOG.md) and [`docs/release-notes/v1.3.11.md`](docs/release-notes/v1.3.11.md); v1.3.11 is not a published release until its stable tag and release workflow complete. PR [#87](https://github.com/dukeoftoad/toadNOTES/pull/87) proposes direct external Markdown viewing and adjustable zoom as part of the v1.3.11 candidate; it is still under review and has not been released.
 
 Visit [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases). Only download an APK attached to a versioned production release and verify its signature before installing. Historical “latest” or “CI-SIGNED” artifacts, if present, are not proof of production signing.
 
