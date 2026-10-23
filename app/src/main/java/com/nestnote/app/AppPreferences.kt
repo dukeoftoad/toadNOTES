@@ -38,6 +38,7 @@ internal const val PREF_BACKUP_LAST_SUCCESS_AT = "backup_last_success_at"
 internal const val PREF_BACKUP_LAST_STATUS = "backup_last_status"
 internal const val PREF_PRIVATE_VAULT_SALT = "private_vault_password_salt"
 internal const val PREF_PRIVATE_VAULT_HASH = "private_vault_password_hash"
+internal const val PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED = "private_vault_biometric_enabled"
 
 internal enum class ThemeMode(val label: String) {
     SYSTEM("Device"), LIGHT("Light"), DARK("Dark")
