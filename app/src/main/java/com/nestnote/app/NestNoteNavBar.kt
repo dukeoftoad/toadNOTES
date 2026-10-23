@@ -55,7 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /** Destinations that live under the More tab; back from these returns to More. */
-internal val moreSubViews = listOf("Settings", "Backup", "Pinned", "Archived", "Categories", "About", "Templates", "Insights", "Shortcuts")
+internal val moreSubViews = listOf("Settings", "PrivateVaultSettings", "Backup", "Pinned", "Archived", "Categories", "About", "Templates", "Insights", "Shortcuts")
 
 /**
  * Floating four-tab bar with a centred New note button: Home, Notes, [New], Reminders, More.
