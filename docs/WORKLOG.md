@@ -4,8 +4,25 @@
 - Added AndroidX BiometricPrompt unlock on supported devices after password setup, with fingerprint/biometric authentication and password fallback; cancellation or failed authentication never unlocks the vault.
 - Added a dedicated Private Vault settings page reachable from More and Settings → Privacy. It manages biometric unlock, supports changing the password only after current-password verification, shows the number of private notes, provides a direct authenticated “Open Private Vault” action, explains swipe access and foreground lock behavior, and warns about plaintext exports.
 - Added a backward-compatible `privateNote` model field, JSON serialization/backup preservation, default-view exclusion, editor hide/reveal action, and salted PBKDF2-HMAC-SHA256 password verification.
-- Added tests for persistence/backup, filtering, password verification, short-password rejection, and validated password changes. The observed CI failure was a missing `assertFalse` import in `NoteFiltersTest`; added the import. A new CI result for the latest head has not yet appeared, and manual gesture/lifecycle checks remain required.
-- Security boundary: the password gates UI access; existing Android Keystore encryption protects local storage. Exported backup JSON remains plaintext and can include private notes.
+- Added tests for persistence/backup, filtering, password verification, short-password rejection, and validated password changes. The earlier CI failure was a missing `assertFalse` import in `NoteFiltersTest`; that import was added. Exact-head CI for the current PR head must still be confirmed; manual gesture/lifecycle checks remain required.
+- Security boundary: the vault password gates UI access; existing Android Keystore encryption protects local storage. Exported backup JSON remains plaintext and can include private notes.
+
+---
+
+## 2026-10-23 — PR #87 merged; external Markdown viewer and zoom
+
+- PR #87 merged into `main` as `c7954ae8d9f815c0040595805ac50b9c36e880da`.
+- Exact-head Android CI passed on PR head `b5611b96e47f6365567cdf80b4c6d346bbef122e` (run [#855](https://github.com/dukeoftoad/toadNOTES/actions/runs/39899583780)); merge commit CI run [#860](https://github.com/dukeoftoad/toadNOTES/actions/runs/39900584102) also passed.
+- Device/emulator smoke testing is still not claimed; see the Markdown external-open and zoom checklist in `docs/RELEASE_CHECKLIST.md`.
+
+### Original PR documentation sync notes
+
+- Updated README, root/documentation changelogs, v1.3.11 candidate release notes, roadmap, development guidance, engineering decisions, and release checklist to describe direct external Markdown viewing and configurable zoom.
+- At the time of the original documentation update, PR #87 was still open; it has since merged. The feature is in the v1.3.11 candidate record, but the version is not yet published.
+- Documented behavior: external `.md` files open in a transient read-only viewer rather than being imported as saved notes; viewer zoom is 50–200% in 5% steps; a More-menu control and Settings → Note editor default are provided; existing import remains separate.
+- Validation status: no local Android build, unit test, lint, instrumentation execution, or on-device verification was performed as part of this documentation update. Exact-head CI and UI behavior remain unverified until evidence is recorded.
+
+Last updated: 2026-10-23
 
 ---
 
