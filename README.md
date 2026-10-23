@@ -14,6 +14,7 @@ NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, an
 - Editor text-size options, reminder metadata, and copy/share actions.
 - JSON backup and restore through Android's system file picker.
 - Local-data recovery safeguards and validated, versioned backups.
+- Password-gated Private Vault: swipe down on the home title area, set a password, then hide or reveal notes. Vault passwords are stored as salted hashes; exported JSON backups remain plaintext and may include private notes.
 
 ## License
 
