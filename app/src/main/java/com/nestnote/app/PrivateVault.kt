@@ -71,6 +71,7 @@ internal object PrivateVaultSecurity {
 @Composable
 internal fun PrivateVaultGateDialog(
     passwordConfigured: Boolean,
+    biometricEnabled: Boolean,
     onDismiss: () -> Unit,
     onSubmit: (password: String, confirmation: String) -> Boolean,
     onBiometricUnlock: () -> Unit
@@ -78,7 +79,7 @@ internal fun PrivateVaultGateDialog(
     val context = LocalContext.current
     val activity = context as? FragmentActivity
     val biometricAvailable = remember(activity, passwordConfigured) {
-        passwordConfigured && activity != null &&
+        passwordConfigured && biometricEnabled && activity != null &&
             BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
             BiometricManager.BIOMETRIC_SUCCESS
     }
