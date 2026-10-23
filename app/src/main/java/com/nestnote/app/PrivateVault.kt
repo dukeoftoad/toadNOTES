@@ -61,6 +61,9 @@ internal object PrivateVaultSecurity {
         }.getOrDefault(false)
     }
 
+    // Adapted security patterns: Markleaf's locked-notes screen applies FLAG_SECURE
+    // to private content, and its passcode gate persists exponential retry backoff.
+    // Source is Apache-2.0 licensed; attribution and license are in THIRD_PARTY_NOTICES.md.
     /** Persisted brute-force backoff so closing/restarting the app cannot reset it. */
     fun retryAtMillis(context: Context): Long =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
