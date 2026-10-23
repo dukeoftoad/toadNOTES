@@ -60,6 +60,12 @@ internal object PrivateVaultSecurity {
         MessageDigest.isEqual(expected, derive(password, salt))
     }.getOrDefault(false)
 
+    fun changePassword(context: Context, current: String, newPassword: String, confirmation: String): Boolean {
+        if (!isConfigured(context) || !verify(context, current)) return false
+        if (newPassword.length < MIN_PASSWORD_LENGTH || newPassword != confirmation) return false
+        return configure(context, newPassword)
+    }
+
     private fun derive(password: String, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(password.toCharArray(), salt, ITERATIONS, KEY_BITS)
         return try {
