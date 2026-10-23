@@ -1,15 +1,18 @@
 package com.nestnote.app
 
+import android.app.Activity
 import android.app.DatePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -227,6 +230,20 @@ internal fun NestNoteApp(
         BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
     }
     fun requestPrivateVault() { showPrivateVaultGate = true }
+    // Private content is excluded from screenshots and Recents previews while the
+    // vault is open. Preserve a FLAG_SECURE already owned by another app feature.
+    DisposableEffect(context, selectedView) {
+        val window = context.findActivityForSecureWindow()?.window
+        val wasAlreadySecure = (window?.attributes?.flags ?: 0) and WindowManager.LayoutParams.FLAG_SECURE != 0
+        if (selectedView == "Private") {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            if (selectedView == "Private" && !wasAlreadySecure) {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
+    }
     DisposableEffect(context, selectedView) {
         val lifecycle = (context as? ComponentActivity)?.lifecycle
         val observer = LifecycleEventObserver { _, event ->
@@ -1302,8 +1319,22 @@ internal fun NestNoteApp(
                 onDismiss = { showPrivateVaultGate = false },
                 onSubmit = { password, confirmation ->
                     val configured = PrivateVaultSecurity.isConfigured(context)
-                    val accepted = if (configured) PrivateVaultSecurity.verify(context, password)
-                    else password.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH && password == confirmation && PrivateVaultSecurity.configure(context, password)
+                    val accepted = if (configured) {
+                        when {
+                            PrivateVaultSecurity.isLockedOut(context) -> false
+                            PrivateVaultSecurity.verify(context, password) -> {
+                                PrivateVaultSecurity.clearFailedAttempts(context)
+                                true
+                            }
+                            else -> {
+                                PrivateVaultSecurity.recordFailedAttempt(context)
+                                false
+                            }
+                        }
+                    } else {
+                        password.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH &&
+                            password == confirmation && PrivateVaultSecurity.configure(context, password)
+                    }
                     if (accepted) {
                         privateVaultUnlocked = true
                         selectedView = "Private"
@@ -1315,6 +1346,7 @@ internal fun NestNoteApp(
                     accepted
                 },
                 onBiometricUnlock = {
+                    PrivateVaultSecurity.clearFailedAttempts(context)
                     privateVaultUnlocked = true
                     selectedView = "Private"
                     search = ""
@@ -1528,4 +1560,10 @@ internal fun NestNoteApp(
         }
 
     }
+}
+
+private tailrec fun Context.findActivityForSecureWindow(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivityForSecureWindow()
+    else -> null
 }
