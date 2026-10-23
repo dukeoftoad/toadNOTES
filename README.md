@@ -83,4 +83,4 @@ NESTNOTE follows [UI_UX_RULES.md](UI_UX_RULES.md). The immediate P0 is a polishe
 
 
 ## Private Vault
-The Private Vault settings page is available from More and Settings → Privacy. It shows the private-note count, provides a direct authenticated shortcut to the vault, manages biometric unlock, and supports changing the vault password after verification. Exported JSON backups may contain readable private-note content; store them securely.
+The Private Vault settings page is available from More and Settings → Privacy. It shows the private-note count, provides a direct authenticated shortcut to the vault, manages biometric unlock, and supports changing the vault password after verification. Exported JSON backups may contain readable private-note content; store them securely. The vault also hides its contents from screenshots and Recents previews, and password attempts are rate-limited with a persisted, escalating cooldown after repeated failures. See [third-party notices](THIRD_PARTY_NOTICES.md) for reused open-source security patterns.
