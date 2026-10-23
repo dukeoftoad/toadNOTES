@@ -742,10 +742,7 @@ internal fun NestNoteApp(
                         },
                         onSetUpPassword = { requestPrivateVault() },
                         onChangePassword = { current, new, confirmation ->
-                            val accepted = PrivateVaultSecurity.isConfigured(context) &&
-                                PrivateVaultSecurity.verify(context, current) &&
-                                new.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH &&
-                                new == confirmation && PrivateVaultSecurity.configure(context, new)
+                            val accepted = PrivateVaultSecurity.changePassword(context, current, new, confirmation)
                             if (accepted) coroutineScope.launch { snackbarHostState.showSnackbar("Private Vault password updated") }
                             accepted
                         }
