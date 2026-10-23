@@ -772,7 +772,7 @@ internal fun NestNoteApp(
                         showEditorCounts = showEditorCounts,
                         onShowEditorCountsChange = { showEditorCounts = it; saveBoolean(PREF_EDITOR_COUNTS, it) },
                         onResetDefaults = { resetPreferences() },
-                        totalNotes = notes.size,
+                        totalNotes = notes.count { !it.privateNote },
                         archivedNotes = notes.count { it.archived },
                         onOpenBackupRestore = { selectedView = "Backup" }
                     )
