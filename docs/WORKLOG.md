@@ -1,7 +1,13 @@
-## 2026-10-23 — PR #87 documentation sync: external Markdown viewer and zoom
+## 2026-10-23 — PR #87 merged; external Markdown viewer and zoom
+
+- PR #87 merged into `main` as `c7954ae8d9f815c0040595805ac50b9c36e880da`.
+- Exact-head Android CI passed on PR head `b5611b96e47f6365567cdf80b4c6d346bbef122e` (run [#855](https://github.com/dukeoftoad/toadNOTES/actions/runs/39899583780)); merge commit CI run [#860](https://github.com/dukeoftoad/toadNOTES/actions/runs/39900584102) also passed.
+- Device/emulator smoke testing is still not claimed; see the Markdown external-open and zoom checklist in `docs/RELEASE_CHECKLIST.md`.
+
+### Original PR documentation sync notes
 
 - Updated README, root/documentation changelogs, v1.3.11 candidate release notes, roadmap, development guidance, engineering decisions, and release checklist to describe direct external Markdown viewing and configurable zoom.
-- PR [#87](https://github.com/dukeoftoad/toadNOTES/pull/87) is still open on `fix/open-markdown-files-without-import`. The docs mark this as proposed v1.3.11 candidate scope, not a merged or published feature.
+- At the time of the original documentation update, PR #87 was still open; it has since merged. The feature is in the v1.3.11 candidate record, but the version is not yet published.
 - Documented behavior: external `.md` files open in a transient read-only viewer rather than being imported as saved notes; viewer zoom is 50–200% in 5% steps; a More-menu control and Settings → Note editor default are provided; existing import remains separate.
 - Validation status: no local Android build, unit test, lint, instrumentation execution, or on-device verification was performed as part of this documentation update. Exact-head CI and UI behavior remain unverified until evidence is recorded.
 
