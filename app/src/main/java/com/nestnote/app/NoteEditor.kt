@@ -136,6 +136,7 @@ internal fun NoteEditorContent(
     }
     var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
     var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
+    var privateNote by rememberSaveable(original?.id) { mutableStateOf(original?.privateNote ?: false) }
     var toolRailVisible by remember { mutableStateOf(false) }
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
     var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
@@ -305,7 +306,8 @@ internal fun NoteEditorContent(
             archived = archived,
             background = backgroundIndex,
             wallpaperUri = customWallpaperUri,
-            format = if (noteFormat == "markdown") "markdown" else "plain"
+            format = if (noteFormat == "markdown") "markdown" else "plain",
+            privateNote = privateNote
         )
     }
 
@@ -601,6 +603,7 @@ internal fun NoteEditorContent(
                     title = title,
                     editorMode = editorMode,
                     pinned = pinned,
+                    privateNote = privateNote,
                     reminder = reminder,
                     noteFormat = noteFormat,
                     hasContent = title.isNotBlank() || body.isNotBlank(),
@@ -618,6 +621,7 @@ internal fun NoteEditorContent(
                     },
                     onVoiceNote = { voiceNoteDialog = true },
                     onTogglePinned = { pinned = !pinned },
+                    onTogglePrivate = { privateNote = !privateNote },
                     onReminderChange = { reminder = it },
                     onPickReminder = ::pickReminder,
                     onLock = { editorModeViewModel.lock() },
