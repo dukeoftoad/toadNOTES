@@ -36,6 +36,17 @@ class PrivateVaultSecurityTest {
     }
 
     @Test
+    fun passwordCanBeChangedOnlyAfterCurrentPasswordVerification() {
+        assertTrue(PrivateVaultSecurity.configure(context, "original password"))
+        assertFalse(PrivateVaultSecurity.changePassword(context, "wrong password", "updated password", "updated password"))
+        assertFalse(PrivateVaultSecurity.changePassword(context, "original password", "short", "short"))
+        assertFalse(PrivateVaultSecurity.changePassword(context, "original password", "updated password", "does not match"))
+        assertTrue(PrivateVaultSecurity.changePassword(context, "original password", "updated password", "updated password"))
+        assertFalse(PrivateVaultSecurity.verify(context, "original password"))
+        assertTrue(PrivateVaultSecurity.verify(context, "updated password"))
+    }
+
+    @Test
     fun passwordSetupRejectsShortPasswords() {
         assertFalse(PrivateVaultSecurity.configure(context, "12345"))
         assertFalse(PrivateVaultSecurity.isConfigured(context))
