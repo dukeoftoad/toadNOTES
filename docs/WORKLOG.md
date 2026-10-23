@@ -4,7 +4,7 @@
 - Added AndroidX BiometricPrompt unlock on supported devices after password setup, with fingerprint/biometric authentication and password fallback; cancellation or failed authentication never unlocks the vault.
 - Added a dedicated Private Vault settings page reachable from More and Settings → Privacy. It manages biometric unlock, supports changing the password only after current-password verification, explains swipe access and foreground lock behavior, and warns about plaintext exports.
 - Added a backward-compatible `privateNote` model field, JSON serialization/backup preservation, default-view exclusion, editor hide/reveal action, and salted PBKDF2-HMAC-SHA256 password verification.
-- Added tests for persistence/backup, filtering, password verification, short-password rejection, and validated password changes. Android CI and manual gesture/lifecycle checks must pass before merge; no device validation is claimed yet.
+- Added tests for persistence/backup, filtering, password verification, short-password rejection, and validated password changes. The observed CI failure was a missing `assertFalse` import in `NoteFiltersTest`; added the import. A new CI result for the latest head has not yet appeared, and manual gesture/lifecycle checks remain required.
 - Security boundary: the password gates UI access; existing Android Keystore encryption protects local storage. Exported backup JSON remains plaintext and can include private notes.
 
 ---
