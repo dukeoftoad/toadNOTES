@@ -1,3 +1,12 @@
+## 2026-10-23 — Private Vault security hardening
+
+- Added persisted password-attempt throttling: five consecutive failures trigger a 30-second cooldown, with exponential backoff up to 15 minutes on subsequent failures. The retry deadline survives app restarts; successful password or biometric authentication clears the failed-attempt streak.
+- Enabled Android `FLAG_SECURE` while the Private Vault is open so private-note content is excluded from screenshots and the Recents thumbnail. The implementation preserves a secure flag that was already set by another app feature.
+- Added unit coverage for the lockout schedule, persisted retry deadline, and reset behavior. Android CI must confirm compilation and tests on this branch; real-device screenshot/Recents and biometric behavior still require device smoke tests.
+- Reused/adapted the screenshot-protection and persisted passcode-backoff patterns from [Markleaf Android](https://github.com/jeiel85/markleaf-android), licensed under Apache-2.0. Attribution and a copy of the license are included in the repository.
+
+---
+
 ## 2026-10-23 — Private Vault feature PR #88
 
 - Opened [PR #88](https://github.com/dukeoftoad/toadNOTES/pull/88) for a swipe-down, password-gated Private Vault.
