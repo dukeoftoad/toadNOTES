@@ -166,7 +166,12 @@ internal fun PrivateVaultSettingsScreen(
 
     if (showPasswordDialog) {
         AlertDialog(
-            onDismissRequest = { showPasswordDialog = false },
+            onDismissRequest = {
+                showPasswordDialog = false
+                currentPassword = ""
+                newPassword = ""
+                confirmation = ""
+            },
             title = { Text("Change vault password") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -213,7 +218,12 @@ internal fun PrivateVaultSettingsScreen(
                 }) { Text("Update password") }
             },
             dismissButton = {
-                TextButton(onClick = { showPasswordDialog = false }) { Text("Cancel") }
+                TextButton(onClick = {
+                    showPasswordDialog = false
+                    currentPassword = ""
+                    newPassword = ""
+                    confirmation = ""
+                }) { Text("Cancel") }
             }
         )
     }
