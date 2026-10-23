@@ -79,3 +79,7 @@ The [Android CI workflow](https://github.com/dukeoftoad/toadNOTES/blob/main/.git
 
 ## Mandatory UI/UX direction
 NESTNOTE follows [UI_UX_RULES.md](UI_UX_RULES.md). The immediate P0 is a polished note editor with an animated right-side Appearance panel (replacing the bottom appearance picker), shared by create/edit flows. App-wide consistency and accessibility auditing follow before backend/new-feature expansion. See [ROADMAP.md](ROADMAP.md) for phases and [WORKLOG.md](WORKLOG.md) for evidence and implementation status.
+
+
+## Private Vault
+The Private Vault settings page is available from More and Settings → Privacy. It shows the private-note count, provides a direct authenticated shortcut to the vault, manages biometric unlock, and supports changing the vault password after verification. Exported JSON backups may contain readable private-note content; store them securely.
