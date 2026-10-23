@@ -26,7 +26,7 @@ This is the current v1.3.11 release record on `main`, synchronized by merged PR 
 - Escape backslashes and both square-bracket delimiters in selected link labels in a single pass.
 - Add coverage for Unicode labels, punctuation, empty selections, document boundaries, reversed selections, escaping, and cursor placement inside the URL placeholder.
 
-### External Markdown viewer and zoom — PR #87 (under review)
+### External Markdown viewer and zoom — PR #87 (merged 2026-10-23)
 - Open Markdown files shared from Android's Files app or another file provider directly in a transient read-only viewer instead of importing them into the note collection.
 - Add a separate **More → Text size** control with vertically aligned decrease/percentage/increase controls, a slider, and a restore-default action; zoom ranges from 50% to 200% in 5% steps.
 - Add a saved default Markdown viewer zoom under Settings → Note editor. New external Markdown opens use the configured default.
