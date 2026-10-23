@@ -106,7 +106,11 @@ internal object PrivateVaultSecurity {
     }.getOrDefault(false)
 
     fun changePassword(context: Context, current: String, newPassword: String, confirmation: String): Boolean {
-        if (!isConfigured(context) || !verify(context, current)) return false
+        if (!isConfigured(context) || isLockedOut(context)) return false
+        if (!verify(context, current)) {
+            recordFailedAttempt(context)
+            return false
+        }
         if (newPassword.length < MIN_PASSWORD_LENGTH || newPassword != confirmation) return false
         return configure(context, newPassword)
     }
