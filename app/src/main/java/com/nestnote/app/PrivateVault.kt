@@ -2,6 +2,8 @@ package com.nestnote.app
 
 import android.content.Context
 import android.util.Base64
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,9 +19,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
@@ -67,36 +72,107 @@ internal object PrivateVaultSecurity {
 internal fun PrivateVaultGateDialog(
     passwordConfigured: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: (password: String, confirmation: String) -> Boolean
+    onSubmit: (password: String, confirmation: String) -> Boolean,
+    onBiometricUnlock: () -> Unit
 ) {
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
+    val biometricAvailable = remember(activity, passwordConfigured) {
+        passwordConfigured && activity != null &&
+            BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
+            BiometricManager.BIOMETRIC_SUCCESS
+    }
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+
+    fun launchBiometricPrompt() {
+        val host = activity ?: return
+        val prompt = BiometricPrompt(
+            host,
+            ContextCompat.getMainExecutor(host),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    error = ""
+                    onBiometricUnlock()
+                }
+
+                override fun onAuthenticationFailed() {
+                    error = "Fingerprint not recognized. Try again or use your password."
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    // Cancellation is not an unlock; keep the password fallback available.
+                    error = if (errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
+                        errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                        errorCode == BiometricPrompt.ERROR_CANCELED
+                    ) "" else errString.toString()
+                }
+            }
+        )
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Private Vault")
+            .setSubtitle("Confirm your identity with your fingerprint or device biometric")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+            .setNegativeButtonText("Use password")
+            .build()
+        prompt.authenticate(promptInfo)
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (passwordConfigured) "Unlock Private Vault" else "Set up Private Vault") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (passwordConfigured) "Enter your vault password to reveal hidden notes."
-                else "Choose a password with at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters. This password cannot be recovered if forgotten.")
-                OutlinedTextField(value = password, onValueChange = { password = it; error = "" },
-                    modifier = Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true,
+                Text(
+                    if (passwordConfigured) {
+                        "Enter your vault password to reveal hidden notes, or use a registered device biometric."
+                    } else {
+                        "Choose a password with at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters. This password cannot be recovered if forgotten."
+                    }
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; error = "" },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Password") },
+                    singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                if (!passwordConfigured) OutlinedTextField(value = confirmation,
-                    onValueChange = { confirmation = it; error = "" }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Confirm password") }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+                if (!passwordConfigured) {
+                    OutlinedTextField(
+                        value = confirmation,
+                        onValueChange = { confirmation = it; error = "" },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Confirm password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                }
+                if (error.isNotBlank()) {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                if (!onSubmit(password, confirmation)) error = if (passwordConfigured) "Incorrect password."
-                else "Passwords must match and contain at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters."
-            }) { Text(if (passwordConfigured) "Unlock" else "Create password") }
+                if (!onSubmit(password, confirmation)) {
+                    error = if (passwordConfigured) "Incorrect password."
+                    else "Passwords must match and contain at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters."
+                }
+            }) { Text(if (passwordConfigured) "Unlock with password" else "Create password") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            Column {
+                if (biometricAvailable) {
+                    TextButton(onClick = ::launchBiometricPrompt) {
+                        Text("Unlock with fingerprint")
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
     )
 }
