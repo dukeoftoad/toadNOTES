@@ -1,6 +1,6 @@
 # NESTNOTE Product Roadmap
 
-Last updated: 2026-10-19
+Last updated: 2026-10-23
 
 ## Product direction
 Build a calm, compact, personal note-taking experience using native Android, Jetpack Compose, and Material 3. Keep common actions fast, preserve local user data, and deliver in small, testable increments.
@@ -14,13 +14,13 @@ Build a calm, compact, personal note-taking experience using native Android, Jet
 - Preserve existing local note storage; avoid unnecessary schema migrations.
 - Do not mark a phase complete until its relevant checks pass.
 
-### External Markdown open and zoom — PR #87 (under review, 2026-10-23)
+### External Markdown open and zoom — PR #87 (merged, 2026-10-23)
 
 - [x] Implement candidate code for opening external Markdown files in a transient read-only viewer rather than importing them into saved notes.
 - [x] Add viewer zoom controls (50–200%, 5% steps), restore-default action, and a persisted default in Settings → Note editor.
-- [ ] Confirm exact-head Android CI, tests, lint, and compile results.
+- [x] Exact-head Android CI passed on PR head `b5611b96e47f6365567cdf80b4c6d346bbef122e` (run [#855](https://github.com/dukeoftoad/toadNOTES/actions/runs/39899583780)); merge commit `c7954ae8d9f815c0040595805ac50b9c36e880da` also has successful main CI run [#860](https://github.com/dukeoftoad/toadNOTES/actions/runs/39900584102).
 - [ ] Verify Android Files `ACTION_VIEW` behavior, zoom controls, preference persistence, and unchanged import behavior on a device/emulator.
-- Status: PR #87 is open; this feature is not merged into `main` or published. See [PR #87](https://github.com/dukeoftoad/toadNOTES/pull/87) and [WORKLOG](WORKLOG.md).
+- Status: merged into `main`; publication and device/emulator smoke testing remain separate release gates. See [PR #87](https://github.com/dukeoftoad/toadNOTES/pull/87) and [WORKLOG](WORKLOG.md).
 
 ## Current redesign follow-up — 2026-10-19
 
