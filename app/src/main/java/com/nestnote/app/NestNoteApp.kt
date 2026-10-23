@@ -15,6 +15,7 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -214,6 +215,10 @@ internal fun NestNoteApp(
     var selectedView by remember { mutableStateOf("Home") }
     var showPrivateVaultGate by remember { mutableStateOf(false) }
     var privateVaultUnlocked by remember { mutableStateOf(false) }
+    var privateVaultBiometricEnabled by remember { mutableStateOf(preferences.getBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, true)) }
+    val privateVaultBiometricAvailable = remember(context) {
+        BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+    }
     fun requestPrivateVault() { showPrivateVaultGate = true }
     DisposableEffect(context, selectedView) {
         val lifecycle = (context as? ComponentActivity)?.lifecycle
@@ -507,12 +512,12 @@ internal fun NestNoteApp(
                             }
                         ) {
                             Text(
-                                when (selectedView) { "Private" -> "Private Vault"; "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
+                                when (selectedView) { "Private" -> "Private Vault"; "PrivateVaultSettings" -> "Private Vault settings"; "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.2.sp
                             )
                             Text(
-                                when (selectedView) { "Private" -> "Hidden notes · unlocked"; "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized. · Swipe down to open Private Vault" },
+                                when (selectedView) { "Private" -> "Hidden notes · unlocked"; "PrivateVaultSettings" -> "Authentication and privacy controls"; "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized. · Swipe down to open Private Vault" },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
@@ -726,6 +731,25 @@ internal fun NestNoteApp(
                         },
                         onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
                     )
+                } else if (selectedView == "PrivateVaultSettings") {
+                    PrivateVaultSettingsScreen(
+                        passwordConfigured = PrivateVaultSecurity.isConfigured(context),
+                        biometricAvailable = privateVaultBiometricAvailable,
+                        biometricEnabled = privateVaultBiometricEnabled,
+                        onBiometricEnabledChange = { enabled ->
+                            privateVaultBiometricEnabled = enabled
+                            preferences.edit().putBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, enabled).apply()
+                        },
+                        onSetUpPassword = { requestPrivateVault() },
+                        onChangePassword = { current, new, confirmation ->
+                            val accepted = PrivateVaultSecurity.isConfigured(context) &&
+                                PrivateVaultSecurity.verify(context, current) &&
+                                new.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH &&
+                                new == confirmation && PrivateVaultSecurity.configure(context, new)
+                            if (accepted) coroutineScope.launch { snackbarHostState.showSnackbar("Private Vault password updated") }
+                            accepted
+                        }
+                    )
                 } else if (selectedView == "Settings") {
                     SettingsScreen(
                         themeMode = themeMode,
@@ -774,7 +798,8 @@ internal fun NestNoteApp(
                         onResetDefaults = { resetPreferences() },
                         totalNotes = notes.count { !it.privateNote },
                         archivedNotes = notes.count { it.archived },
-                        onOpenBackupRestore = { selectedView = "Backup" }
+                        onOpenBackupRestore = { selectedView = "Backup" },
+                        onOpenPrivateVaultSettings = { selectedView = "PrivateVaultSettings" }
                     )
                 } else if (selectedView == "About") {
                     AboutScreen(version = appVersion)
@@ -1110,6 +1135,7 @@ internal fun NestNoteApp(
         if (showPrivateVaultGate) {
             PrivateVaultGateDialog(
                 passwordConfigured = PrivateVaultSecurity.isConfigured(context),
+                biometricEnabled = privateVaultBiometricEnabled,
                 onDismiss = { showPrivateVaultGate = false },
                 onSubmit = { password, confirmation ->
                     val configured = PrivateVaultSecurity.isConfigured(context)
