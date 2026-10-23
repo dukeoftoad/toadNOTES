@@ -26,6 +26,16 @@ Build a calm, compact, personal note-taking experience using native Android, Jet
 
 The supplied HTML redesign is implemented as a native Compose adaptation. The remaining work is tracked in [docs/PROTOTYPE_PARITY_AUDIT.md](docs/PROTOTYPE_PARITY_AUDIT.md): device validation of the editor and rail, accessibility and keyboard/inset checks, cold-start and editor performance profiling, focused interaction coverage, and resolution of the small dashboard/More parity decisions. The prototype is a reference artifact, not production code.
 
+## Private Vault — PR #88 (in progress)
+
+- Add swipe-down entry from the Home title area and a password setup/unlock dialog.
+- Persist a private-note flag in encrypted local storage and versioned/plain-array JSON backup formats; older records default to visible notes.
+- Exclude private notes from normal views and provide an editor More-menu action to hide/reveal them while the vault is unlocked.
+- Password gate uses a random salt and PBKDF2-HMAC-SHA256; the vault password is not an encryption key. Exported JSON backups remain plaintext.
+- Added a dedicated Private Vault settings page linked from More and Settings → Privacy, with biometric enable/disable, verified password change, quick-access guidance, and export-security notes.
+- Added AndroidX BiometricPrompt unlock (fingerprint where enrolled and supported) after password setup; password fallback remains available. Device-level biometric paths still require verification.
+- Required validation before merge: Android CI, password-hash tests, note persistence/backup tests, view-filter tests, and manual gesture/lifecycle checks.
+
 ## Phase 1 — Modernize the home screen
 **Status: Merged** — [PR #1](https://github.com/dukeoftoad/toadNOTES/pull/1)
 - Material 3 color and typography direction.

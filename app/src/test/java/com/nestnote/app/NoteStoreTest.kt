@@ -44,10 +44,18 @@ class NoteStoreTest {
         val expected = listOf(NestNote(
             id = 42L, title = "Test title", body = "Body text",
             category = "Work", color = 3, pinned = true,
-            reminder = "2026-10-12 09:30", updated = 123456L
+            reminder = "2026-10-12 09:30", updated = 123456L, privateNote = true
         ))
         store.save(expected)
         assertEquals(expected, store.load())
+    }
+
+    @Test
+    fun privateNoteFlagSurvivesSaveLoadAndBackupRoundTrip() {
+        val secret = NestNote(id = 999L, title = "Private", body = "Secret", privateNote = true)
+        assertTrue(store.save(listOf(secret)))
+        assertEquals(secret, store.load().single())
+        assertEquals(listOf(secret), NoteStore.decodeBackup(NoteStore.encodeBackup(listOf(secret))))
     }
 
     @Test

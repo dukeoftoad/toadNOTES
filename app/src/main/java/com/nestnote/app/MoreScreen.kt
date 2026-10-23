@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
@@ -63,7 +64,8 @@ internal fun MoreScreen(
             MoreRow(Icons.Default.Keyboard, "Keyboard shortcuts", "Undo and redo for hardware keyboards", true) { onOpen("Shortcuts") }
         }
         MoreGroup("Preferences & technology") {
-            MoreRow(Icons.Default.Settings, "Settings", "Themes, typography, categories and editor defaults", false) { onOpen("Settings") }
+            MoreRow(Icons.Default.Lock, "Private Vault", "Fingerprint access, password and privacy controls", false) { onOpen("PrivateVaultSettings") }
+            MoreRow(Icons.Default.Settings, "Settings", "Themes, typography, categories and editor defaults", true) { onOpen("Settings") }
             MoreRow(Icons.Default.FileOpen, "Backup & restore", "Portable files and on-device backup status", true) { onOpen("Backup") }
             MoreRow(Icons.Default.Info, "About & technical details", "Encryption, storage, formats and open-source credits", true) { onOpen("About") }
         }

@@ -1,3 +1,14 @@
+## 2026-10-23 — Private Vault feature PR #88
+
+- Opened [PR #88](https://github.com/dukeoftoad/toadNOTES/pull/88) for a swipe-down, password-gated Private Vault.
+- Added AndroidX BiometricPrompt unlock on supported devices after password setup, with fingerprint/biometric authentication and password fallback; cancellation or failed authentication never unlocks the vault.
+- Added a dedicated Private Vault settings page reachable from More and Settings → Privacy. It manages biometric unlock, supports changing the password only after current-password verification, shows the number of private notes, provides a direct authenticated “Open Private Vault” action, explains swipe access and foreground lock behavior, and warns about plaintext exports.
+- Added a backward-compatible `privateNote` model field, JSON serialization/backup preservation, default-view exclusion, editor hide/reveal action, and salted PBKDF2-HMAC-SHA256 password verification.
+- Added tests for persistence/backup, filtering, password verification, short-password rejection, and validated password changes. The earlier CI failure was a missing `assertFalse` import in `NoteFiltersTest`; that import was added. Exact-head CI for the current PR head must still be confirmed; manual gesture/lifecycle checks remain required.
+- Security boundary: the vault password gates UI access; existing Android Keystore encryption protects local storage. Exported backup JSON remains plaintext and can include private notes.
+
+---
+
 ## 2026-10-23 — PR #87 merged; external Markdown viewer and zoom
 
 - PR #87 merged into `main` as `c7954ae8d9f815c0040595805ac50b9c36e880da`.

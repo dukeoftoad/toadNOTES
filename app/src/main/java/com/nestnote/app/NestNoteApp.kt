@@ -15,6 +15,7 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -90,6 +91,8 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -102,6 +105,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.testTag
@@ -215,7 +220,26 @@ internal fun NestNoteApp(
     var editorTextSize by remember { mutableStateOf(EditorTextSize.values().firstOrNull { it.name == preferences.getString(PREF_TEXT_SIZE, "MEDIUM") } ?: EditorTextSize.MEDIUM) }
     var showEditorCounts by remember { mutableStateOf(preferences.getBoolean(PREF_EDITOR_COUNTS, true)) }
     var selectedView by remember { mutableStateOf("Home") }
+    var showPrivateVaultGate by remember { mutableStateOf(false) }
+    var privateVaultUnlocked by remember { mutableStateOf(false) }
+    var privateVaultBiometricEnabled by remember { mutableStateOf(preferences.getBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, true)) }
+    val privateVaultBiometricAvailable = remember(context) {
+        BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+    fun requestPrivateVault() { showPrivateVaultGate = true }
+    DisposableEffect(context, selectedView) {
+        val lifecycle = (context as? ComponentActivity)?.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && selectedView == "Private") {
+                privateVaultUnlocked = false
+                selectedView = "Home"
+            }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
     LaunchedEffect(selectedView) {
+        if (selectedView != "Private") privateVaultUnlocked = false
         if (selectedView == "Backup") {
             automaticBackupLastRun = preferences.getLong(PREF_BACKUP_AUTOMATIC_LAST_RUN, 0L)
             automaticBackupStatus = preferences.getString(PREF_BACKUP_AUTOMATIC_STATUS, "Not run yet") ?: "Not run yet"
@@ -478,8 +502,8 @@ internal fun NestNoteApp(
     } else if (dark) nestNoteDarkScheme
     else nestNoteLightScheme
 
-    val filteredNotes = remember(notes, selectedView, search, sortByTitle, sortByCreated) {
-        NoteFilters.visibleNotes(notes, selectedView, search, sortByTitle, sortByCreated)
+    val filteredNotes = remember(notes, selectedView, search, sortByTitle, sortByCreated, privateVaultUnlocked) {
+        NoteFilters.visibleNotes(notes, if (selectedView == "Private" && privateVaultUnlocked) "Private" else selectedView, search, sortByTitle, sortByCreated)
     }
 
     PredictiveBackHandler(enabled = !editorVisible && selectedView != "Home") { progress ->
@@ -506,21 +530,42 @@ internal fun NestNoteApp(
             topBar = {
                 TopAppBar(
                     title = {
-                        Column {
+                        Column(
+                            modifier = Modifier.pointerInput(selectedView) {
+                                var totalDrag = 0f
+                                detectVerticalDragGestures(
+                                    onVerticalDrag = { _, dragAmount ->
+                                        if (dragAmount > 0f) {
+                                            totalDrag += dragAmount
+                                            if (totalDrag > 72f && selectedView == "Home") {
+                                                totalDrag = 0f
+                                                requestPrivateVault()
+                                            }
+                                        } else if (dragAmount < 0f) totalDrag = 0f
+                                    },
+                                    onDragEnd = { totalDrag = 0f },
+                                    onDragCancel = { totalDrag = 0f }
+                                )
+                            }
+                        ) {
                             Text(
-                                when (selectedView) { "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
+                                when (selectedView) { "Private" -> "Private Vault"; "PrivateVaultSettings" -> "Private Vault settings"; "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.2.sp
                             )
                             Text(
-                                when (selectedView) { "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
+                                when (selectedView) { "Private" -> "Hidden notes · unlocked"; "PrivateVaultSettings" -> "Authentication and privacy controls"; "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized. · Swipe down to open Private Vault" },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
                         }
                     },
                     navigationIcon = {
-                        if (selectedView in moreSubViews) {
+                        if (selectedView == "Private") {
+                            IconButton(onClick = { privateVaultUnlocked = false; selectedView = "Home" }) {
+                                Icon(Icons.Default.LockOpen, contentDescription = "Lock Private Vault")
+                            }
+                        } else if (selectedView in moreSubViews) {
                             IconButton(onClick = { selectedView = "More" }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to More")
                             }
@@ -678,8 +723,8 @@ internal fun NestNoteApp(
                 }
                 if (selectedView == "More") {
                     MoreScreen(
-                        pinnedCount = notes.count { it.pinned && !it.archived },
-                        archivedCount = notes.count { it.archived },
+                        pinnedCount = notes.count { it.pinned && !it.archived && !it.privateNote },
+                        archivedCount = notes.count { it.archived && !it.privateNote },
                         categoryCount = categoryOptions.size,
                         versionLabel = AboutInfo.versionLabel(appVersion),
                         onOpen = { selectedView = it; selectedNoteIds = emptySet() }
@@ -693,7 +738,7 @@ internal fun NestNoteApp(
                         editorVisible = true
                     }
                 } else if (selectedView == "Insights") {
-                    NoteInsightsScreen(notes, onOpenCategory = { selectedView = it }) { noteId ->
+                    NoteInsightsScreen(notes.filterNot { it.privateNote }, onOpenCategory = { selectedView = it }) { noteId ->
                         editorNoteId = noteId
                         editorDraftId = noteId
                         selectedView = "Home"
@@ -703,9 +748,9 @@ internal fun NestNoteApp(
                     KeyboardShortcutsScreen()
                 } else if (selectedView == "Backup") {
                     BackupRestoreScreen(
-                        totalNotes = notes.size,
-                        archivedNotes = notes.count { it.archived },
-                        pinnedNotes = notes.count { it.pinned && !it.archived },
+                        totalNotes = notes.count { !it.privateNote },
+                        archivedNotes = notes.count { it.archived && !it.privateNote },
+                        pinnedNotes = notes.count { it.pinned && !it.archived && !it.privateNote },
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
                         automaticBackupEnabled = automaticBackupEnabled,
@@ -722,6 +767,24 @@ internal fun NestNoteApp(
                             exportLauncher.launch("nestnote-backup.json")
                         },
                         onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+                    )
+                } else if (selectedView == "PrivateVaultSettings") {
+                    PrivateVaultSettingsScreen(
+                        passwordConfigured = PrivateVaultSecurity.isConfigured(context),
+                        biometricAvailable = privateVaultBiometricAvailable,
+                        biometricEnabled = privateVaultBiometricEnabled,
+                        privateNoteCount = notes.count { it.privateNote },
+                        onBiometricEnabledChange = { enabled ->
+                            privateVaultBiometricEnabled = enabled
+                            preferences.edit().putBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, enabled).apply()
+                        },
+                        onSetUpPassword = { requestPrivateVault() },
+                        onOpenVault = { requestPrivateVault() },
+                        onChangePassword = { current, new, confirmation ->
+                            val accepted = PrivateVaultSecurity.changePassword(context, current, new, confirmation)
+                            if (accepted) coroutineScope.launch { snackbarHostState.showSnackbar("Private Vault password updated") }
+                            accepted
+                        }
                     )
                 } else if (selectedView == "Settings") {
                     SettingsScreen(
@@ -774,15 +837,16 @@ internal fun NestNoteApp(
                         showEditorCounts = showEditorCounts,
                         onShowEditorCountsChange = { showEditorCounts = it; saveBoolean(PREF_EDITOR_COUNTS, it) },
                         onResetDefaults = { resetPreferences() },
-                        totalNotes = notes.size,
+                        totalNotes = notes.count { !it.privateNote },
                         archivedNotes = notes.count { it.archived },
-                        onOpenBackupRestore = { selectedView = "Backup" }
+                        onOpenBackupRestore = { selectedView = "Backup" },
+                        onOpenPrivateVaultSettings = { selectedView = "PrivateVaultSettings" }
                     )
                 } else if (selectedView == "About") {
                     AboutScreen(version = appVersion)
                 } else if (selectedView == "Categories") {
                     val activeCategoryCounts = remember(notes) {
-                        categoryOptions.associateWith { category -> notes.count { it.category == category && !it.archived } }
+                        categoryOptions.associateWith { category -> notes.count { it.category == category && !it.archived && !it.privateNote } }
                     }
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Categories", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -1231,6 +1295,36 @@ internal fun NestNoteApp(
             )
         }
 
+        if (showPrivateVaultGate) {
+            PrivateVaultGateDialog(
+                passwordConfigured = PrivateVaultSecurity.isConfigured(context),
+                biometricEnabled = privateVaultBiometricEnabled,
+                onDismiss = { showPrivateVaultGate = false },
+                onSubmit = { password, confirmation ->
+                    val configured = PrivateVaultSecurity.isConfigured(context)
+                    val accepted = if (configured) PrivateVaultSecurity.verify(context, password)
+                    else password.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH && password == confirmation && PrivateVaultSecurity.configure(context, password)
+                    if (accepted) {
+                        privateVaultUnlocked = true
+                        selectedView = "Private"
+                        search = ""
+                        searchVisible = false
+                        selectedNoteIds = emptySet()
+                        showPrivateVaultGate = false
+                    }
+                    accepted
+                },
+                onBiometricUnlock = {
+                    privateVaultUnlocked = true
+                    selectedView = "Private"
+                    search = ""
+                    searchVisible = false
+                    selectedNoteIds = emptySet()
+                    showPrivateVaultGate = false
+                }
+            )
+        }
+
         if (showStorageRecoveryDialog) {
             AlertDialog(
                 onDismissRequest = { showStorageRecoveryDialog = false },
@@ -1298,7 +1392,11 @@ internal fun NestNoteApp(
                         }
                         return@saveNote
                     }
-                    val updated = draft.copy(id = savedId, updated = System.currentTimeMillis())
+                    val updated = draft.copy(
+                        id = savedId,
+                        updated = System.currentTimeMillis(),
+                        privateNote = if (existing == null && selectedView == "Private") true else draft.privateNote
+                    )
                     val next = if (existing == null) notes + updated else notes.map {
                         if (it.id == existing.id) updated.copy(id = existing.id) else it
                     }

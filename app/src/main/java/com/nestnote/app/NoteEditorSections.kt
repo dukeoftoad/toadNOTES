@@ -101,6 +101,7 @@ internal fun EditorTopBar(
     title: String,
     editorMode: EditorMode,
     pinned: Boolean,
+    privateNote: Boolean,
     reminder: String,
     noteFormat: String,
     hasContent: Boolean,
@@ -112,6 +113,7 @@ internal fun EditorTopBar(
     onOpenToolRail: (ToolRailTab) -> Unit,
     onVoiceNote: () -> Unit,
     onTogglePinned: () -> Unit,
+    onTogglePrivate: () -> Unit,
     onReminderChange: (String) -> Unit,
     onPickReminder: () -> Unit,
     onLock: () -> Unit,
@@ -192,6 +194,11 @@ internal fun EditorTopBar(
                             leadingIcon = {
                                 Icon(Icons.Default.Mic, contentDescription = null)
                             }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (privateNote) "Move out of Private Vault" else "Hide in Private Vault") },
+                            onClick = { moreMenu = false; onTogglePrivate() },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
                         )
                         DropdownMenuItem(
                             text = { Text(if (pinned) "Unpin note" else "Pin note") },
