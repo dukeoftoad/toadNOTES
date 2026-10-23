@@ -1,6 +1,7 @@
 package com.nestnote.app
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Base64
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -83,7 +84,7 @@ internal fun PrivateVaultGateDialog(
     onBiometricUnlock: () -> Unit
 ) {
     val context = LocalContext.current
-    val activity = context as? FragmentActivity
+    val activity = context.findFragmentActivity()
     val biometricAvailable = remember(activity, passwordConfigured, biometricEnabled) {
         passwordConfigured && biometricEnabled && activity != null &&
             BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
@@ -182,4 +183,10 @@ internal fun PrivateVaultGateDialog(
             }
         }
     )
+}
+
+private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
+    is FragmentActivity -> this
+    is ContextWrapper -> baseContext.findFragmentActivity()
+    else -> null
 }
