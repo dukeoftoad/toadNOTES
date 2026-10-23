@@ -736,11 +736,13 @@ internal fun NestNoteApp(
                         passwordConfigured = PrivateVaultSecurity.isConfigured(context),
                         biometricAvailable = privateVaultBiometricAvailable,
                         biometricEnabled = privateVaultBiometricEnabled,
+                        privateNoteCount = notes.count { it.privateNote },
                         onBiometricEnabledChange = { enabled ->
                             privateVaultBiometricEnabled = enabled
                             preferences.edit().putBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, enabled).apply()
                         },
                         onSetUpPassword = { requestPrivateVault() },
+                        onOpenVault = { requestPrivateVault() },
                         onChangePassword = { current, new, confirmation ->
                             val accepted = PrivateVaultSecurity.changePassword(context, current, new, confirmation)
                             if (accepted) coroutineScope.launch { snackbarHostState.showSnackbar("Private Vault password updated") }
