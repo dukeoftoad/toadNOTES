@@ -23,7 +23,8 @@ internal object NoteFilters {
         val query = parseQuery(search)
         val showArchived = selectedView == "Archived" || query.archived
         val visible = notes.filter { note ->
-            val inView = if (showArchived) note.archived else !note.archived && when (selectedView) {
+            val inView = if (selectedView == "Private") note.privateNote && !note.archived
+            else if (showArchived) note.archived && !note.privateNote else !note.archived && !note.privateNote && when (selectedView) {
                 "Home", "All notes" -> true
                 "Pinned" -> note.pinned
                 "Reminders" -> note.reminder.isNotBlank()

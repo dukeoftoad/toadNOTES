@@ -26,7 +26,8 @@ data class NestNote(
     val archived: Boolean = false,
     val background: Int = 0,
     val wallpaperUri: String = "",
-    val format: String = "plain"
+    val format: String = "plain",
+    val privateNote: Boolean = false
 )
 
 data class MergeResult(val notes: List<NestNote>, val added: Int, val updated: Int)
@@ -186,6 +187,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     put("updated", n.updated); put("created", n.created); put("archived", n.archived)
                     put("background", n.background.coerceIn(0, 9)); put("wallpaperUri", n.wallpaperUri)
                     put("format", if (n.format == "markdown") "markdown" else "plain")
+                    put("privateNote", n.privateNote)
                 })
             }
             return array.toString()
@@ -243,7 +245,8 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     archived = o.optBoolean("archived", false),
                     background = o.optInt("background", 0).coerceIn(0, 9),
                     wallpaperUri = o.optString("wallpaperUri", ""),
-                    format = if (o.optString("format", "plain") == "markdown") "markdown" else "plain"
+                    format = if (o.optString("format", "plain") == "markdown") "markdown" else "plain",
+                    privateNote = o.optBoolean("privateNote", false)
                 )
             }
             require(isValidNoteCollection(decoded)) { "invalid note records" }

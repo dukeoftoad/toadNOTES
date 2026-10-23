@@ -1,6 +1,7 @@
 package com.nestnote.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,6 +49,13 @@ class NoteFiltersTest {
         assertEquals(listOf(personal), NoteFilters.visibleNotes(all, "Home", "personal", false, false))
         // Blank query never filters.
         assertEquals(3, NoteFilters.visibleNotes(all, "Home", "   ", false, false).size)
+    }
+
+    @Test
+    fun privateNotesAreExcludedFromHomeAndOnlyAppearInPrivateView() {
+        val secret = all.first().copy(id = 999L, title = "Secret", privateNote = true)
+        assertFalse(NoteFilters.visibleNotes(all + secret, "Home", "", false, false).any { it.id == secret.id })
+        assertTrue(NoteFilters.visibleNotes(all + secret, "Private", "", false, false).any { it.id == secret.id })
     }
 
     @Test

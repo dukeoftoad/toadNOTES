@@ -155,7 +155,8 @@ internal fun SettingsScreen(
     totalNotes: Int,
     archivedNotes: Int,
     modifier: Modifier = Modifier,
-    onOpenBackupRestore: () -> Unit = {}
+    onOpenBackupRestore: () -> Unit = {},
+    onOpenPrivateVaultSettings: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -979,6 +980,21 @@ internal fun SettingsScreen(
                         title = "No account or tracking",
                         body = "No login required. Exporting does not automatically sync to any cloud server; you choose the file destination via Android's file picker."
                     )
+
+                    HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
+
+                    OutlinedButton(
+                        onClick = onOpenPrivateVaultSettings,
+                        modifier = Modifier.fillMaxWidth().testTag("settings_private_vault"),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, colors.outlineVariant)
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Private Vault settings", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
 
                     HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
 

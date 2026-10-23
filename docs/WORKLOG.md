@@ -1,3 +1,23 @@
+## 2026-10-23 — Private Vault security hardening
+
+- Added persisted password-attempt throttling: five consecutive failures trigger a 30-second cooldown, with exponential backoff up to 15 minutes on subsequent failures. The retry deadline survives app restarts; successful password or biometric authentication clears the failed-attempt streak.
+- Enabled Android `FLAG_SECURE` while the Private Vault is open so private-note content is excluded from screenshots and the Recents thumbnail. The implementation preserves a secure flag that was already set by another app feature.
+- Added unit coverage for the lockout schedule, persisted retry deadline, and reset behavior. Android CI must confirm compilation and tests on this branch; real-device screenshot/Recents and biometric behavior still require device smoke tests.
+- Reused/adapted the screenshot-protection and persisted passcode-backoff patterns from [Markleaf Android](https://github.com/jeiel85/markleaf-android), licensed under Apache-2.0. Attribution and a copy of the license are included in the repository.
+
+---
+
+## 2026-10-23 — Private Vault feature PR #88
+
+- Opened [PR #88](https://github.com/dukeoftoad/toadNOTES/pull/88) for a swipe-down, password-gated Private Vault.
+- Added AndroidX BiometricPrompt unlock on supported devices after password setup, with fingerprint/biometric authentication and password fallback; cancellation or failed authentication never unlocks the vault.
+- Added a dedicated Private Vault settings page reachable from More and Settings → Privacy. It manages biometric unlock, supports changing the password only after current-password verification, shows the number of private notes, provides a direct authenticated “Open Private Vault” action, explains swipe access and foreground lock behavior, and warns about plaintext exports.
+- Added a backward-compatible `privateNote` model field, JSON serialization/backup preservation, default-view exclusion, editor hide/reveal action, and salted PBKDF2-HMAC-SHA256 password verification.
+- Added tests for persistence/backup, filtering, password verification, short-password rejection, and validated password changes. The earlier CI failure was a missing `assertFalse` import in `NoteFiltersTest`; that import was added. Exact-head CI for the current PR head must still be confirmed; manual gesture/lifecycle checks remain required.
+- Security boundary: the vault password gates UI access; existing Android Keystore encryption protects local storage. Exported backup JSON remains plaintext and can include private notes.
+
+---
+
 ## 2026-10-23 — PR #87 merged; external Markdown viewer and zoom
 
 - PR #87 merged into `main` as `c7954ae8d9f815c0040595805ac50b9c36e880da`.

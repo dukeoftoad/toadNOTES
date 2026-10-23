@@ -15,6 +15,7 @@ NESTNOTE is a local-first note-taking app built with Kotlin, Jetpack Compose, an
 - JSON backup and restore through Android's system file picker.
 - Open external Markdown (`.md`) files directly in a read-only viewer without importing them as saved notes; adjust viewer zoom from 50% to 200% and configure the default in Settings.
 - Local-data recovery safeguards and validated, versioned backups.
+- Private Vault: swipe down on the Home title area to unlock; also open the dedicated Vault page from More or Settings → Privacy. Configure fingerprint/biometric unlock, change the vault password after verifying the current one, and review access/security guidance. Vault passwords are stored as salted hashes; exported JSON backups remain plaintext and may include private notes.
 
 ## License
 
@@ -79,3 +80,7 @@ The [Android CI workflow](https://github.com/dukeoftoad/toadNOTES/blob/main/.git
 
 ## Mandatory UI/UX direction
 NESTNOTE follows [UI_UX_RULES.md](UI_UX_RULES.md). The immediate P0 is a polished note editor with an animated right-side Appearance panel (replacing the bottom appearance picker), shared by create/edit flows. App-wide consistency and accessibility auditing follow before backend/new-feature expansion. See [ROADMAP.md](ROADMAP.md) for phases and [WORKLOG.md](WORKLOG.md) for evidence and implementation status.
+
+
+## Private Vault
+The Private Vault settings page is available from More and Settings → Privacy. It shows the private-note count, provides a direct authenticated shortcut to the vault, manages biometric unlock, and supports changing the vault password after verification. Exported JSON backups may contain readable private-note content; store them securely. The vault also hides its contents from screenshots and Recents previews, and password attempts are rate-limited with a persisted, escalating cooldown after repeated failures. See [third-party notices](THIRD_PARTY_NOTICES.md) for reused open-source security patterns.
