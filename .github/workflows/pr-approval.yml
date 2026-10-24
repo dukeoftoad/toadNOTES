@@ -1,0 +1,50 @@
+name: PR Review Policy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-review-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-policy:
+    name: Solo maintainer review policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check review policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+
+          # The repository owner is the solo maintainer and may review their own changes
+          # using the PR checklist and CI checks; GitHub does not allow self-approval.
+          if [ "$PR_AUTHOR" = "$REPOSITORY_OWNER" ]; then
+            echo "Solo maintainer PR: independent approval is not required. Ensure the PR self-review checklist and CI checks are complete."
+            exit 0
+          fi
+
+          # Contributions from anyone else require an approval by someone other than
+          # the contributor, attached to the current head commit.
+          approvals="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews" \
+            --jq "[.[] | select(.commit_id == \"$PR_HEAD_SHA\" and .user.login != \"$PR_AUTHOR\") | {user: .user.login, state: .state, submitted_at: .submitted_at}] | sort_by(.submitted_at) | group_by(.user) | map(last) | map(select(.state == \"APPROVED\")) | length")"
+
+          if [ "$approvals" -lt 1 ]; then
+            echo "::error::External contributions require an approval from someone other than the PR author for the current head commit."
+            exit 1
+          fi
+
+          echo "Found $approvals independent approval(s) for this contribution."
