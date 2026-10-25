@@ -47,17 +47,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # issue_comment also fires for ordinary comments. Ignore non-PR comments and
-          # comments that are not explicit approval commands.
-          if [ "$EVENT_NAME" = "issue_comment" ]; then
-            if [ "$EVENT_IS_PULL_REQUEST" != "true" ]; then
-              echo "Comment is not attached to a pull request; skipping."
-              exit 0
-            fi
-            if [[ ! "${EVENT_COMMENT_BODY:-}" =~ ^/approve[[:space:]]+[0-9a-fA-F]{40}[[:space:]]*$ ]]; then
-              echo "Not an explicit /approve <full-head-SHA> command; no policy change."
-              exit 0
-            fi
+          # issue_comment also fires for ordinary comments. Non-PR comments are irrelevant;
+          # ordinary PR comments must still satisfy the policy rather than creating a
+          # successful check that could accidentally replace a failed approval check.
+          if [ "$EVENT_NAME" = "issue_comment" ] &&
+             [ "$EVENT_IS_PULL_REQUEST" != "true" ]; then
+            echo "Comment is not attached to a pull request; skipping."
+            exit 0
           fi
 
           PR_NUMBER="$EVENT_PR_NUMBER"
@@ -71,7 +67,7 @@ jobs:
           if [ "$PR_AUTHOR" = "$REPOSITORY_OWNER" ]; then
             if [ "$EVENT_NAME" = "issue_comment" ]; then
               if [ "$EVENT_COMMENT_AUTHOR" = "$REPOSITORY_OWNER" ] &&
-                 [ "${EVENT_COMMENT_BODY//[$'\\t\\r\\n ']/}" = "/approve$PR_HEAD_SHA" ]; then
+                 [ "${EVENT_COMMENT_BODY:-}" = "/approve $PR_HEAD_SHA" ]; then
                 echo "Solo maintainer explicitly approved current head $PR_HEAD_SHA."
                 exit 0
               fi
@@ -80,7 +76,7 @@ jobs:
             fi
 
             approvals="$(gh api --paginate "repos/$REPOSITORY/issues/$PR_NUMBER/comments" \
-              --jq "[.[] | select(.user.login == \"$REPOSITORY_OWNER\" and .body | gsub(\"[\\\\t\\\\r\\\\n ]\"; \"\") == \"/approve$PR_HEAD_SHA\")] | length")"
+              --jq "[.[] | select(.user.login == \"$REPOSITORY_OWNER\" and .body == \"/approve $PR_HEAD_SHA\")] | length")"
             if [ "$approvals" -lt 1 ]; then
               echo "::error::Solo maintainer must self-review this exact PR head by commenting: /approve $PR_HEAD_SHA"
               exit 1
