@@ -78,7 +78,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
@@ -259,7 +258,7 @@ private class EncryptedPcmRecording(
  *
  * Contract:
  *  - [cursorAtRecordStart] returns the body cursor captured the moment the user taps
- *    Record or Attach WAV. The parent uses it to insert a marker at that position.
+ *    Record or Import audio. The parent uses it to insert a marker at that position.
  *  - [onRecordingAttached] fires once per completed attachment, passing the id and
  *    the cursor at record-start. The parent should insert `[[voice:id]]` at that cursor.
  *  - [addedThisSession] is owned by the editor; it removes unattached ids on save and all ids on discard.
@@ -323,7 +322,10 @@ internal fun VoiceNoteControls(
 
     var status by remember { mutableStateOf("") }
 
-    // --- WAV import ---
+    // --- Audio import ---
+    val audioImporter = remember(context, voiceNotes) {
+        com.nestnote.app.voicenote.VoiceNoteImporter(context, voiceNotes)
+    }
     val audioFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -333,30 +335,15 @@ internal fun VoiceNoteControls(
         status = "Importing audio securely…"
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val pcm = context.contentResolver.openInputStream(uri)
-                        ?.use { decodePcmWav(it.readBytes()) }
-                        ?: throw IOException("Could not open the selected audio file.")
-                    if (pcm.isEmpty()) throw IOException("The selected audio file contains no audio.")
-                    if (pcm.size > com.nestnote.app.voicenote.VoiceNoteRepository.MAX_RECORDING_BYTES) {
-                        throw IOException("Audio exceeds the 25 MiB attachment limit.")
-                    }
-                    val id = UUID.randomUUID().toString()
-                    val duration = pcm.size.toLong() * 1000L / (VOICE_SAMPLE_RATE * 2L)
-                    voiceNotes.save(
-                        noteId, id, ByteArrayInputStream(pcm), System.currentTimeMillis(),
-                        duration, defaultVoiceName()
-                    )
-                    id
-                }
+                runCatching { audioImporter.importAudio(noteId, uri).attachmentId }
             }
             importingAudio = false
             result.onSuccess { id ->
                 addedThisSession.add(id)
                 onRecordingAttached(id, cursor)
-                status = "Audio attached at cursor position."
+                status = "Audio imported and attached at cursor position. Playback depends on Android codec support."
             }.onFailure {
-                status = it.message ?: "Could not attach this audio file."
+                status = it.message ?: "Could not import this audio file."
             }
         }
     }
@@ -644,7 +631,7 @@ internal fun VoiceNoteControls(
                 }
             }
         } else if (pendingReviewId == null) {
-            // ---------- Idle: Record here / Attach WAV ----------
+            // ---------- Idle: Record here / Import audio ----------
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -666,16 +653,16 @@ internal fun VoiceNoteControls(
                     onClick = {
                         keyboardController?.hide()
                         audioFileLauncher.launch(
-                            arrayOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")
+                            arrayOf("audio/*")
                         )
                     },
                     modifier = Modifier.semantics {
-                        contentDescription = "Attach WAV audio file at cursor position"
+                        contentDescription = "Import audio file at cursor position"
                     }
                 ) {
                     Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(if (importingAudio) "Importing…" else "Attach WAV")
+                    Text(if (importingAudio) "Importing…" else "Import audio")
                 }
             }
         }
@@ -1008,61 +995,6 @@ internal fun abandonVoiceAudioFocus(
     if (listener == null) return
     val request = voiceAudioFocusRequests.remove(listener) ?: return
     audioManager.abandonAudioFocusRequest(request)
-}
-
-/** Converts uncompressed 16-bit mono/stereo WAV to the inline player’s 16 kHz mono PCM format. */
-private fun decodePcmWav(bytes: ByteArray): ByteArray {
-    if (bytes.size < 44 || String(bytes, 0, 4, Charsets.US_ASCII) != "RIFF" ||
-        String(bytes, 8, 4, Charsets.US_ASCII) != "WAVE"
-    ) {
-        throw IOException("Choose an uncompressed PCM WAV file (16-bit audio).")
-    }
-    var offset = 12
-    var format = -1
-    var channels = 0
-    var sampleRate = 0
-    var bits = 0
-    var dataOffset = -1
-    var dataLength = 0
-    while (offset + 8 <= bytes.size) {
-        val id = String(bytes, offset, 4, Charsets.US_ASCII)
-        val length = java.nio.ByteBuffer.wrap(bytes, offset + 4, 4)
-            .order(java.nio.ByteOrder.LITTLE_ENDIAN).int
-        if (length < 0 || offset + 8L + length > bytes.size) {
-            throw IOException("The WAV file is malformed.")
-        }
-        if (id == "fmt " && length >= 16) {
-            val b = java.nio.ByteBuffer.wrap(bytes, offset + 8, length)
-                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            format = b.short.toInt() and 0xffff
-            channels = b.short.toInt() and 0xffff
-            sampleRate = b.int; b.int; b.short
-            bits = b.short.toInt() and 0xffff
-        }
-        if (id == "data") { dataOffset = offset + 8; dataLength = length }
-        offset += 8 + length + (length and 1)
-    }
-    if (format != 1 || channels !in 1..2 || bits != 16 || sampleRate <= 0 ||
-        dataOffset < 0 || dataLength < channels * 2
-    ) {
-        throw IOException("Unsupported WAV format. Use uncompressed 16-bit mono or stereo WAV.")
-    }
-    val frames = dataLength / (channels * 2)
-    val outFrames = (frames.toLong() * VOICE_SAMPLE_RATE / sampleRate)
-        .coerceAtLeast(1L)
-        .coerceAtMost((Int.MAX_VALUE / 2).toLong())
-        .toInt()
-    val input = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-    val output = java.nio.ByteBuffer.allocate(outFrames * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-    repeat(outFrames) { i ->
-        val frame = ((i.toLong() * sampleRate) / VOICE_SAMPLE_RATE).toInt().coerceAtMost(frames - 1)
-        val left = input.getShort(dataOffset + frame * channels * 2).toInt()
-        val sample = if (channels == 2) {
-            (left + input.getShort(dataOffset + frame * 4 + 2).toInt()) / 2
-        } else left
-        output.putShort(i * 2, sample.toShort())
-    }
-    return output.array()
 }
 
 private fun formatPlaybackTime(durationMs: Int): String {

@@ -6,6 +6,7 @@ import android.media.MediaDataSource
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -25,6 +26,7 @@ internal class PcmVoicePlayback(
     private val attachment: VoiceAttachment,
     private val startAtMs: Long = 0L,
     private val playbackSpeed: Float = 1f,
+    private val encodedAudio: Boolean = false,
     private val onProgress: (Long, Long) -> Unit = { _, _ -> },
     private val onFinished: (String?) -> Unit
 ) {
@@ -59,7 +61,8 @@ internal class PcmVoicePlayback(
         Thread({
             val result = runCatching {
                 val pcm = readAttachment(attachment.noteId, attachment.attachmentId)
-                PcmPlaybackFormat.validateAuthenticatedPcm(pcm)
+                if (!encodedAudio) PcmPlaybackFormat.validateAuthenticatedPcm(pcm)
+                else if (pcm.isEmpty()) throw IOException("This audio file is empty.")
                 pcm
             }
 
@@ -72,7 +75,7 @@ internal class PcmVoicePlayback(
     }
 
     private fun begin(pcm: ByteArray) {
-        val header = wavHeader(pcm.size)
+        val header = if (encodedAudio) ByteArray(0) else wavHeader(pcm.size)
         val mp = MediaPlayer()
         player = mp
 

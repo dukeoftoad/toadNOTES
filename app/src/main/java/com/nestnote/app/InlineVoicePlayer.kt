@@ -181,6 +181,7 @@ internal fun InlineVoicePlayer(
                 readAttachment = voiceNotes::read,
                 attachment = attachment,
                 playbackSpeed = playbackSpeed,
+                encodedAudio = metadata?.displayName?.substringAfterLast('.', "")?.lowercase(java.util.Locale.ROOT) in setOf("aac", "aif", "aiff", "amr", "ape", "flac", "m4a", "m4b", "mka", "mp3", "mpc", "oga", "ogg", "opus", "wav", "weba", "webm", "wma", "3ga", "3gp", "audio"),
                 onProgress = { pos, dur ->
                     positionMs = pos.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                     durationMs = dur.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
