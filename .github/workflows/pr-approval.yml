@@ -5,40 +5,92 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted]
+  issue_comment:
+    types: [created]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
+  issues: read
   pull-requests: read
 
 concurrency:
-  group: pr-review-policy-${{ github.event.pull_request.number }}
+  group: pr-review-policy-${{ github.event.pull_request.number || github.event.issue.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
   review-policy:
-    name: Solo maintainer review policy
+    name: Solo maintainer approval policy
     runs-on: ubuntu-latest
     steps:
-      - name: Check review policy
+      - name: Allow direct commits to main
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          echo "Direct commit to main detected. PR approval policy applies only to pull requests."
+          echo "Android CI is responsible for validating the pushed commit."
+
+      - name: Check PR approval policy
+        if: ${{ github.event_name != 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_COMMENT_BODY: ${{ github.event.comment.body }}
+          EVENT_COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          EVENT_IS_PULL_REQUEST: ${{ toJSON(github.event.issue.pull_request != null) }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          EVENT_PR_AUTHOR: ${{ github.event.pull_request.user.login || github.event.issue.user.login }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPOSITORY: ${{ github.repository }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
 
-          # The repository owner is the solo maintainer and may review their own changes
-          # using the PR checklist and CI checks; GitHub does not allow self-approval.
+          # issue_comment also fires for ordinary comments. Ignore non-PR comments and
+          # comments that are not explicit approval commands.
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            if [ "$EVENT_IS_PULL_REQUEST" != "true" ]; then
+              echo "Comment is not attached to a pull request; skipping."
+              exit 0
+            fi
+            if [[ ! "${EVENT_COMMENT_BODY:-}" =~ ^/approve[[:space:]]+[0-9a-fA-F]{40}[[:space:]]*$ ]]; then
+              echo "Not an explicit /approve <full-head-SHA> command; no policy change."
+              exit 0
+            fi
+          fi
+
+          PR_NUMBER="$EVENT_PR_NUMBER"
+          PR_JSON="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          PR_AUTHOR="$(jq -r '.user.login' <<< "$PR_JSON")"
+          PR_HEAD_SHA="$(jq -r '.head.sha' <<< "$PR_JSON")"
+
+          # Solo maintainer approvals must be explicit and bound to the exact current
+          # head SHA. GitHub does not permit a user to submit a formal review approval
+          # on their own PR, so this signed-in maintainer command is the self-review record.
           if [ "$PR_AUTHOR" = "$REPOSITORY_OWNER" ]; then
-            echo "Solo maintainer PR: independent approval is not required. Ensure the PR self-review checklist and CI checks are complete."
+            if [ "$EVENT_NAME" = "issue_comment" ]; then
+              if [ "$EVENT_COMMENT_AUTHOR" = "$REPOSITORY_OWNER" ] &&
+                 [ "${EVENT_COMMENT_BODY//[$'\\t\\r\\n ']/}" = "/approve$PR_HEAD_SHA" ]; then
+                echo "Solo maintainer explicitly approved current head $PR_HEAD_SHA."
+                exit 0
+              fi
+              echo "::error::Self-approval command must be posted by the repository owner and include the exact current full head SHA: /approve $PR_HEAD_SHA"
+              exit 1
+            fi
+
+            approvals="$(gh api --paginate "repos/$REPOSITORY/issues/$PR_NUMBER/comments" \
+              --jq "[.[] | select(.user.login == \"$REPOSITORY_OWNER\" and .body | gsub(\"[\\\\t\\\\r\\\\n ]\"; \"\") == \"/approve$PR_HEAD_SHA\")] | length")"
+            if [ "$approvals" -lt 1 ]; then
+              echo "::error::Solo maintainer must self-review this exact PR head by commenting: /approve $PR_HEAD_SHA"
+              exit 1
+            fi
+            echo "Found explicit self-approval for current head $PR_HEAD_SHA."
             exit 0
           fi
 
-          # Contributions from anyone else require an approval by someone other than
-          # the contributor, attached to the current head commit.
+          # External contributions need an independent GitHub review approval for the
+          # current head commit. A review on an older head does not satisfy this policy.
           approvals="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews" \
             --jq "[.[] | select(.commit_id == \"$PR_HEAD_SHA\" and .user.login != \"$PR_AUTHOR\") | {user: .user.login, state: .state, submitted_at: .submitted_at}] | sort_by(.submitted_at) | group_by(.user) | map(last) | map(select(.state == \"APPROVED\")) | length")"
 
