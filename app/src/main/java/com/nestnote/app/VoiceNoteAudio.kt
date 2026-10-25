@@ -96,12 +96,12 @@ private const val VOICE_CHANNEL_IN = AudioFormat.CHANNEL_IN_MONO
 private const val VOICE_ENCODING = AudioFormat.ENCODING_PCM_16BIT
 
 /**
- * Records mono PCM and pipes it directly into VoiceAttachmentStore's encrypting stream.
+ * Records mono PCM and pipes it directly into the repository's encrypted storage stream.
  * No plaintext recording file is written to disk. The store's existing 25 MiB limit applies.
  */
 private class EncryptedPcmRecording(
     private val context: Context,
-    private val store: VoiceAttachmentStore,
+    private val repository: com.nestnote.app.voicenote.VoiceNoteRepository,
     private val noteId: Long,
     private val attachmentId: String,
     private val onFinished: (Result<VoiceAttachment>) -> Unit
@@ -154,10 +154,10 @@ private class EncryptedPcmRecording(
 
         storageThread = Thread({
             val result = runCatching {
-                val saved = store.save(noteId, attachmentId, input)
+                val saved = repository.saveForReview(noteId, attachmentId, input)
                 val failure = recordingFailure.get()
                 if (failure != null || audioBytes.get() == 0L || limitExceeded.get()) {
-                    store.delete(noteId, attachmentId)
+                    repository.deletePayload(noteId, attachmentId)
                     throw failure ?: IOException(
                         if (limitExceeded.get()) "Recording reached the 25 MiB limit and was discarded."
                         else "No audio was captured. Try recording again."
@@ -176,7 +176,7 @@ private class EncryptedPcmRecording(
                 val captured = PcmCapturePump.capture(
                     capture = capture,
                     output = output,
-                    maxBytes = VoiceAttachmentStore.MAX_AUDIO_BYTES.toLong(),
+                    maxBytes = com.nestnote.app.voicenote.VoiceNoteRepository.MAX_RECORDING_BYTES.toLong(),
                     shouldContinue = { running.get() },
                     isPaused = { paused.get() },
                     onBytesCaptured = { audioBytes.set(it) },
@@ -277,8 +277,7 @@ internal fun VoiceNoteControls(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val attachmentStore = remember(context) { VoiceAttachmentStore(context) }
-    val attachmentManifest = remember(context) { VoiceAttachmentManifest(context) }
+    val voiceNotes = remember(context) { com.nestnote.app.voicenote.VoiceNoteRepository(context) }
     val scope = rememberCoroutineScope()
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -339,18 +338,14 @@ internal fun VoiceNoteControls(
                         ?.use { decodePcmWav(it.readBytes()) }
                         ?: throw IOException("Could not open the selected audio file.")
                     if (pcm.isEmpty()) throw IOException("The selected audio file contains no audio.")
-                    if (pcm.size > VoiceAttachmentStore.MAX_AUDIO_BYTES) {
+                    if (pcm.size > com.nestnote.app.voicenote.VoiceNoteRepository.MAX_RECORDING_BYTES) {
                         throw IOException("Audio exceeds the 25 MiB attachment limit.")
                     }
                     val id = UUID.randomUUID().toString()
-                    val saved = attachmentStore.save(noteId, id, ByteArrayInputStream(pcm))
                     val duration = pcm.size.toLong() * 1000L / (VOICE_SAMPLE_RATE * 2L)
-                    attachmentManifest.put(
-                        VoiceAttachmentMetadata(
-                            noteId, id, System.currentTimeMillis(), duration,
-                            saved.encryptedSizeBytes, defaultVoiceName()
-                        ),
-                        attachmentStore
+                    voiceNotes.save(
+                        noteId, id, ByteArrayInputStream(pcm), System.currentTimeMillis(),
+                        duration, defaultVoiceName()
                     )
                     id
                 }
@@ -377,7 +372,7 @@ internal fun VoiceNoteControls(
                 showPermissionSettings = false
                 val cursor = cursorAtRecordStart()
                 startVoiceRecording(
-                    context, audioManager, attachmentStore, attachmentManifest,
+                    context, audioManager, voiceNotes,
                     noteId, addedThisSession,
                     onStarted = { session, listener ->
                         startingRecording = false
@@ -434,7 +429,7 @@ internal fun VoiceNoteControls(
         ) {
             val cursor = cursorAtRecordStart()
             startVoiceRecording(
-                context, audioManager, attachmentStore, attachmentManifest,
+                context, audioManager, voiceNotes,
                 noteId, addedThisSession,
                 onStarted = { session, listener ->
                     startingRecording = false
@@ -516,7 +511,7 @@ internal fun VoiceNoteControls(
         if (status.startsWith("Recording ready for review:")) {
             val id = status.substringAfter("Recording ready for review:").trim()
             val payload = runCatching {
-                attachmentStore.list(noteId).firstOrNull { it.attachmentId == id }
+                voiceNotes.listPayloads(noteId).firstOrNull { it.attachmentId == id }
             }.getOrNull()
             recording = false
             recordingPaused = false
@@ -690,7 +685,7 @@ internal fun VoiceNoteControls(
             val reviewId = pendingReviewId!!
             val reviewAttachment = remember(reviewId) {
                 runCatching {
-                    attachmentStore.list(noteId).firstOrNull { it.attachmentId == reviewId }
+                    voiceNotes.listPayloads(noteId).firstOrNull { it.attachmentId == reviewId }
                 }.getOrNull()
             }
             val shownDuration = if (reviewDurationMs > 0) reviewDurationMs else pendingReviewDurationMs
@@ -792,7 +787,7 @@ internal fun VoiceNoteControls(
                                             reviewPositionMs = 0
                                             reviewDurationMs = 0
                                             val player = PcmVoicePlayback(
-                                                context, attachmentStore, reviewAttachment,
+                                                context, readAttachment = voiceNotes::read, attachment = reviewAttachment,
                                                 playbackSpeed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                                                     .getFloat(PREF_VOICE_PLAYER_SPEED, 1f),
                                                 onProgress = { positionMs, durationMs ->
@@ -839,14 +834,12 @@ internal fun VoiceNoteControls(
                             enabled = pendingReviewName.isNotBlank() && reviewAttachment != null,
                             onClick = {
                                 runCatching {
-                                    attachmentManifest.put(
-                                        VoiceAttachmentMetadata(
-                                            noteId, reviewId, System.currentTimeMillis(),
-                                            pendingReviewDurationMs.toLong(),
-                                            reviewAttachment!!.encryptedSizeBytes,
-                                            pendingReviewName.trim()
-                                        ),
-                                        attachmentStore
+                                    voiceNotes.attachExisting(
+                                        noteId = noteId,
+                                        attachmentId = reviewId,
+                                        createdAtMillis = System.currentTimeMillis(),
+                                        durationMillis = pendingReviewDurationMs.toLong(),
+                                        displayName = pendingReviewName.trim()
                                     )
                                 }.onSuccess {
                                     stopReviewPlayback()
@@ -907,8 +900,7 @@ internal fun VoiceNoteControls(
                     stopReviewPlayback()
                     if (id != null) {
                         addedThisSession.remove(id)
-                        runCatching { attachmentStore.delete(noteId, id) }
-                        runCatching { attachmentManifest.remove(noteId, id) }
+                        runCatching { voiceNotes.delete(noteId, id) }
                     }
                     pendingReviewId = null
                     pendingReviewName = defaultVoiceName()
@@ -934,8 +926,7 @@ internal fun VoiceNoteControls(
 private fun startVoiceRecording(
     context: Context,
     audioManager: AudioManager,
-    store: VoiceAttachmentStore,
-    manifest: VoiceAttachmentManifest,
+    repository: com.nestnote.app.voicenote.VoiceNoteRepository,
     noteId: Long,
     addedIds: MutableSet<String>,
     onStarted: (EncryptedPcmRecording, AudioManager.OnAudioFocusChangeListener) -> Unit,
@@ -949,13 +940,12 @@ private fun startVoiceRecording(
     }
     val id = UUID.randomUUID().toString()
     addedIds.add(id)
-    val session = EncryptedPcmRecording(context, store, noteId, id) { result ->
+    val session = EncryptedPcmRecording(context, repository, noteId, id) { result ->
         abandonVoiceAudioFocus(audioManager, focusListener)
         // Discard can finish before this main-thread callback is dispatched. Never let
         // a late successful worker callback recreate the manifest entry for discarded audio.
         if (id !in addedIds) {
-            runCatching { store.delete(noteId, id) }
-            runCatching { manifest.remove(noteId, id) }
+            runCatching { repository.deletePayload(noteId, id) }
             return@EncryptedPcmRecording
         }
         when {
@@ -974,8 +964,7 @@ private fun startVoiceRecording(
         // attachment discarded first, then wait for workers before deleting its payload.
         addedIds.remove(id)
         runCatching { session.discardAndWait() }
-        runCatching { store.delete(noteId, id) }
-        runCatching { manifest.remove(noteId, id) }
+        runCatching { repository.deletePayload(noteId, id) }
         abandonVoiceAudioFocus(audioManager, focusListener)
         onStatus(error.message ?: "Couldn't start recording")
     }

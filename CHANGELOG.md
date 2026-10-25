@@ -1,47 +1,42 @@
 # Changelog
 
-All notable changes to NESTNOTE are documented here.
+All notable changes to NESTNOTE are documented here. The current release candidate is **1.4.6**.
 
-## [1.3.11] - Current repository release record (2026-10-22)
+## [1.4.6] — Release candidate
 
-This is the current v1.3.11 release record on `main`, synchronized by merged PR #76, covering note-editor and Markdown work associated with [issue #61](https://github.com/dukeoftoad/toadNOTES/issues/61). The public release tag and signed APK are separate publication steps and are not claimed to exist yet.
+This version updates release metadata to 1.4.6 and carries forward the current feature set. Publish only after exact-tag CI, signing, and release gates are verified.
 
-### Fixed
-- Corrected editor text contrast selection for dark surfaces by using surface luminance and theme-provided foreground colors.
-- Improved Markdown blockquote and horizontal-rule preview rendering while keeping raw HTML-like content inert.
-- Preserved meaningful whitespace, indentation, trailing-newline semantics, and LF/CRLF/lone-CR line endings in text conversion and list operations.
-- Corrected selection remapping after line edits to better preserve cursor and reversed-selection positions.
-- Hardened inline-format toggles and checklist/bullet transitions, including indentation, Enter behavior, and mixed line endings.
-- Restricted actionable Markdown preview links to `http`, `https`, and `mailto` schemes; unsupported schemes are removed from actionable preview content.
-- Improved accessibility touch-target sizing and added standalone Markdown heading semantics for preview segments.
+### Included capabilities
+- Native Markwon Markdown table rendering and automatic pipe-table alignment.
+- Private Vault biometric enrollment and CryptoObject-based unlock path, with password recovery; physical-device validation remains a release check.
+- Bounded SAF backup verification reads.
 
-### Markdown renderer — PR #74 (merged 2026-10-22)
-- Replace the regex-based inline/block Markdown preprocessor with **Markwon**, using its CommonMark-based Android rendering pipeline.
-- Add Markwon task-list and strikethrough extensions for richer Markdown preview support.
-- Pass the current Android context into preview rendering.
-- Keep the original note source unchanged during preview, disable raw HTML rendering, and restrict actionable links to `http`, `https`, and `mailto` schemes.
-- Update preview regression tests to assert rendered behavior rather than parser-specific spans.
+## [1.4.5] — Previous release baseline
 
-### Link insertion — PR #74 (merged 2026-10-22)
-- Escape backslashes and both square-bracket delimiters in selected link labels in a single pass.
-- Add coverage for Unicode labels, punctuation, empty selections, document boundaries, reversed selections, escaping, and cursor placement inside the URL placeholder.
+Version 1.4.5 is the previous release baseline. Consult [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases) for the authoritative published release asset and metadata.
 
-### External Markdown viewer and zoom — PR #87 (merged 2026-10-23)
-- Open Markdown files shared from Android's Files app or another file provider directly in a transient read-only viewer instead of importing them into the note collection.
-- Add a separate **More → Text size** control with vertically aligned decrease/percentage/increase controls, a slider, and a restore-default action; zoom ranges from 50% to 200% in 5% steps.
-- Add a saved default Markdown viewer zoom under Settings → Note editor. New external Markdown opens use the configured default.
-- Preserve the existing multi-file import flow; this feature is for direct open/view, not import.
-- Validation is pending: do not claim CI, build, or on-device verification until the exact PR head has a recorded successful result.
+### Product capabilities
+- Markdown pipe tables render as tables in note preview; pasted Markdown tables are automatically column-aligned, while fenced code and ordinary pipe text remain unchanged.
+- Local-first note creation, editing, search, categories, pinning, archive/restore, sorting, and configurable Home layout.
+- Editor and saved-note reader zoom from 50% to 200% in 5% steps; zoom is presentation-only.
+- Transient read-only external Markdown viewer with separate configurable zoom.
+- Offline Text Toolbox with text statistics, reading-time estimate, case conversion, whitespace cleanup, copy, and clear.
+- Private Vault with password access and optional biometric flow; key invalidation and recovery must fail safely.
+- Validated JSON backup/restore with explicit plaintext-export warning; audio attachments are excluded.
 
-### Tests and engineering
-- Added regression coverage for Markdown rendering, formatting toggles, list/checklist transitions, link escaping and cursor placement, line-ending preservation, and safe-link handling.
-- Added draft persistence/isolation and undo/redo regression coverage.
-- Added Compose editor integration coverage for save/recovery, discard/reopen, preview/edit switching, formatting actions, link insertion, note switching, and Activity recreation.
-- Added CI workflow coverage to execute Android emulator UI tests on pull requests.
+## Historical notes: 1.3.11 and earlier
 
-### Known validation gaps
-- PR #74's latest CI status and integration behavior must be confirmed before treating its Markwon replacement and link-insertion changes as verified.
-- Do not consider every item in issue #61 complete solely from this changelog. Check the issue and linked pull requests for exact scope and evidence.
-- Confirm CI passes on the final release commit, including unit tests, lint, release compilation, and the configured emulator/UI-test jobs.
-- Verify production signing and the exact release APK certificate; do not distribute unsigned or inspection-only artifacts.
-- Record any remaining physical-device checks, including TalkBack semantics, large fonts, keyboard/insets, theme contrast, and process-death recovery, before declaring release readiness.
+Older references to v1.3.10 as latest stable or v1.3.11 as current candidate are historical and must not be used as the current-version statement.
+
+### Editor and Markdown reliability
+- Markwon/CommonMark rendering with task-list and strikethrough extensions.
+- Raw HTML disabled in preview; actionable links restricted to http, https, and mailto.
+- Preserve whitespace, indentation, line endings, cursor/selection, and checklist/bullet behavior during editing.
+- External Markdown opens in a transient read-only viewer and does not silently import into saved notes.
+
+### Validation and release policy
+- Validate the exact release commit with CI and configured test jobs.
+- Compiling instrumentation tests is not proof of device execution.
+- Verify production signing and the exact APK certificate before distribution.
+- Record physical-device biometric enrollment/unlock, key invalidation/password fallback, TalkBack, large fonts, keyboard/insets, migration, and process-death recovery.
+- Do not claim tests, signing, or release success without evidence for the exact commit/artifact.

@@ -1,10 +1,26 @@
 # NESTNOTE Changelog
 
-## v1.3.11 — Current repository release record (2026-10-22)
+## Unreleased — encrypted-only portability
+
+- Removed plaintext JSON backup/export and import controls and their file-handling paths.
+- Removed scheduled plaintext JSON backups and their WorkManager worker/scheduler.
+- Kept password-protected AES-GCM `.nestnote` archives as the only user-facing note portability option.
+- Archive payload serialization remains an internal implementation detail; Private Vault notes and voice attachments are excluded.
+
+
+## v1.4.6 — Release candidate
+
+- Align app release metadata and current documentation with version 1.4.6.
+- Carry forward native Markdown table rendering and pipe-table alignment.
+- Include the Private Vault strong-biometric CryptoObject path; device validation remains a release gate.
+- Bound SAF backup verification reads to the expected payload size.
+- Do not treat this entry as proof of publication, signing, or exact-head CI success.
+
+## v1.3.11 — Historical repository release record (2026-10-22)
 
 Versioned notes: [docs/release-notes/v1.3.11.md](release-notes/v1.3.11.md).
 
-This is the current release record on `main`, synchronized by merged PR #76. Publishing v1.3.11 still requires a stable tag and successful release workflow.
+This is a historical release record retained for traceability. The current candidate is v1.4.6; publishing it still requires a stable tag and successful release workflow.
 
 ### Fixed
 - Improve editor foreground contrast on dark surfaces using surface luminance and theme-provided colors.
@@ -137,20 +153,17 @@ Remaining open items are all low-priority UX gaps.
 - Remove hardcoded local Java 17 paths from `gradle.properties` so CI uses the Java installation configured on the runner.
 - Hardened `SlimRailPanel` initial drag-anchor setup to avoid reading an uninitialized anchored-draggable offset during first layout.
 
-### Added (Backup & restore)
-- Added optional scheduled automatic backups using Android background work, with a visible last-run status and an approximate next-run window.
-- Added a versioned JSON backup format with format identification, schema version, and creation timestamp.
-- Improved restore safety with backup validation, unsupported-schema rejection, and a preview of notes to add, update, or skip before confirmation.
+### Historical feature (removed in 1.4.7)
+- Earlier versions offered scheduled automatic backups and versioned JSON export/import. These plaintext portability paths have been removed; encrypted `.nestnote` archives are the only current user-facing portable backup option.
 
-### Improved (Backup & restore)
-- Automatic backups use app-private storage; Android may delay background execution, and app-private backups can be lost when the app is uninstalled.
-- Manual exports let users choose a destination through Android's save flow. Exporting a file does not automatically upload it to cloud storage.
-- Restore remains merge-oriented rather than destructively replacing the current notes. Audio attachments remain excluded from the current backup format.
+### Current encrypted archive behavior
+- Archives are written to the user-selected Documents/NESTNOTE folder after folder access is granted.
+- Restore is merge-oriented rather than destructively replacing current notes. Private Vault notes and voice attachments are excluded.
 
 ### Privacy and portability notes
-- Password-protected backup files are not implemented in this version.
-- Users should keep exported backup files in a secure location; exported JSON contains note data.
-- The versioned format is intended to support validation and future migration across app versions.
+- Current portable archives are password-protected and AES-GCM encrypted; plaintext JSON export/import is not offered.
+- Historical note: the retired JSON export format contained readable note data. Current portable backups use password-protected encrypted `.nestnote` archives.
+- Internal archive payload schema checks support validation and compatibility across app versions.
 
 ### Testing and release readiness
 - Add Robolectric regression tests for plaintext and encrypted-v1 note migrations, migration idempotence, corrupt/tampered payload recovery, and preservation of unreadable source data.
@@ -180,7 +193,7 @@ Remaining open items are all low-priority UX gaps.
 - Added Markdown preview HTML-safety tests and expanded editor formatting regression coverage.
 
 ### Notes
-- Voice attachments are stored locally and remain excluded from the current JSON backup/restore format.
+- Voice attachments are stored locally and were excluded from the legacy JSON backup format; plaintext JSON backup/restore has since been removed.
 - The self-hosted F-Droid repository is separate from the official F-Droid listing; successful workflow completion should be followed by checking the published repository index.
 - This entry summarizes feature and fix commits found in the repository history. The exact v1.3.1 release date and precise commit/tag boundary were not independently confirmed.
 
@@ -234,7 +247,7 @@ Remaining open items are all low-priority UX gaps.
 
 ### Compatibility and privacy notes
 - Audio-file import currently supports uncompressed 16-bit mono or stereo WAV files; other formats are not yet supported.
-- Voice recordings are stored as local attachments. Audio attachments remain excluded from the current JSON backup/restore format.
+- Voice recordings are stored as local attachments. Audio attachments are excluded from portable `.nestnote` archives.
 - NESTNOTE remains local-first with no account-based cloud sync.
 
 ## v1.2.5 — 2026-10-18
@@ -252,8 +265,8 @@ Remaining open items are all low-priority UX gaps.
 - Expanded editor, storage, backup, release, and F-Droid distribution documentation.
 
 ### Privacy and backup notes
-- Voice recordings are stored as local attachments; audio attachments are intentionally excluded from the current JSON backup/restore format.
-- User-exported JSON backups contain plaintext note data and should be stored securely.
+- Voice recordings are stored as local attachments; audio attachments were excluded from the legacy JSON backup/restore format, which is no longer a user-facing option.
+- Historical note: older versions offered user-exported plaintext JSON files. JSON export/import is removed; use password-protected encrypted `.nestnote` archives.
 - NESTNOTE remains local-first with no account-based cloud sync.
 
 ### Distribution
@@ -269,3 +282,9 @@ Remaining open items are all low-priority UX gaps.
 - Editor and backup/release audit updates
 
 Full comparison: https://github.com/dukeoftoad/toadNOTES/compare/v1.2.4...v1.2.5
+
+## Candidate additions in PR #94 — not yet published
+- Home dashboard quick-create card with active and pinned note counts.
+- Offline Text Toolbox under More → Power tools (text statistics, reading-time estimate, case transforms, whitespace cleanup, copy, and clear).
+- Expandable note editor/reader zoom slider (50%–200%, 5% increments); display-only and does not change stored text.
+- Private Vault biometric enrollment/unlock flow and modernized settings/dialog UI remain subject to exact-head CI and device-level verification before release.

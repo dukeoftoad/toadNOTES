@@ -7,6 +7,8 @@ import android.text.style.LineBackgroundSpan
 import android.text.style.QuoteSpan
 import io.noties.markwon.core.spans.EmphasisSpan
 import io.noties.markwon.core.spans.StrongEmphasisSpan
+import io.noties.markwon.ext.tables.TableRowSpan
+import io.noties.markwon.ext.tables.TableSpan
 import android.text.style.URLSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -185,5 +187,21 @@ class MarkdownPreviewTest {
 
         assertTrue("first body token must not be lost", result.toString().contains("jklloikkk"))
         assertTrue("second body token must not be lost", result.toString().contains("uuiii_iiio9"))
+    }
+
+    @Test
+    fun markdownPipeTablesUseMarkwonsNativeTableSpans() {
+        val markdown = "| Name | Count |\n| --- | ---: |\n| Apples | 3 |"
+        val rendered = MarkdownPreview.toSpanned(RuntimeEnvironment.getApplication(), markdown)
+
+        // Markwon intentionally stores cell content inside ReplacementSpans so the table
+        // extension can measure and draw aligned columns in a TextView. The cell text is
+        // therefore not required to appear in Spanned.toString(); assert the rendering
+        // contract rather than replacing it with a lossy plain-text table preprocessor.
+        assertEquals("header and body should each be a native table row", 2,
+            rendered.getSpans(0, rendered.length, TableRowSpan::class.java).size)
+        assertEquals("the table block should have Markwon's table span", 1,
+            rendered.getSpans(0, rendered.length, TableSpan::class.java).size)
+        assertFalse("pipe delimiters should not be shown literally", rendered.toString().contains("|"))
     }
 }

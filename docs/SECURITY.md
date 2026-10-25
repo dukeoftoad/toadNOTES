@@ -23,7 +23,7 @@ Therefore, the current Private Vault is a privacy/navigation boundary, **not a c
 
 ## Backup and data movement
 
-User-exported JSON backups are **plaintext** and may include private-note titles and bodies. The private-note flag is metadata, not encryption. Anyone with access to the exported file can read its contents without unlocking the in-app Private Vault. Do not describe exported JSON as encrypted unless a separately implemented and verified encrypted-export format exists.
+Portable note transfer uses password-protected `.nestnote` archives with AES-GCM authenticated encryption. Private Vault notes and voice attachments are excluded from these archives. The archive password is independent of the vault password; losing it makes that archive unrecoverable.
 
 ## Threat-model assumptions and residual risks
 
@@ -34,7 +34,7 @@ Relevant threats include:
 - A private editor remaining visible after backgrounding or activity recreation.
 - Screenshots and Recents previews exposing content.
 - Private notes leaking into ordinary lists, search, pinned/archived views, counts, links, or insights.
-- Plaintext backup disclosure.
+- Encrypted archive password handling and archive restore validation.
 - Repeated password guessing, including lockout persistence and clock changes.
 - Biometric cancellation/failure/unavailability incorrectly granting access.
 - Loss or invalidation of the local-storage Keystore key.
@@ -43,7 +43,7 @@ Relevant threats include:
 
 Prefer:
 
-> Private Vault adds a password/biometric gate to viewing private notes inside NESTNOTE. Private notes use NESTNOTE's general local-storage encryption, not a separate vault key. Exported JSON backups are plaintext and may include private notes.
+> Private Vault adds a password/biometric gate to viewing private notes inside NESTNOTE. Private notes use NESTNOTE's general local-storage encryption, not a separate vault key. Portable encrypted archives exclude private notes.
 
 Avoid claims such as “separately encrypted vault,” “vault-password-encrypted notes,” or “private notes remain encrypted in exported backups.”
 
@@ -52,3 +52,8 @@ Avoid claims such as “separately encrypted vault,” “vault-password-encrypt
 Separate cryptographic isolation is a distinct security project, not a documentation toggle. At minimum, it requires a reviewed design for independent vault-key generation and protected key storage/wrapping; authorization by password/biometrics without storing the raw password; authenticated encryption; key rotation, password changes, biometric enrollment changes, and recovery; safe migration of existing private notes; explicit encrypted/plaintext backup policy; failure-safe rollback; and dedicated tests.
 
 Until that work is implemented and verified, product copy must describe Private Vault as a UI gate over notes protected by the app's general local-storage encryption.
+
+
+## Portable backup policy (2026-10-24)
+
+Plaintext JSON export/import and scheduled plaintext JSON backups are removed. The only user-facing portable note backup is a password-protected AES-GCM `.nestnote` archive. Its scope excludes Private Vault notes and voice attachments. JSON is still used internally for local persistence and the serialized payload inside the encrypted archive; this does not make a plaintext JSON backup available. Existing JSON files created by earlier versions are not automatically found or deleted.

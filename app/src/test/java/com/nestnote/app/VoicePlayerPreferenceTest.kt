@@ -2,6 +2,7 @@ package com.nestnote.app
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -47,5 +48,26 @@ class VoicePlayerPreferenceTest {
 
         assertFalse(preferences.getBoolean(PREF_VOICE_PLAYER_COMPACT, true))
         assertTrue(preferences.getString(PREF_THEME, null) == ThemeMode.DARK.name)
+    }
+    @Test
+    fun playerStyleAndCustomSizePreferencesPersist() {
+        val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+        preferences.edit()
+            .putString(PREF_VOICE_PLAYER_STYLE, VoicePlayerStyle.WAVEFORM.name)
+            .putInt(PREF_VOICE_PLAYER_SIZE_PERCENT, 125)
+            .commit()
+
+        assertEquals(VoicePlayerStyle.WAVEFORM.name, preferences.getString(PREF_VOICE_PLAYER_STYLE, null))
+        assertEquals(125, preferences.getInt(PREF_VOICE_PLAYER_SIZE_PERCENT, DEFAULT_VOICE_PLAYER_SIZE_PERCENT))
+    }
+
+    @Test
+    fun invalidPlayerSizeIsClampedToSupportedRange() {
+        val tooSmall = 20.coerceIn(MIN_VOICE_PLAYER_SIZE_PERCENT, MAX_VOICE_PLAYER_SIZE_PERCENT)
+        val tooLarge = 300.coerceIn(MIN_VOICE_PLAYER_SIZE_PERCENT, MAX_VOICE_PLAYER_SIZE_PERCENT)
+
+        assertEquals(MIN_VOICE_PLAYER_SIZE_PERCENT, tooSmall)
+        assertEquals(MAX_VOICE_PLAYER_SIZE_PERCENT, tooLarge)
     }
 }

@@ -22,6 +22,7 @@ internal object NoteFilters {
     fun visibleNotes(notes: List<NestNote>, selectedView: String, search: String, sortByTitle: Boolean, sortByCreated: Boolean): List<NestNote> {
         val query = parseQuery(search)
         val showArchived = selectedView == "Archived" || query.archived
+        val terms = query.terms.map { it.lowercase(Locale.ROOT) }
         val visible = notes.filter { note ->
             val inView = if (selectedView == "Private") note.privateNote && !note.archived
             else if (showArchived) note.archived && !note.privateNote else !note.archived && !note.privateNote && when (selectedView) {
@@ -30,14 +31,17 @@ internal object NoteFilters {
                 "Reminders" -> note.reminder.isNotBlank()
                 else -> note.category.equals(selectedView, ignoreCase = true)
             }
+            // Reject notes outside the selected view before allocating/lowercasing their bodies.
+            if (!inView) return@filter false
+            if (query.category != null && !note.category.equals(query.category, ignoreCase = true)) return@filter false
+            if (query.pinned == true && !note.pinned) return@filter false
+            if (query.reminder && note.reminder.isBlank()) return@filter false
+            if (query.after != null && note.updated < query.after) return@filter false
+            if (query.before != null && note.updated >= query.before) return@filter false
+            if (query.voice && NoteText.voiceMarkers(note.body).isEmpty()) return@filter false
+            if (terms.isEmpty()) return@filter true
             val searchable = "${note.title} ${note.body} ${note.category}".lowercase(Locale.ROOT)
-            inView && query.terms.all { searchable.contains(it.lowercase(Locale.ROOT)) } &&
-                (query.category == null || note.category.equals(query.category, ignoreCase = true)) &&
-                (query.pinned != true || note.pinned) &&
-                (!query.reminder || note.reminder.isNotBlank()) &&
-                (!query.voice || NoteText.voiceMarkers(note.body).isNotEmpty()) &&
-                (query.after == null || note.updated >= query.after) &&
-                (query.before == null || note.updated < query.before)
+            terms.all(searchable::contains)
         }
         return when {
             sortByTitle -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenBy { it.title.lowercase(Locale.getDefault()) })

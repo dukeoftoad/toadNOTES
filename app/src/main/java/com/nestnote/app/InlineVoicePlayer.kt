@@ -1,6 +1,12 @@
 package com.nestnote.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.AudioManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -95,19 +101,28 @@ internal fun InlineVoicePlayer(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val store = remember(context) { VoiceAttachmentStore(context) }
-    val manifest = remember(context) { VoiceAttachmentManifest(context) }
+    var notificationPermissionRevision by remember { mutableIntStateOf(0) }
+    var notificationPermissionAsked by remember(context) {
+        mutableStateOf(
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .getBoolean(PREF_VOICE_NOTIFICATION_PERMISSION_ASKED, false)
+        )
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { notificationPermissionRevision++ }
+    val voiceNotes = remember(context) { com.nestnote.app.voicenote.VoiceNoteRepository(context) }
     val audioManager = remember(context) {
         context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
     }
 
     // File + metadata lookups recompute only when identity changes.
     val attachment = remember(noteId, attachmentId) {
-        runCatching { store.list(noteId).firstOrNull { it.attachmentId == attachmentId } }
+        runCatching { voiceNotes.listPayloads(noteId).firstOrNull { it.attachmentId == attachmentId } }
             .getOrNull()
     }
     val metadata = remember(noteId, attachmentId) {
-        runCatching { manifest.list(noteId, store).firstOrNull { it.attachmentId == attachmentId } }
+        runCatching { voiceNotes.list(noteId).firstOrNull { it.attachmentId == attachmentId } }
             .getOrNull()
     }
 
@@ -163,8 +178,8 @@ internal fun InlineVoicePlayer(
             audioFocusListener = focus
             val next = PcmVoicePlayback(
                 context,
-                store,
-                attachment,
+                readAttachment = voiceNotes::read,
+                attachment = attachment,
                 playbackSpeed = playbackSpeed,
                 onProgress = { pos, dur ->
                     positionMs = pos.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
@@ -241,13 +256,121 @@ internal fun InlineVoicePlayer(
     val shownDuration = if (durationMs > 0) durationMs else fallbackDurationMs
     val reducedMotion = rememberSystemReducedMotion()
     val displayName = metadata?.displayName?.takeIf { it.isNotBlank() } ?: "Voice recording"
+
+    // Keep a compact media notification in the Android shade while this voice note is active.
+    // The callback routes notification actions back to the same player instance.
+    LaunchedEffect(
+        isActive, player, paused, positionMs, shownDuration, displayName, notificationPermissionRevision
+    ) {
+        if (isActive && player != null) {
+            val notificationPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+            if (!notificationPermissionGranted) {
+                if (!notificationPermissionAsked) {
+                    notificationPermissionAsked = true
+                    context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit()
+                        .putBoolean(PREF_VOICE_NOTIFICATION_PERMISSION_ASKED, true).apply()
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            } else {
+                VoicePlaybackNotifications.show(
+                    context = context,
+                    attachmentId = attachmentId,
+                    displayName = displayName,
+                    positionMs = positionMs,
+                    durationMs = shownDuration,
+                    paused = paused
+                ) { action ->
+                    when (action) {
+                        VoicePlaybackNotifications.Action.TOGGLE -> {
+                            if (paused) {
+                                runCatching { player?.resume() }.onSuccess { paused = false }
+                            } else {
+                                runCatching { player?.pause() }.onSuccess { paused = true }
+                            }
+                        }
+                        VoicePlaybackNotifications.Action.STOP -> onStopRequested()
+                    }
+                }
+            }
+        } else {
+            VoicePlaybackNotifications.clear(context, attachmentId)
+        }
+    }
     var selected by remember(attachmentId) { mutableStateOf(false) }
 
-    val compactPlayer = remember(context) {
+    val playerPreferences = remember(context) {
         context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-            .getBoolean(PREF_VOICE_PLAYER_COMPACT, true)
     }
-    if (compactPlayer) {
+    val playerStyle = remember(context) {
+        val storedStyle = playerPreferences.getString(PREF_VOICE_PLAYER_STYLE, null)
+        storedStyle?.let { runCatching { VoicePlayerStyle.valueOf(it) }.getOrNull() }
+            ?: if (playerPreferences.getBoolean(PREF_VOICE_PLAYER_COMPACT, true)) {
+                VoicePlayerStyle.COMPACT
+            } else {
+                VoicePlayerStyle.FULL
+            }
+    }
+    val playerSizePercent = remember(context) {
+        playerPreferences.getInt(PREF_VOICE_PLAYER_SIZE_PERCENT, DEFAULT_VOICE_PLAYER_SIZE_PERCENT)
+            .coerceIn(MIN_VOICE_PLAYER_SIZE_PERCENT, MAX_VOICE_PLAYER_SIZE_PERCENT)
+    }
+    val sizeScale = playerSizePercent / 100f
+
+    if (playerStyle == VoicePlayerStyle.WAVEFORM) {
+        Surface(
+            modifier = modifier.fillMaxWidth().combinedClickable(
+                onClick = { if (selected) selected = false },
+                onLongClick = { selected = !selected }
+            ).semantics { contentDescription = "Voice note: $displayName" },
+            shape = RoundedCornerShape((20 * sizeScale).dp),
+            color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = (12 * sizeScale).dp, vertical = (10 * sizeScale).dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy((10 * sizeScale).dp)
+            ) {
+                FilledIconButton(
+                    onClick = {
+                        if (isActive) {
+                            if (paused) runCatching { player?.resume() }.onSuccess { paused = false }
+                            else runCatching { player?.pause() }.onSuccess { paused = true }
+                        } else onPlayRequested(attachmentId)
+                    },
+                    modifier = Modifier.size((42 * sizeScale).dp).semantics {
+                        contentDescription = if (isActive && !paused) "Pause $displayName" else "Play $displayName"
+                    }
+                ) {
+                    Icon(if (isActive && !paused) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy((5 * sizeScale).dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(displayName, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (isActive) formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
+                            else formatInlineTime(fallbackDurationMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    InlineVoiceWaveform(
+                        playing = isActive && !paused,
+                        reducedMotion = reducedMotion,
+                        modifier = Modifier.fillMaxWidth().height((30 * sizeScale).dp)
+                    )
+                }
+                if (selected) {
+                    IconButton(onClick = { onDeleteRequested(attachmentId) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete voice note", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+    } else if (playerStyle == VoicePlayerStyle.COMPACT || playerStyle == VoicePlayerStyle.MINIMAL) {
         Surface(
             modifier = modifier.fillMaxWidth().combinedClickable(
                 onClick = { if (selected) selected = false },
@@ -258,9 +381,9 @@ internal fun InlineVoicePlayer(
                 else MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
+                Modifier.fillMaxWidth().padding(horizontal = (8 * sizeScale).dp, vertical = (5 * sizeScale).dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy((8 * sizeScale).dp)
             ) {
                 FilledIconButton(
                     onClick = {
@@ -269,7 +392,7 @@ internal fun InlineVoicePlayer(
                             else runCatching { player?.pause() }.onSuccess { paused = true }
                         } else onPlayRequested(attachmentId)
                     },
-                    modifier = Modifier.size(36.dp).semantics {
+                    modifier = Modifier.size((if (playerStyle == VoicePlayerStyle.MINIMAL) 32 else 36).times(sizeScale).dp).semantics {
                         contentDescription = when {
                             !isActive -> "Play $displayName"
                             paused -> "Resume $displayName"
@@ -282,11 +405,13 @@ internal fun InlineVoicePlayer(
                         contentDescription = null
                     )
                 }
-                InlineVoiceWaveform(
-                    playing = isActive && !paused,
-                    reducedMotion = reducedMotion,
-                    modifier = Modifier.width(64.dp).height(24.dp)
-                )
+                if (playerStyle != VoicePlayerStyle.MINIMAL) {
+                    InlineVoiceWaveform(
+                        playing = isActive && !paused,
+                        reducedMotion = reducedMotion,
+                        modifier = Modifier.width((64 * sizeScale).dp).height((24 * sizeScale).dp)
+                    )
+                }
                 Text(
                     if (isActive) formatInlineTime(positionMs) + " / " + formatInlineTime(shownDuration)
                     else formatInlineTime(fallbackDurationMs),
@@ -311,7 +436,7 @@ internal fun InlineVoicePlayer(
                     onLongClick = { selected = !selected }
                 )
                 .semantics { contentDescription = "Voice note: $displayName" },
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape((18 * sizeScale).dp),
             color = if (selected) MaterialTheme.colorScheme.secondaryContainer
                 else MaterialTheme.colorScheme.surfaceContainerLow
         ) {
@@ -319,9 +444,9 @@ internal fun InlineVoicePlayer(
             // Column so the slider never paints over the title, waveform, or timestamps.
             Column {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = (12 * sizeScale).dp, vertical = (10 * sizeScale).dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy((12 * sizeScale).dp)
                 ) {
                 FilledIconButton(
                     onClick = {
@@ -335,7 +460,7 @@ internal fun InlineVoicePlayer(
                             onPlayRequested(attachmentId)
                         }
                     },
-                    modifier = Modifier.size(44.dp).semantics {
+                    modifier = Modifier.size((44 * sizeScale).dp).semantics {
                         contentDescription = when {
                             !isActive -> "Play $displayName"
                             paused -> "Resume $displayName"
@@ -352,7 +477,7 @@ internal fun InlineVoicePlayer(
                     )
                 }
     
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy((5 * sizeScale).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             displayName,
@@ -384,11 +509,50 @@ internal fun InlineVoicePlayer(
                     }
                 }
             }
+                if (playerStyle == VoicePlayerStyle.TRANSPORT) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = (16 * sizeScale).dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        IconButton(
+                            enabled = isActive && shownDuration > 0,
+                            onClick = {
+                                val target = (positionMs - 10_000).coerceAtLeast(0)
+                                pendingSeekMs = target
+                                positionMs = target
+                                runCatching { player?.seekTo(target.toLong()) }
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Rewind 10 seconds" }
+                        ) {
+                            Icon(Icons.Default.Replay10, contentDescription = null)
+                        }
+                        Text(
+                            if (isActive && paused) "Paused" else if (isActive) "Playing" else "Ready to play",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = (12 * sizeScale).dp)
+                        )
+                        IconButton(
+                            enabled = isActive && shownDuration > 0,
+                            onClick = {
+                                val target = (positionMs + 10_000).coerceAtMost(shownDuration)
+                                pendingSeekMs = target
+                                positionMs = target
+                                runCatching { player?.seekTo(target.toLong()) }
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Forward 10 seconds" }
+                        ) {
+                            Icon(Icons.Default.Forward10, contentDescription = null)
+                        }
+                    }
+                }
+
                 // Seeking must be available for short clips too; hiding the slider below
                 // one minute made recordings under 60 seconds impossible to scrub.
                 if (shownDuration > 0) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 4.dp, bottom = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(start = (56 * sizeScale).dp, end = (4 * sizeScale).dp, bottom = (6 * sizeScale).dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {

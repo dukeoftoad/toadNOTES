@@ -71,6 +71,18 @@ class DraftStoreTest {
     }
 
     @Test
+    fun `failed atomic replacement preserves previous draft`() {
+        val target = File(root, "note-1.json").apply { writeText("previous-good-draft") }
+        val temp = File(root, "note-1.json.tmp").apply { writeText("replacement-draft") }
+
+        val replaced = DraftStore.replaceDraftFile(temp, target) { _, _ -> false }
+
+        assertFalse(replaced)
+        assertEquals("previous-good-draft", target.readText())
+        assertFalse(temp.exists())
+    }
+
+    @Test
     fun `write twice overwrites`() {
         val first = sampleDraft().copy(title = "First")
         val second = sampleDraft().copy(title = "Second")
@@ -199,6 +211,30 @@ class DraftStoreTest {
         assertEquals(draft, secureStore.read(77L))
         assertTrue(secureStore.listAll().isEmpty())
         assertEquals(listOf(draft), secureStore.listAll(includePrivate = true))
+    }
+
+    @Test
+    fun `missing private draft key fails closed and preserves encrypted bytes`() {
+        val draft = sampleDraft(84L).copy(title = "Keep encrypted", body = "Do not discard", privateNote = true)
+        assertTrue(encryptedStore().write(draft))
+        val file = File(root, "note-84.json")
+        val originalBytes = file.readBytes()
+
+        // A store without access to the dedicated private key must not decode or erase it.
+        assertNull(store.read(84L))
+        assertTrue(file.exists())
+        assertTrue(originalBytes.contentEquals(file.readBytes()))
+        assertTrue(store.listAll(includePrivate = true).isEmpty())
+        assertTrue(file.exists())
+        assertTrue(originalBytes.contentEquals(file.readBytes()))
+    }
+
+    @Test
+    fun `private draft cannot be written without its encryption key`() {
+        val draft = sampleDraft(85L).copy(title = "Never plaintext", body = "Sensitive", privateNote = true)
+
+        assertFalse(store.write(draft))
+        assertFalse(File(root, "note-85.json").exists())
     }
 
     @Test

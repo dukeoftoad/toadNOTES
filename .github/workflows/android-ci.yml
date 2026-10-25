@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-# Keep a 70-second debounce for PR commit bursts; newer runs replace older runs per ref.
+# Keep a 30-second debounce for PR commit bursts; newer runs replace older runs per ref.
 concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Debounce pull request updates
         if: ${{ github.event_name == 'pull_request' }}
-        run: sleep 70
+        run: sleep 30
       - uses: actions/checkout@v4
         with:
           # Check out the latest PR merge ref after debounce; otherwise use the triggering SHA.
@@ -41,12 +41,19 @@ jobs:
           name: unit-test-reports
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nestnote-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload release APK for inspection
+        uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: android-apk-inspection
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          name: nestnote-release-apk-inspection
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
           retention-days: 14

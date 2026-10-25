@@ -166,7 +166,7 @@ internal fun AboutScreen(version: AboutInfo.Version) {
                 Icons.Default.Info,
                 "What NESTNOTE does",
                 "Notes, checklists and categories with markdown preview, voice-note attachments, " +
-                    "reminders metadata and JSON backups — all on your device.",
+                    "reminder metadata and password-protected encrypted note archives — all on your device.",
                 true
             )
         }
@@ -186,14 +186,14 @@ internal fun AboutScreen(version: AboutInfo.Version) {
             )
             AboutInfoRow(
                 Icons.Default.Description,
-                "Portable backup format",
-                "Manual backups use versioned JSON that you can copy with Android's file picker. Backups are not encrypted by NESTNOTE after export; choose a secure destination.",
+                "Encrypted archive format",
+                "Portable .nestnote archives are protected with a password and AES-GCM. Private Vault notes and voice attachments are excluded.",
                 true
             )
             AboutInfoRow(
                 Icons.Default.Info,
-                "Background work",
-                "Daily automatic backups are written to private app storage by Android WorkManager. Android may defer the run to protect battery life.",
+                "Data portability",
+                "Only password-protected encrypted archives are supported for note transfer. Voice recordings are excluded.",
                 true
             )
         }
@@ -260,9 +260,9 @@ internal fun AboutScreen(version: AboutInfo.Version) {
             )
             AboutInfoRow(
                 Icons.Default.Description,
-                "Backups are plaintext JSON",
-                "Export from Settings > Backup & privacy and store the file securely. " +
-                    "Voice recordings are excluded from backups.",
+                "Encrypted archives",
+                "Create or restore a password-protected .nestnote archive from More > Backup & restore. " +
+                    "Keep the archive password separately; forgotten passwords cannot be recovered.",
                 true
             )
             AboutInfoRow(

@@ -18,7 +18,7 @@ Scope: exact-head CI, source security/regression review, APK artifact evidence, 
 - [x] Review attachment ownership and lifecycle: manifest entries are checked against stored payloads; draft discard removes staged payloads and metadata; delete cleanup waits until the Undo window expires; saved attachments are preserved when an existing note's unsaved edits are discarded.
 - [x] Review partial-clip failure paths: capture failure and size overflow transition to terminal failure; incomplete recordings are not committed as successful attachments; JVM tests cover fake PCM errors, size limits, and stop/discard races.
 - [x] Review permission and manifest compatibility: microphone permission is declared only for the recording feature, and runtime permission is requested in response to Record rather than at app launch. Automatic Android backup remains disabled.
-- [x] Confirm v1 backup policy is notes-only; update export success feedback and restore confirmation to explicitly state that voice recordings are excluded.
+- [x] Confirm portable archives contain public notes only; archive creation and restore confirmation disclose that voice recordings and Private Vault notes are excluded.
 - [x] Investigate warnings from the successful CI run. Known warnings are deprecated Compose auto-mirrored icons, legacy AudioManager audio-focus APIs, Gradle features deprecated ahead of Gradle 9, and Node.js 20 deprecation notices from GitHub Actions. These are identified, not build failures; broad API/action upgrades are follow-up maintenance and must be revalidated separately.
 - [ ] Complete an automated dependency vulnerability/SCA scan; this is not part of the current Android CI workflow and no scan result is claimed.
 
@@ -38,7 +38,7 @@ Scope: exact-head CI, source security/regression review, APK artifact evidence, 
 ## Source-review findings
 
 - Audio storage uses app-private files, AES-GCM with per-payload random IVs, and AAD bound to the note and attachment identities.
-- Attachment ciphertext is excluded from note JSON backups because it is installation-key/identity-bound. Settings and restore confirmation disclose that voice audio does not return with a notes-only restore.
+- Attachment ciphertext is excluded from portable encrypted archives because it is installation-key/identity-bound. Archive creation and restore confirmation disclose that voice audio does not return with a notes-only restore.
 - The manifest is size/count bounded, versioned, and atomically replaced; malformed metadata raises a recovery error rather than deleting payloads.
 - `RECORD_AUDIO` is the only explicit app permission added for this feature. No new network permission is declared.
 - The current CI uploads test reports and, after this change, debug/release APK inspection artifacts. Those APKs are CI inspection outputs and are not production-signed-release evidence.

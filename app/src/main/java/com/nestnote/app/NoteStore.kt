@@ -27,23 +27,80 @@ data class NestNote(
     val background: Int = 0,
     val wallpaperUri: String = "",
     val format: String = "plain",
-    val privateNote: Boolean = false
+    val privateNote: Boolean = false,
+    val encrypted: Boolean = false,
+    val encryptedPayload: String = ""
 )
 
 data class MergeResult(val notes: List<NestNote>, val added: Int, val updated: Int)
 data class NoteLoadResult(val notes: List<NestNote>, val recoveryRequired: Boolean)
 class NoteStorageException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
+enum class NoteStorageBackend { KEYSTORE, SQLCIPHER }
+
 class NoteStore internal constructor(context: Context, private val testKeyProvider: (() -> SecretKey)? = null) {
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("nestnote_local", Context.MODE_PRIVATE)
 
+    fun currentBackend(): NoteStorageBackend = runCatching {
+        NoteStorageBackend.valueOf(prefs.getString(STORAGE_BACKEND_KEY, NoteStorageBackend.KEYSTORE.name)!!)
+    }.getOrDefault(NoteStorageBackend.KEYSTORE)
+
+    /** Switches backends without deleting either store. SQLCipher is seeded only when it has no data. */
+    @Synchronized
+    fun switchBackend(target: NoteStorageBackend, currentNotes: List<NestNote>): NoteLoadResult {
+        if (target == currentBackend()) return loadSafely()
+        if (testKeyProvider != null && target == NoteStorageBackend.SQLCIPHER) {
+            throw NoteStorageException("SQLCipher backend is unavailable in injected-key test mode")
+        }
+        val targetStore = if (target == NoteStorageBackend.SQLCIPHER) SqlCipherNoteStore(appContext) else null
+        val result = if (targetStore == null) {
+            if (!isValidNoteCollection(currentNotes)) {
+                throw NoteStorageException("Current notes failed validation; the active store was not changed")
+            }
+            val hasKeystoreArtifacts = prefs.contains(ENCRYPTED_NOTES_V2_KEY) ||
+                prefs.contains(ENCRYPTED_NOTES_V1_KEY) || prefs.contains(LEGACY_NOTES_KEY)
+            val keystoreNotes = if (hasKeystoreArtifacts) loadKeyStoreSafely().also {
+                if (it.recoveryRequired) throw NoteStorageException("The Android Keystore store is unreadable; the active store was not changed")
+            }.notes else emptyList()
+            val merged = merge(keystoreNotes, currentNotes).notes
+            if (!saveKeyStore(merged)) {
+                throw NoteStorageException("Could not verify the Android Keystore copy; the active store was not changed")
+            }
+            NoteLoadResult(merged, false)
+        } else {
+            if (targetStore.hasStorageArtifacts()) {
+                // Existing database/key material must be treated as authoritative. Never
+                // seed over it merely because its key is missing or its database is unreadable.
+                targetStore.loadSafely()
+            } else {
+                if (!isValidNoteCollection(currentNotes) || !targetStore.save(currentNotes)) {
+                    throw NoteStorageException("Could not initialize the encrypted SQL database; the active store was not changed")
+                }
+                targetStore.loadSafely()
+            }
+        }
+        if (result.recoveryRequired) throw NoteStorageException("The selected storage is unreadable; the active store was not changed")
+        check(prefs.edit().putString(STORAGE_BACKEND_KEY, target.name).commit()) {
+            "Could not save storage selection"
+        }
+        return result
+    }
+
     fun load(): List<NestNote> = loadSafely().notes
+
+    fun loadSafely(): NoteLoadResult = when (currentBackend()) {
+        NoteStorageBackend.KEYSTORE -> loadKeyStoreSafely()
+        NoteStorageBackend.SQLCIPHER -> if (testKeyProvider != null) NoteLoadResult(emptyList(), true)
+            else runCatching { SqlCipherNoteStore(appContext).loadSafely() }
+                .getOrElse { NoteLoadResult(emptyList(), true) }
+    }
 
     /**
      * Distinguishes a genuinely new install from unreadable stored data.
      * On corruption, return no editable notes and leave the original bytes untouched.
      */
-    fun loadSafely(): NoteLoadResult {
+    private fun loadKeyStoreSafely(): NoteLoadResult {
         val encryptedV2 = prefs.getString(ENCRYPTED_NOTES_V2_KEY, null)
         if (encryptedV2 != null) {
             val decoded = runCatching { decode(decryptV2(encryptedV2)) }.getOrNull()
@@ -57,7 +114,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
         if (encryptedV1 != null) {
             val decoded = runCatching { decode(decryptV1(encryptedV1)) }.getOrNull()
                 ?: return NoteLoadResult(emptyList(), true)
-            return if (save(decoded)) NoteLoadResult(decoded, false)
+            return if (saveKeyStore(decoded)) NoteLoadResult(decoded, false)
             else NoteLoadResult(emptyList(), true)
         }
 
@@ -68,12 +125,20 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
 
         // Commit the encrypted payload before removing the plaintext key. If encryption or
         // the preferences commit fails, preserve the legacy bytes and block normal writes.
-        return if (save(decoded)) NoteLoadResult(decoded, false)
+        return if (saveKeyStore(decoded)) NoteLoadResult(decoded, false)
         else NoteLoadResult(emptyList(), true)
     }
 
     /** Encrypts first and removes legacy plaintext only in the same successful preferences commit. */
     fun save(notes: List<NestNote>): Boolean {
+        if (!isValidNoteCollection(notes)) return false
+        return when (currentBackend()) {
+            NoteStorageBackend.KEYSTORE -> saveKeyStore(notes)
+            NoteStorageBackend.SQLCIPHER -> testKeyProvider == null && runCatching { SqlCipherNoteStore(appContext).save(notes) }.getOrDefault(false)
+        }
+    }
+
+    private fun saveKeyStore(notes: List<NestNote>): Boolean {
         if (!isValidNoteCollection(notes)) return false
         return runCatching {
             val encrypted = encryptV2(encode(notes))
@@ -156,6 +221,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
     }
 
     companion object {
+        private const val STORAGE_BACKEND_KEY = "storage_backend"
         private const val LEGACY_NOTES_KEY = "notes"
         private const val ENCRYPTED_NOTES_V1_KEY = "notes_encrypted_v1"
         private const val ENCRYPTED_NOTES_V2_KEY = "notes_encrypted_v2"
@@ -168,15 +234,16 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
         private const val GCM_TAG_LENGTH_BITS = 128
         private val AAD_V2 = "com.nestnote.app|notes|v2".toByteArray(Charsets.UTF_8)
 
-        const val MAX_BACKUP_BYTES = 10 * 1024 * 1024
+        const val MAX_ARCHIVE_PAYLOAD_BYTES = 10 * 1024 * 1024
         const val MAX_NOTES = 10_000
         const val MAX_TITLE_LENGTH = 10_000
         const val MAX_BODY_LENGTH = 1_000_000
         const val MAX_CATEGORY_LENGTH = 256
         const val MAX_REMINDER_LENGTH = 512
-        const val CURRENT_BACKUP_SCHEMA_VERSION = 1
+        const val ENCRYPTED_NOTE_TITLE = "Encrypted note"
+        const val CURRENT_ARCHIVE_PAYLOAD_SCHEMA_VERSION = 1
 
-        /** Serializes notes to the same JSON array used for local storage and backups. */
+        /** Serializes note records for encrypted local storage and the authenticated archive payload. */
         fun encode(notes: List<NestNote>): String {
             val array = JSONArray()
             notes.forEach { n ->
@@ -188,42 +255,50 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     put("background", n.background.coerceIn(0, 9)); put("wallpaperUri", n.wallpaperUri)
                     put("format", if (n.format == "markdown") "markdown" else "plain")
                     put("privateNote", n.privateNote)
+                    put("encrypted", n.encrypted)
+                    put("encryptedPayload", n.encryptedPayload)
                 })
             }
             return array.toString()
         }
 
         /**
-         * Selects notes for a user-facing plaintext backup. Private Vault content is
-         * excluded because this export is not encrypted independently of the app.
+         * Selects notes for an encrypted archive. Private Vault records are excluded from portability archives.
          */
-        fun notesForBackup(notes: List<NestNote>, includeArchived: Boolean): List<NestNote> =
-            notes.filter { !it.privateNote && (includeArchived || !it.archived) }
+        fun notesForArchive(notes: List<NestNote>, includeArchived: Boolean): List<NestNote> =
+            notes.filter { !it.privateNote && !it.encrypted && (includeArchived || !it.archived) }
 
-        /** Encodes a versioned user-facing backup envelope. Local storage keeps the legacy array format. */
-        fun encodeBackup(notes: List<NestNote>): String {
+        /** Encodes the serialized payload that is placed inside an authenticated encrypted archive. */
+        fun encodeArchivePayload(notes: List<NestNote>): String {
             require(isValidNoteCollection(notes)) { "invalid note records" }
-            return JSONObject()
-                .put("format", "com.nestnote.backup")
-                .put("schemaVersion", CURRENT_BACKUP_SCHEMA_VERSION)
+            require(notes.none { it.privateNote || it.encrypted }) { "Private Vault and device-encrypted ordinary notes cannot be placed in portable archives" }
+            val backup = JSONObject()
+                .put("format", "com.nestnote.archive-payload")
+                .put("schemaVersion", CURRENT_ARCHIVE_PAYLOAD_SCHEMA_VERSION)
                 .put("createdAt", System.currentTimeMillis())
                 .put("notes", JSONArray(encode(notes)))
                 .toString()
+            require(backup.toByteArray(Charsets.UTF_8).size <= MAX_ARCHIVE_PAYLOAD_BYTES) {
+                "Archive payload exceeds the supported ${MAX_ARCHIVE_PAYLOAD_BYTES / (1024 * 1024)} MiB limit"
+            }
+            return backup
         }
 
-        /** Accepts versioned backups and legacy JSON-array backups for backward compatibility. */
-        fun decodeBackup(raw: String): List<NestNote>? = runCatching {
-            require(raw.toByteArray(Charsets.UTF_8).size <= MAX_BACKUP_BYTES) { "backup is too large" }
+        /** Decodes the archive's serialized payload and validates every note record. */
+        fun decodeArchivePayload(raw: String): List<NestNote>? = runCatching {
+            require(raw.toByteArray(Charsets.UTF_8).size <= MAX_ARCHIVE_PAYLOAD_BYTES) { "archive payload is too large" }
             if (raw.trimStart().startsWith("[")) {
-                decode(raw, requireFields = true)
+                decode(raw, requireFields = true)?.also { require(it.none { note -> note.privateNote || note.encrypted }) { "Private Vault and device-encrypted ordinary notes are not allowed in portable archives" } }
             } else {
                 val envelope = JSONObject(raw)
-                require(envelope.optString("format", "com.nestnote.backup") == "com.nestnote.backup") { "unsupported backup format" }
-                require(envelope.optInt("schemaVersion", -1) == CURRENT_BACKUP_SCHEMA_VERSION) {
-                    "unsupported backup schema"
+                require(envelope.optString("format") in setOf("com.nestnote.archive-payload", "com.nestnote.backup")) { "unsupported or missing archive payload format" }
+                require(envelope.optInt("schemaVersion", -1) == CURRENT_ARCHIVE_PAYLOAD_SCHEMA_VERSION) {
+                    "unsupported archive payload schema"
                 }
-                val records = envelope.optJSONArray("notes") ?: error("missing notes")
-                decode(records.toString(), requireFields = true) ?: error("invalid backup records")
+                val records = envelope.optJSONArray("notes") ?: error("missing archive notes")
+                decode(records.toString(), requireFields = true)
+                    ?.also { require(it.none { note -> note.privateNote }) { "Private Vault records are not allowed in portable archives" } }
+                    ?: error("invalid archive records")
             }
         }.getOrNull()
 
@@ -233,7 +308,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
          * (used to reject unrelated files during import).
          */
         fun decode(raw: String, requireFields: Boolean = false): List<NestNote>? = runCatching {
-            require(raw.toByteArray(Charsets.UTF_8).size <= MAX_BACKUP_BYTES) { "backup is too large" }
+            require(raw.toByteArray(Charsets.UTF_8).size <= MAX_ARCHIVE_PAYLOAD_BYTES) { "serialized payload is too large" }
             val array = JSONArray(raw)
             require(array.length() <= MAX_NOTES) { "too many notes" }
             val decoded = (0 until array.length()).map { i ->
@@ -253,7 +328,9 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     background = o.optInt("background", 0).coerceIn(0, 9),
                     wallpaperUri = o.optString("wallpaperUri", ""),
                     format = if (o.optString("format", "plain") == "markdown") "markdown" else "plain",
-                    privateNote = o.optBoolean("privateNote", false)
+                    privateNote = o.optBoolean("privateNote", false),
+                    encrypted = o.optBoolean("encrypted", false),
+                    encryptedPayload = o.optString("encryptedPayload", "")
                 )
             }
             require(isValidNoteCollection(decoded)) { "invalid note records" }
@@ -334,6 +411,9 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                         note.body.length > MAX_BODY_LENGTH ||
                         note.category.length > MAX_CATEGORY_LENGTH ||
                         note.reminder.length > MAX_REMINDER_LENGTH ||
+                        note.encryptedPayload.length > MAX_BODY_LENGTH * 2 ||
+                        (note.encrypted && (note.privateNote || note.encryptedPayload.isBlank() || note.title != ENCRYPTED_NOTE_TITLE || note.body.isNotBlank())) ||
+                        (!note.encrypted && note.encryptedPayload.isNotEmpty()) ||
                         note.updated < 0L || note.created < 0L
                 }) return false
             return notes.map { it.id }.distinct().size == notes.size

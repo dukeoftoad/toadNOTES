@@ -1,6 +1,6 @@
 # NESTNOTE Release & Validation Checklist
 
-Last updated: 2026-10-23
+Last updated: 2026-10-24
 
 Use this checklist for every candidate. A successful build is necessary but does not establish release readiness. Record the exact commit, CI run, device, results, and accepted risks in WORKLOG.md. Do not mark a check complete without evidence.
 
@@ -35,25 +35,25 @@ Use this checklist for every candidate. A successful build is necessary but does
 - [ ] Record exact-head CI and device/emulator results; do not mark unchecked items complete without evidence.
 
 ## Private Vault release gate
-- [ ] **Release blocker:** private editor drafts must not be persisted as plaintext. `DraftStore` currently writes UTF-8/Properties draft files without `NoteStore` encryption and does not preserve a private/public classification. Implement encrypted private drafts with a dedicated classification-aware path (or safely disable disk persistence for private drafts), plus orphan-recovery tests proving private content never reappears outside the authenticated vault. Do not mark this gate complete until exact-head CI passes.
+- [ ] **Release blocker:** validate the current schema-v2 `DraftStore` envelope implementation on the exact candidate: private drafts must use the dedicated Android Keystore AES-GCM key and explicit classification; missing/invalidated keys, tampered envelopes, and classification mismatches must fail closed; legacy plaintext must never be reclassified as public. Automated tests and exact-head CI must pass, and process-death/device recovery still needs recorded evidence.
 - [ ] Background the app while the vault list is open; verify return requires authentication.
 - [ ] Background the app while a private note editor is visible; verify no editor content reappears before reauthentication.
 - [ ] Recreate the activity/process during vault/editor use; verify private content is not restored into a visible editor while locked.
 - [ ] Verify biometric success, cancellation, failure, unavailable hardware, enrollment changes, and disabled-biometric password fallback; only explicit success unlocks.
-- [ ] Round-trip mixed public/private backup data; verify private notes stay excluded from ordinary views/search/insights and from user-facing plaintext export. Also verify direct serializer callers are documented as unsafe for private records and private drafts are not written/read as plaintext.
+- [ ] Round-trip archive payloads; verify archive selection excludes Private Vault notes and private notes stay excluded from ordinary views/search/insights. Also verify private drafts are not written/read as plaintext.
 - [ ] Verify lockout escalation, cooldown boundary, persistence after restart, 15-minute cap, monotonic behavior under forward/backward wall-clock changes, and bounded behavior after device reboot. Automated regression coverage exists; device verification remains required.
 - [ ] Verify FLAG_SECURE on vault and private editor through Recents snapshots, rapid navigation, and lifecycle transitions on supported Android versions.
-- [ ] Confirm security copy says the vault password is a UI gate, not a separate encryption key, and exported JSON is plaintext; verify private notes are excluded from user-facing export.
+- [ ] Confirm security copy accurately explains that the vault password derives a wrapping key for the independent Private Vault data key, and that portable archives are password-protected and exclude Private Vault notes.
 - [ ] Record exact-head CI result and device/emulator evidence; source inspection alone is not sufficient.
 
 ## 3. Backup, encryption, and recovery
-- [ ] Export a backup and confirm expected note fields round-trip.
-- [ ] Verify backup/restore is **notes-only**: voice audio attachments are excluded, private notes are excluded from user-facing plaintext export, and the UI warns that recordings are not included.
-- [ ] Restore versioned backup and legacy JSON-array backup.
+- [ ] Create a password-protected encrypted archive and confirm expected public note fields round-trip.
+- [ ] Verify encrypted archive/restore is **public-notes-only**: voice audio attachments and Private Vault notes are excluded, and the UI explains the archive scope.
+- [ ] Restore a password-protected `.nestnote` archive; reject incorrect passwords and tampered archives.
 - [ ] Preview restore additions/updates before applying.
 - [ ] Confirm newer incoming notes update existing notes; older/equal timestamps do not overwrite.
 - [ ] Confirm notes absent from the import are retained.
-- [ ] Reject malformed JSON, unsupported schema, duplicate/non-positive IDs, invalid fields, and oversized payloads without partial mutation.
+- [ ] Reject malformed/tampered archives, unsupported payload schemas, duplicate/non-positive IDs, invalid fields, and oversized payloads without partial mutation.
 - [ ] Test storage commit failure and verify the editor does not report a successful save.
 - [ ] Test corrupt local data and confirm original bytes remain recoverable.
 - [ ] On a device with legacy notes, validate migration commits encrypted content before deleting plaintext.
@@ -62,7 +62,7 @@ Use this checklist for every candidate. A successful build is necessary but does
 - [ ] Verify existing v1 encrypted records migrate to v2 and remove v1 only after the v2 write commits.
 - [ ] Verify the v2 key alias is retained across app upgrades and document recovery limits if the Android Keystore key is invalidated.
 - [ ] Verify the shipped manifest and Android backup/data-extraction behavior on supported versions.
-- [ ] Confirm privacy copy states local storage is encrypted and exported JSON is plaintext.
+- [ ] Confirm privacy copy states local storage is encrypted and portable archives require a separate password.
 
 ## Historical voice-recording JVM acceptance evidence
 

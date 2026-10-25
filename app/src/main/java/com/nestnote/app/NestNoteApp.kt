@@ -12,6 +12,8 @@ import android.widget.TextView
 import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
@@ -28,6 +30,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -105,11 +110,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.testTag
@@ -132,12 +136,36 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+private const val PREF_PRIVATE_SCREEN_PROTECTION = "private_screen_protection_enabled"
+private const val PREF_BOOT_SOUND_ENABLED = "boot_sound_enabled"
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
+internal enum class AccentPalette(val label: String, val primaryLight: Color, val primaryDark: Color, val secondaryLight: Color, val secondaryDark: Color) {
+    DEFAULT("Default", Color(0xFF526B55), Color(0xFFB4D0B0), Color(0xFF526477), Color(0xFFB8C8E2)),
+    OCEAN("Ocean", Color(0xFF006A9C), Color(0xFF8CCFFF), Color(0xFF41617D), Color(0xFFB5D2F0)),
+    LAVENDER("Lavender", Color(0xFF6750A4), Color(0xFFD0BCFF), Color(0xFF625B71), Color(0xFFCCC2DC)),
+    ROSE("Rose", Color(0xFFB3265E), Color(0xFFFFB1C8), Color(0xFF76565F), Color(0xFFE8BFC9)),
+    FOREST("Forest", Color(0xFF386A20), Color(0xFFA4D68B), Color(0xFF52634A), Color(0xFFC0D9B2)),
+    SUNSET("Sunset", Color(0xFF9C4328), Color(0xFFFFB59D), Color(0xFF77574D), Color(0xFFE8BFB2)),
+    AMBER("Amber", Color(0xFF805600), Color(0xFFFFD27A), Color(0xFF6D5D3F), Color(0xFFE4C99A));
+
+    fun applyTo(scheme: androidx.compose.material3.ColorScheme, dark: Boolean) = scheme.copy(
+        primary = if (dark) primaryDark else primaryLight,
+        onPrimary = if (dark) Color(0xFF19351B) else Color.White,
+        primaryContainer = if (dark) primaryDark.copy(alpha = 0.24f) else primaryLight.copy(alpha = 0.12f),
+        onPrimaryContainer = if (dark) Color(0xFFE0EBDD) else primaryLight,
+        secondary = if (dark) secondaryDark else secondaryLight,
+        tertiary = if (dark) secondaryDark else secondaryLight
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -153,19 +181,18 @@ internal fun NestNoteApp(
         windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val preferences = remember { context.getSharedPreferences(PREFS, 0) }
     var notes by remember { mutableStateOf<List<NestNote>>(emptyList()) }
+    var filteredNotes by remember { mutableStateOf<List<NestNote>>(emptyList()) }
     // Private records are held in the general encrypted blob only until the first authenticated
     // vault unlock can migrate them. Never expose them to ordinary views or overwrite them while
     // migration is pending.
     var legacyPrivateNotes by remember { mutableStateOf<List<NestNote>>(emptyList()) }
     val privateNoteCrypto = remember(context) { PrivateNoteCrypto(context) }
     val privateNoteStore = remember(context) { PrivateNoteStore(context) }
+    val ordinaryNoteCrypto = remember(context) { OrdinaryNoteCrypto(context) }
     var privateVaultSession by remember { mutableStateOf<PrivateNoteCrypto.Session?>(null) }
     var storageLoaded by remember { mutableStateOf(false) }
     var lastBackupAt by remember { mutableLongStateOf(preferences.getLong(PREF_BACKUP_LAST_SUCCESS_AT, 0L)) }
     var backupStatus by remember { mutableStateOf(preferences.getString(PREF_BACKUP_LAST_STATUS, "Not yet backed up") ?: "Not yet backed up") }
-    var automaticBackupEnabled by remember { mutableStateOf(preferences.getBoolean(PREF_BACKUP_AUTOMATIC_ENABLED, false)) }
-    var automaticBackupLastRun by remember { mutableLongStateOf(preferences.getLong(PREF_BACKUP_AUTOMATIC_LAST_RUN, 0L)) }
-    var automaticBackupStatus by remember { mutableStateOf(preferences.getString(PREF_BACKUP_AUTOMATIC_STATUS, "Not run yet") ?: "Not run yet") }
     var storageRecoveryRequired by remember { mutableStateOf(false) }
     var showStorageRecoveryDialog by remember { mutableStateOf(false) }
     var openedExternalMarkdownTitle by remember { mutableStateOf("") }
@@ -216,6 +243,7 @@ internal fun NestNoteApp(
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
     var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
     var amoled by remember { mutableStateOf(preferences.getBoolean(PREF_AMOLED, false)) }
+    var accentPalette by remember { mutableStateOf(AccentPalette.values().firstOrNull { it.name == preferences.getString("PREF_ACCENT_PALETTE", "DEFAULT") } ?: AccentPalette.DEFAULT) }
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
     var editorMode by remember { mutableStateOf(EditorPresentationMode.values().firstOrNull { it.name == preferences.getString(PREF_EDITOR, "FULL_SCREEN") } ?: EditorPresentationMode.FULL_SCREEN) }
     var dashboardDensity by remember { mutableStateOf(DashboardDensity.values().firstOrNull { it.name == preferences.getString(PREF_DENSITY, "COMPACT") } ?: DashboardDensity.COMPACT) }
@@ -233,6 +261,21 @@ internal fun NestNoteApp(
     var editorTextSize by remember { mutableStateOf(EditorTextSize.values().firstOrNull { it.name == preferences.getString(PREF_TEXT_SIZE, "MEDIUM") } ?: EditorTextSize.MEDIUM) }
     var showEditorCounts by remember { mutableStateOf(preferences.getBoolean(PREF_EDITOR_COUNTS, true)) }
     var selectedView by remember { mutableStateOf("Home") }
+    val tabContentAlpha = remember { Animatable(1f) }
+    val tabContentOffsetY = remember { Animatable(0f) }
+    var hasShownInitialTab by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedView) {
+        if (hasShownInitialTab) {
+            tabContentAlpha.snapTo(0.88f)
+            tabContentOffsetY.snapTo(7f)
+            launch {
+                tabContentAlpha.animateTo(1f, animationSpec = tween(durationMillis = 190))
+            }
+            tabContentOffsetY.animateTo(0f, animationSpec = tween(durationMillis = 190))
+        } else {
+            hasShownInitialTab = true
+        }
+    }
     var showPrivateVaultGate by remember { mutableStateOf(false) }
     var privateVaultUnlocked by remember { mutableStateOf(false) }
     fun lockPrivateVault() {
@@ -241,27 +284,30 @@ internal fun NestNoteApp(
         notes = notes.filterNot { it.privateNote }
         if (selectedView == "Private") selectedView = "Home"
     }
-    var privateVaultBiometricEnabled by remember { mutableStateOf(preferences.getBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, true)) }
+    var privateVaultBiometricEnabled by remember { mutableStateOf(preferences.getBoolean("private_vault_biometric_enabled", false)) }
+    var screenCaptureProtectionEnabled by remember {
+        mutableStateOf(preferences.getBoolean(PREF_PRIVATE_SCREEN_PROTECTION, true))
+    }
+    var pendingBiometricEnrollment by remember { mutableStateOf(false) }
+    var showBiometricEnrollment by remember { mutableStateOf(false) }
     val privateVaultBiometricAvailable = remember(context) {
-        BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+        BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
     }
     fun requestPrivateVault() { showPrivateVaultGate = true }
     LaunchedEffect(selectedView) {
         if (selectedView != "Private") lockPrivateVault()
-        if (selectedView == "Backup") {
-            automaticBackupLastRun = preferences.getLong(PREF_BACKUP_AUTOMATIC_LAST_RUN, 0L)
-            automaticBackupStatus = preferences.getString(PREF_BACKUP_AUTOMATIC_STATUS, "Not run yet") ?: "Not run yet"
-        }
     }
     var search by remember { mutableStateOf("") }
     var selectedNoteIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var confirmBulkDelete by remember { mutableStateOf(false) }
+    var confirmEncryptAll by remember { mutableStateOf(false) }
     var savedSearches by remember {
         mutableStateOf<List<String>>(preferences.getStringSet(PREF_SAVED_SEARCHES, emptySet())?.toList()?.sorted() ?: emptyList())
     }
     var searchVisible by remember { mutableStateOf(false) }
     var editorNoteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editorDraftId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingLinkedNoteAfterSave by remember { mutableStateOf<Long?>(null) }
     var editorTemplate by remember { mutableStateOf<NoteTemplate?>(null) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     var editorHasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
@@ -272,8 +318,9 @@ internal fun NestNoteApp(
     // Protect private content even when a private note is opened from Home.
     // Track ownership across recompositions so changing between protected routes
     // cannot accidentally leave FLAG_SECURE set or clear a flag owned elsewhere.
-    val protectPrivateContent = selectedView == "Private" ||
-        (editorVisible && editorNote?.privateNote == true)
+    // Apply FLAG_SECURE across the app whenever the privacy setting is enabled.
+    // This protects private content consistently, without relying on the current route.
+    val protectPrivateContent = screenCaptureProtectionEnabled
     var privateVaultAddedSecureFlag by remember { mutableStateOf(false) }
     val secureWindow = remember(context) { context.findActivityForSecureWindow()?.window }
     SideEffect {
@@ -321,74 +368,196 @@ internal fun NestNoteApp(
     fun saveString(key: String, value: String) = preferences.edit().putString(key, value).apply()
     fun saveBoolean(key: String, value: Boolean) = preferences.edit().putBoolean(key, value).apply()
     fun saveLong(key: String, value: Long) = preferences.edit().putLong(key, value).apply()
-    fun persist(next: List<NestNote>, allowRecovery: Boolean = false): Boolean {
-        if (!storageLoaded) {
-            coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
+    var persistenceBusy by remember { mutableStateOf(false) }
+    suspend fun persist(next: List<NestNote>, allowRecovery: Boolean = false, claimHeld: Boolean = false): Boolean {
+        if (!claimHeld) {
+            if (persistenceBusy) {
+                snackbarHostState.showSnackbar("A save is already in progress. Please try again.")
+                return false
+            }
+            persistenceBusy = true
+        } else if (!persistenceBusy) {
             return false
         }
-        if (storageRecoveryRequired && !allowRecovery) {
-            coroutineScope.launch { snackbarHostState.showSnackbar("Restore a backup before changing notes. Existing local data was not overwritten.") }
-            return false
-        }
-        val session = privateVaultSession
-        val publicNext = next.filterNot { it.privateNote }
-        val privateNext = next.filter { it.privateNote }
-        if (privateNext.isNotEmpty() && session == null) {
-            coroutineScope.launch { snackbarHostState.showSnackbar("Unlock Private Vault before saving private notes.") }
-            return false
-        }
-        // Preserve not-yet-migrated private records in the legacy encrypted blob while locked.
-        val generalNext = if (session == null) publicNext + legacyPrivateNotes else publicNext
-        val oldPrivate = notes.filter { it.privateNote }
-        val privateSaved = if (session == null) true else privateNoteStore.save(session, privateNext)
-        if (!privateSaved) {
-            coroutineScope.launch { snackbarHostState.showSnackbar("Private note encryption failed. No plaintext fallback was used.") }
-            return false
-        }
-        val saved = store.save(generalNext)
-        if (!saved && session != null) {
-            // SharedPreferences cannot transact across namespaces; restore the previous encrypted
-            // private snapshot if the public-store commit fails.
-            if (!privateNoteStore.save(session, oldPrivate)) {
+        try {
+            if (!storageLoaded) {
+                snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.")
+                return false
+            }
+            if (storageRecoveryRequired && !allowRecovery) {
+                snackbarHostState.showSnackbar("Restore a backup before changing notes. Existing local data was not overwritten.")
+                return false
+            }
+            val session = privateVaultSession
+            val publicNext = next.filterNot { it.privateNote }
+            val privateNext = next.filter { it.privateNote }
+            if (privateNext.isNotEmpty() && session == null) {
+                snackbarHostState.showSnackbar("Unlock Private Vault before saving private notes.")
+                return false
+            }
+            val generalNext = if (session == null) publicNext + legacyPrivateNotes else publicNext
+            val oldPrivate = notes.filter { it.privateNote }
+            val (privateSaved, saved, rollbackSucceeded) = withContext(Dispatchers.IO) {
+                android.os.Trace.beginSection("NestNote.persist.privateStoreSave")
+                val privateOk = try {
+                    if (session == null) true else privateNoteStore.save(session, privateNext)
+                } finally {
+                    android.os.Trace.endSection()
+                }
+                if (!privateOk) return@withContext Triple(false, false, true)
+                android.os.Trace.beginSection("NestNote.persist.publicStoreSave")
+                val publicOk = try {
+                    store.save(generalNext)
+                } finally {
+                    android.os.Trace.endSection()
+                }
+                val rollbackOk = if (!publicOk && session != null) privateNoteStore.save(session, oldPrivate) else true
+                Triple(privateOk, publicOk, rollbackOk)
+            }
+            if (!privateSaved) {
+                snackbarHostState.showSnackbar("Private note encryption failed. No plaintext fallback was used.")
+                return false
+            }
+            if (saved) {
+                val previousIds = notes.map { it.id }.toSet()
+                val nextIds = next.map { it.id }.toSet()
+                val removedIds = previousIds - nextIds
+                val notesForAlarms = next
+                coroutineScope.launch(Dispatchers.IO) {
+                    removedIds.forEach { ReminderScheduler.cancel(context, it) }
+                    ReminderScheduler.rescheduleAll(context, notesForAlarms)
+                }
+                notes = if (session == null) publicNext else next
+                if (allowRecovery) storageRecoveryRequired = false
+            } else if (!rollbackSucceeded) {
                 storageRecoveryRequired = true
-                coroutineScope.launch { snackbarHostState.showSnackbar("Storage recovery is required after a failed private-note save.") }
+                snackbarHostState.showSnackbar("Storage recovery is required after a failed save. Do not make further changes until recovery is complete.")
+            } else {
+                snackbarHostState.showSnackbar("Save failed. Your previous notes are still available.")
+            }
+            return saved
+        } finally {
+            persistenceBusy = false
+        }
+    }
+    fun requestPersist(
+        next: List<NestNote>,
+        allowRecovery: Boolean = false,
+        onSuccess: () -> Unit = {},
+        onFailure: () -> Unit = {}
+    ) {
+        if (persistenceBusy) {
+            onFailure()
+            coroutineScope.launch { snackbarHostState.showSnackbar("A save is already in progress. Please try again.") }
+            return
+        }
+        // Claim on the UI thread before launching so two rapid taps cannot queue stale snapshots.
+        persistenceBusy = true
+        coroutineScope.launch {
+            try {
+                if (persist(next, allowRecovery, claimHeld = true)) onSuccess() else onFailure()
+            } finally {
+                // Also release the claim if this coroutine is cancelled before persist starts.
+                if (persistenceBusy) persistenceBusy = false
             }
         }
-        if (saved) {
-            val previousIds = notes.map { it.id }.toSet()
-            val nextIds = next.map { it.id }.toSet()
-            val removedIds = previousIds - nextIds
-            val notesForAlarms = next
-            coroutineScope.launch(Dispatchers.IO) {
-                removedIds.forEach { ReminderScheduler.cancel(context, it) }
-                ReminderScheduler.rescheduleAll(context, notesForAlarms)
-            }
-            notes = if (session == null) publicNext else next
-            if (allowRecovery) storageRecoveryRequired = false
-        } else {
-            coroutineScope.launch { snackbarHostState.showSnackbar("Save failed. Your previous notes are still available.") }
+    }
+    fun encryptOrdinaryNote(note: NestNote): NestNote {
+        require(!note.privateNote && !note.encrypted) { "Only unencrypted ordinary notes can be encrypted here." }
+        val payload = ordinaryNoteCrypto.encrypt(note)
+        val locked = note.copy(
+            title = NoteStore.ENCRYPTED_NOTE_TITLE,
+            body = "",
+            category = "Encrypted",
+            color = 0,
+            pinned = false,
+            reminder = "",
+            background = 0,
+            wallpaperUri = "",
+            format = "plain",
+            encrypted = true,
+            encryptedPayload = payload
+        )
+        // Verify authenticated decryption and identity before the source record can be replaced.
+        val verified = ordinaryNoteCrypto.decrypt(locked)
+        check(verified == note) { "Encrypted note verification failed." }
+        return locked
+    }
+    fun decryptOrdinaryNote(note: NestNote): NestNote {
+        require(note.encrypted && !note.privateNote) { "Only encrypted ordinary notes can be decrypted here." }
+        return ordinaryNoteCrypto.decrypt(note)
+    }
+    fun toggleNoteEncryption(noteId: Long) {
+        val note = notes.firstOrNull { it.id == noteId } ?: return
+        if (note.privateNote) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("Private Vault notes use their own independent encryption.") }
+            return
         }
-        return saved
+        val replacement = runCatching {
+            if (note.encrypted) decryptOrdinaryNote(note) else encryptOrdinaryNote(note)
+        }.getOrElse { error ->
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(error.message ?: "Encryption failed; the original note was preserved.")
+            }
+            return
+        }
+        requestPersist(notes.map { if (it.id == noteId) replacement else it }) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(if (note.encrypted) "Note decrypted" else "Note encrypted and verified")
+            }
+        }
+    }
+    fun encryptSelectedNotes() {
+        val selected = notes.filter { it.id in selectedNoteIds && !it.privateNote && !it.encrypted }
+        if (selected.isEmpty()) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("No unencrypted ordinary notes are selected.") }
+            return
+        }
+        val replacements = runCatching { selected.associate { it.id to encryptOrdinaryNote(it) } }.getOrElse { error ->
+            coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Bulk encryption failed; no notes were changed.") }
+            return
+        }
+        requestPersist(notes.map { replacements[it.id] ?: it }) {
+            selectedNoteIds = emptySet()
+            coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted and verified ${replacements.size} notes") }
+        }
+    }
+    fun decryptSelectedNotes() {
+        val selected = notes.filter { it.id in selectedNoteIds && it.encrypted && !it.privateNote }
+        if (selected.isEmpty()) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("No encrypted ordinary notes are selected.") }
+            return
+        }
+        val replacements = runCatching { selected.associate { it.id to decryptOrdinaryNote(it) } }.getOrElse { error ->
+            coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Bulk decryption failed; no notes were changed.") }
+            return
+        }
+        requestPersist(notes.map { replacements[it.id] ?: it }) {
+            selectedNoteIds = emptySet()
+            coroutineScope.launch { snackbarHostState.showSnackbar("Decrypted and verified ${replacements.size} notes") }
+        }
     }
     fun deleteNote(note: NestNote, closeEditor: Boolean = false) {
-        if (!persist(notes.filterNot { it.id == note.id })) return
-        if (closeEditor) editorVisible = false
-        coroutineScope.launch {
-            val result = snackbarHostState.showSnackbar(
-                message = "Note deleted",
-                actionLabel = "Undo",
-                withDismissAction = true,
-                duration = SnackbarDuration.Short
-            )
-            if (result == SnackbarResult.ActionPerformed && notes.none { it.id == note.id }) {
-                persist(notes + note)
-            } else if (
-                result != SnackbarResult.ActionPerformed &&
-                !storageRecoveryRequired &&
-                notes.none { it.id == note.id }
-            ) {
-                runCatching { VoiceAttachmentStore(context).deleteAll(note.id) }
-                runCatching { VoiceAttachmentManifest(context).removeNote(note.id) }
+        requestPersist(notes.filterNot { it.id == note.id }) {
+            if (closeEditor) editorVisible = false
+            coroutineScope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = "Note deleted",
+                    actionLabel = "Undo",
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Short
+                )
+                if (result == SnackbarResult.ActionPerformed && notes.none { it.id == note.id }) {
+                    persist(notes + note)
+                } else if (
+                    result != SnackbarResult.ActionPerformed &&
+                    !storageRecoveryRequired &&
+                    notes.none { it.id == note.id }
+                ) {
+                    withContext(Dispatchers.IO) {
+                        runCatching { com.nestnote.app.voicenote.VoiceNoteRepository(context).deleteAllForNote(note.id) }
+                    }
+                }
             }
         }
     }
@@ -402,6 +571,7 @@ internal fun NestNoteApp(
         themeMode = ThemeMode.SYSTEM
         dynamicColors = true
         amoled = false
+        accentPalette = AccentPalette.DEFAULT
         dashboardLayout = DashboardLayout.GRID
         editorMode = EditorPresentationMode.FULL_SCREEN
         dashboardDensity = DashboardDensity.COMPACT
@@ -416,10 +586,6 @@ internal fun NestNoteApp(
         showEditorCounts = true
         categoryOptions = categories
         defaultNoteCategory = "Ideas"
-        automaticBackupEnabled = false
-        automaticBackupLastRun = 0L
-        automaticBackupStatus = "Not run yet"
-        AutomaticBackupScheduler.cancel(context)
         coroutineScope.launch { snackbarHostState.showSnackbar("Settings reset to defaults") }
     }
     suspend fun importMarkdownUris(uris: List<android.net.Uri>) {
@@ -520,52 +686,13 @@ internal fun NestNoteApp(
             onExternalMarkdownHandled()
         }
     }
-    var exportArchivedNotes by remember { mutableStateOf(true) }
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) {
-            val exportNotes = NoteStore.notesForBackup(notes, includeArchived = exportArchivedNotes)
-            val saved = runCatching {
-                val payload = NoteStore.encodeBackup(exportNotes).toByteArray(Charsets.UTF_8)
-                context.contentResolver.openOutputStream(uri)?.use { it.write(payload) } != null
-            }.getOrDefault(false)
-            if (saved) {
-                lastBackupAt = System.currentTimeMillis()
-                backupStatus = "Success"
-                preferences.edit()
-                    .putLong(PREF_BACKUP_LAST_SUCCESS_AT, lastBackupAt)
-                    .putString(PREF_BACKUP_LAST_STATUS, backupStatus)
-                    .apply()
-            } else {
-                backupStatus = "Failed"
-                saveString(PREF_BACKUP_LAST_STATUS, backupStatus)
-            }
-            coroutineScope.launch {
-                snackbarHostState.showSnackbar(if (saved) "Backup saved (" + exportNotes.size + " notes). Voice recordings are not included." else "Backup could not be saved. Your notes were not changed.")
-            }
-        }
-    }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) {
-            // Validate every selected file before opening the restore preview; never apply a partial batch.
-            val batches = uris.map { uri ->
-                runCatching {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                        ?.let { NoteStore.decodeBackup(it) }
-                }.getOrNull()
-            }
-            val incoming = if (batches.all { it != null }) {
-                batches.filterNotNull().flatten().takeIf { it.isNotEmpty() }
-            } else null
-            val message = if (incoming == null) {
-                "One or more selected files aren't valid NESTNOTE backups. Nothing was imported."
-            } else {
-                // Deduplicate IDs across files using the same newest-update-wins rule as restore.
-                pendingRestore = incoming.fold(emptyList()) { accumulated, batchNote ->
-                    NoteStore.merge(accumulated, listOf(batchNote)).notes
-                }
-                "Validated ${uris.size} backup file(s). Review the combined restore before applying it."
-            }
-            coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+    var backupFolderConfigured by remember { mutableStateOf(BackupDirectory.configuredTreeUri(context) != null) }
+    val backupFolderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
+        if (treeUri != null && BackupDirectory.persistTreeGrant(context, treeUri)) {
+            backupFolderConfigured = true
+            coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted archive folder access saved.") }
+        } else if (treeUri != null) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("Folder access could not be saved. Choose a folder again.") }
         }
     }
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -579,8 +706,16 @@ internal fun NestNoteApp(
     } else if (dark) nestNoteDarkScheme
     else nestNoteLightScheme
 
-    val filteredNotes = remember(notes, selectedView, search, sortByTitle, sortByCreated, privateVaultUnlocked) {
-        NoteFilters.visibleNotes(notes, if (selectedView == "Private" && privateVaultUnlocked) "Private" else selectedView, search, sortByTitle, sortByCreated)
+    // Keep query parsing, full-body matching, and sorting off the UI thread. A short debounce
+    // prevents rebuilding the result list for every intermediate keystroke while preserving
+    // immediate text-field feedback.
+    LaunchedEffect(notes, selectedView, search, sortByTitle, sortByCreated, privateVaultUnlocked) {
+        delay(100)
+        val view = if (selectedView == "Private" && privateVaultUnlocked) "Private" else selectedView
+        val result = withContext(Dispatchers.Default) {
+            NoteFilters.visibleNotes(notes, view, search, sortByTitle, sortByCreated)
+        }
+        filteredNotes = result
     }
 
     PredictiveBackHandler(enabled = !editorVisible && selectedView != "Home") { progress ->
@@ -590,9 +725,8 @@ internal fun NestNoteApp(
         searchVisible = false
     }
 
-    val expressiveScheme = scheme.copy(
-        tertiary = if (dark) Color(0xFF9CCBC1) else Color(0xFF426F67)
-    ).let { if (dark && amoled) it.asAmoled() else it }
+    val expressiveScheme = (if (accentPalette == AccentPalette.DEFAULT) scheme else accentPalette.applyTo(scheme, dark))
+        .let { if (dark && amoled) it.asAmoled() else it }
 
     MaterialTheme(
         colorScheme = expressiveScheme,
@@ -600,6 +734,9 @@ internal fun NestNoteApp(
         shapes = nestNoteShapes
     ) {
         val colors = MaterialTheme.colorScheme
+        if (!storageLoaded) {
+            BootLandingScreen(preferences = preferences)
+        } else {
         Scaffold(
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -608,30 +745,32 @@ internal fun NestNoteApp(
                 TopAppBar(
                     title = {
                         Column(
-                            modifier = Modifier.pointerInput(selectedView) {
-                                var totalDrag = 0f
-                                detectVerticalDragGestures(
-                                    onVerticalDrag = { _, dragAmount ->
-                                        if (dragAmount > 0f) {
-                                            totalDrag += dragAmount
-                                            if (totalDrag > 72f && selectedView == "Home") {
-                                                totalDrag = 0f
-                                                requestPrivateVault()
-                                            }
-                                        } else if (dragAmount < 0f) totalDrag = 0f
-                                    },
-                                    onDragEnd = { totalDrag = 0f },
-                                    onDragCancel = { totalDrag = 0f }
+                            modifier = Modifier
+                        ) {
+                            AnimatedContent(
+                                targetState = when (selectedView) { "Private" -> "Private Vault"; "PrivateVaultSettings" -> "Private Vault settings"; "Settings" -> "Settings"; "Backup" -> "Encrypted archives"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(180)) +
+                                        slideInVertically(
+                                            animationSpec = androidx.compose.animation.core.tween(180),
+                                            initialOffsetY = { it / 8 }
+                                        )) togetherWith
+                                        (fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
+                                            slideOutVertically(
+                                                animationSpec = androidx.compose.animation.core.tween(100),
+                                                targetOffsetY = { -it / 10 }
+                                            ))
+                                },
+                                label = "tab-title-transition"
+                            ) { title ->
+                                Text(
+                                    title,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.2.sp
                                 )
                             }
-                        ) {
                             Text(
-                                when (selectedView) { "Private" -> "Private Vault"; "PrivateVaultSettings" -> "Private Vault settings"; "Settings" -> "Settings"; "Backup" -> "Backup & restore"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.2.sp
-                            )
-                            Text(
-                                when (selectedView) { "Private" -> "Hidden notes · unlocked"; "PrivateVaultSettings" -> "Authentication and privacy controls"; "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized. · Swipe down to open Private Vault" },
+                                when (selectedView) { "Private" -> "Hidden notes · unlocked"; "PrivateVaultSettings" -> "Authentication and privacy controls"; "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant
                             )
@@ -648,6 +787,30 @@ internal fun NestNoteApp(
                             }
                         }
                     },
+                    actions = {
+                        if (selectedView == "Home" || selectedView == "All notes") {
+                            IconButton(
+                                onClick = {
+                                    searchVisible = !searchVisible
+                                    if (!searchVisible) search = ""
+                                },
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (searchVisible) colors.primaryContainer else colors.surfaceContainerHigh
+                                    )
+                                    .testTag("home_search_icon")
+                            ) {
+                                Icon(
+                                    if (searchVisible) Icons.Default.Close else Icons.Default.Search,
+                                    contentDescription = if (searchVisible) "Close search" else "Search notes",
+                                    tint = if (searchVisible) colors.onPrimaryContainer else colors.onSurface
+                                )
+                            }
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
                 )
             },
@@ -660,18 +823,21 @@ internal fun NestNoteApp(
                         allPinned = selectedNotes.isNotEmpty() && selectedNotes.all { it.pinned },
                         allArchived = selectedNotes.isNotEmpty() && selectedNotes.all { it.archived },
                         onMoveCategory = { category ->
-                            if (persist(notes.map { if (it.id in selectedNoteIds) it.copy(category = category) else it })) selectedNoteIds = emptySet()
+                            requestPersist(notes.map { if (it.id in selectedNoteIds) it.copy(category = category) else it }) { selectedNoteIds = emptySet() }
                         },
                         onTogglePin = {
                             val pin = !(selectedNotes.isNotEmpty() && selectedNotes.all { it.pinned })
-                            if (persist(notes.map { if (it.id in selectedNoteIds) it.copy(pinned = pin, updated = System.currentTimeMillis()) else it })) selectedNoteIds = emptySet()
+                            requestPersist(notes.map { if (it.id in selectedNoteIds) it.copy(pinned = pin, updated = System.currentTimeMillis()) else it }) { selectedNoteIds = emptySet() }
                         },
                         onToggleArchive = {
                             val restore = selectedNotes.isNotEmpty() && selectedNotes.all { it.archived }
-                            if (persist(notes.map { if (it.id in selectedNoteIds) it.copy(archived = !restore, pinned = if (restore) it.pinned else false, updated = System.currentTimeMillis()) else it })) selectedNoteIds = emptySet()
+                            requestPersist(notes.map { if (it.id in selectedNoteIds) it.copy(archived = !restore, pinned = if (restore) it.pinned else false, updated = System.currentTimeMillis()) else it }) { selectedNoteIds = emptySet() }
                         },
                         onDelete = { confirmBulkDelete = true },
-                        onClear = { selectedNoteIds = emptySet() }
+                        onClear = { selectedNoteIds = emptySet() },
+                        onSelectAll = { selectedNoteIds = filteredNotes.filterNot { it.privateNote }.map { it.id }.toSet() },
+                        onEncrypt = if (selectedNotes.any { !it.encrypted && !it.privateNote }) ({ encryptSelectedNotes() }) else null,
+                        onDecrypt = if (selectedNotes.any { it.encrypted && !it.privateNote }) ({ decryptSelectedNotes() }) else null
                     )
                 } else {
                     NestNoteNavBar(
@@ -698,6 +864,11 @@ internal fun NestNoteApp(
                 Column(
                     (if (isExpandedWidth) Modifier.widthIn(max = 840.dp) else Modifier)
                         .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = tabContentAlpha.value
+                            translationY = tabContentOffsetY.value
+                        }
+                        .animateContentSize(animationSpec = tween(durationMillis = 200))
                 ) {
                 if (storageRecoveryRequired) {
                     Surface(
@@ -722,23 +893,29 @@ internal fun NestNoteApp(
                         }
                     }
                 }
-                if (selectedView == "Home" || selectedView == "All notes" || searchVisible) {
+                if (searchVisible) {
                     OutlinedTextField(
                         value = search, onValueChange = { search = it },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("note_search_field"),
                         placeholder = { Text("Search · is:pinned · has:voice · after:YYYY-MM-DD") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
-                            if (search.isNotBlank()) IconButton(
-                                onClick = {
-                                    val query = search.trim()
-                                    if (query !in savedSearches && savedSearches.size < 12) {
-                                        savedSearches = savedSearches + query
-                                        preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
-                                    }
-                                },
-                                enabled = search.trim() in savedSearches || savedSearches.size < 12
-                            ) { Icon(Icons.Default.BookmarkAdd, contentDescription = "Save search") }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (search.isNotBlank()) IconButton(
+                                    onClick = {
+                                        val query = search.trim()
+                                        if (query !in savedSearches && savedSearches.size < 12) {
+                                            savedSearches = savedSearches + query
+                                            preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
+                                        }
+                                    },
+                                    enabled = search.trim() in savedSearches || savedSearches.size < 12
+                                ) { Icon(Icons.Default.BookmarkAdd, contentDescription = "Save search") }
+                                IconButton(onClick = {
+                                    searchVisible = false
+                                    search = ""
+                                }) { Icon(Icons.Default.Close, contentDescription = "Close search field") }
+                            }
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
@@ -821,6 +998,8 @@ internal fun NestNoteApp(
                         selectedView = "Home"
                         editorVisible = true
                     }
+                } else if (selectedView == "TextToolbox") {
+                    TextToolboxScreen()
                 } else if (selectedView == "Shortcuts") {
                     KeyboardShortcutsScreen()
                 } else if (selectedView == "Backup") {
@@ -830,30 +1009,69 @@ internal fun NestNoteApp(
                         pinnedNotes = notes.count { it.pinned && !it.archived && !it.privateNote },
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
-                        automaticBackupEnabled = automaticBackupEnabled,
-                        automaticBackupLastRun = automaticBackupLastRun,
-                        automaticBackupStatus = automaticBackupStatus,
-                        onAutomaticBackupChange = { enabled ->
-                            automaticBackupEnabled = enabled
-                            saveBoolean(PREF_BACKUP_AUTOMATIC_ENABLED, enabled)
-                            if (enabled) AutomaticBackupScheduler.schedule(context)
-                            else AutomaticBackupScheduler.cancel(context)
+                        backupFolderConfigured = backupFolderConfigured,
+                        onChooseBackupFolder = { backupFolderLauncher.launch(null) },
+                        onExportEncryptedArchive = { includeArchived, password ->
+                            val encryptedExcluded = notes.count { it.encrypted && !it.privateNote }
+                            val archiveNotes = NoteStore.notesForArchive(notes, includeArchived = includeArchived)
+                            val encrypted = runCatching {
+                                PasswordBackupArchive.encryptArchive(
+                                    NoteStore.encodeArchivePayload(archiveNotes),
+                                    password.toCharArray()
+                                )
+                            }.getOrNull()
+                            val savedTree = BackupDirectory.configuredTreeUri(context)
+                            val saved = encrypted != null && savedTree != null &&
+                                BackupDirectory.writeEncryptedLatest(context, savedTree, encrypted)
+                            if (saved) {
+                                lastBackupAt = System.currentTimeMillis()
+                                backupStatus = "Success"
+                                preferences.edit()
+                                    .putLong(PREF_BACKUP_LAST_SUCCESS_AT, lastBackupAt)
+                                    .putString(PREF_BACKUP_LAST_STATUS, backupStatus)
+                                    .apply()
+                            } else {
+                                backupStatus = "Failed"
+                                saveString(PREF_BACKUP_LAST_STATUS, backupStatus)
+                            }
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    when {
+                                        encrypted == null -> "Encrypted archive could not be created. Check the password and archive size."
+                                        saved -> if (encryptedExcluded > 0) "Password-protected archive saved. $encryptedExcluded device-encrypted notes were excluded; decrypt them before backing them up." else "Password-protected archive saved to Documents/NESTNOTE/NESTNOTE-backup.nestnote."
+                                        else -> "Encrypted archive could not be saved. Your notes were not changed."
+                                    }
+                                )
+                            }
                         },
-                        onExportNotes = { includeArchived ->
-                            exportArchivedNotes = includeArchived
-                            exportLauncher.launch("nestnote-backup.json")
-                        },
-                        onImportNotes = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+                        onImportEncryptedArchive = { password ->
+                            val savedTree = BackupDirectory.configuredTreeUri(context)
+                            val archive = savedTree?.let { BackupDirectory.readEncryptedLatest(context, it) }
+                            val raw = archive?.let { PasswordBackupArchive.decryptArchive(it, password.toCharArray()) }
+                            val incoming = raw?.let(NoteStore::decodeArchivePayload)
+                            if (incoming != null && incoming.isNotEmpty()) {
+                                pendingRestore = incoming
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted archive unlocked. Review the restore before applying it.") }
+                            } else {
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Could not unlock the encrypted archive. Check the password or archive file; no notes were changed.") }
+                            }
+                        }
                     )
                 } else if (selectedView == "PrivateVaultSettings") {
                     PrivateVaultSettingsScreen(
                         passwordConfigured = PrivateVaultSecurity.isConfigured(context),
-                        biometricAvailable = false, // Keep opt-in disabled until device/emulator validation and enrollment UX are complete.
-                        biometricEnabled = false, // Do not surface a stale preference as an enabled security feature.
+                        biometricAvailable = privateVaultBiometricAvailable,
+                        biometricEnabled = privateVaultBiometricEnabled && PrivateVaultBiometricKey(context).isEnrolled(),
                         privateNoteCount = notes.count { it.privateNote },
                         onBiometricEnabledChange = { enabled ->
-                            privateVaultBiometricEnabled = enabled
-                            preferences.edit().putBoolean(PREF_PRIVATE_VAULT_BIOMETRIC_ENABLED, enabled).apply()
+                            if (enabled) {
+                                pendingBiometricEnrollment = true
+                                requestPrivateVault()
+                            } else {
+                                PrivateVaultBiometricKey(context).deleteEnrollment()
+                                privateVaultBiometricEnabled = false
+                                preferences.edit().putBoolean("private_vault_biometric_enabled", false).commit()
+                            }
                         },
                         onSetUpPassword = { requestPrivateVault() },
                         onOpenVault = { requestPrivateVault() },
@@ -899,9 +1117,18 @@ internal fun NestNoteApp(
                         themeMode = themeMode,
                         onThemeChange = { themeMode = it; saveString(PREF_THEME, it.name) },
                         dynamicColors = dynamicColors,
-                        onDynamicColorsChange = { dynamicColors = it; saveBoolean(PREF_DYNAMIC, it) },
+                        onDynamicColorsChange = { enabled ->
+                            dynamicColors = enabled
+                            saveBoolean(PREF_DYNAMIC, enabled)
+                            if (enabled) {
+                                accentPalette = AccentPalette.DEFAULT
+                                saveString("PREF_ACCENT_PALETTE", AccentPalette.DEFAULT.name)
+                            }
+                        },
                         amoled = amoled,
                         onAmoledChange = { amoled = it; saveBoolean(PREF_AMOLED, it) },
+                        accentPalette = accentPalette,
+                        onAccentPaletteChange = { accentPalette = it; saveString("PREF_ACCENT_PALETTE", it.name); saveBoolean(PREF_DYNAMIC, false); dynamicColors = false },
                         dashboardLayout = dashboardLayout,
                         onLayoutChange = { dashboardLayout = it; saveString(PREF_LAYOUT, it.name) },
                         editorMode = editorMode,
@@ -922,10 +1149,7 @@ internal fun NestNoteApp(
                         onCategoryOptionsChange = { updated ->
                             val removed = categoryOptions.toSet() - updated.toSet()
                             val fallback = updated.firstOrNull() ?: "Other"
-                            val notesMoved = removed.isEmpty() || persist(
-                                notes.map { if (it.category in removed) it.copy(category = fallback) else it }
-                            )
-                            if (notesMoved) {
+                            fun applyCategoryUpdate() {
                                 if (selectedView in removed) selectedView = "Home"
                                 categoryOptions = updated
                                 preferences.edit().putStringSet(PREF_CUSTOM_CATEGORIES, updated.toMutableSet()).apply()
@@ -933,6 +1157,10 @@ internal fun NestNoteApp(
                                     defaultNoteCategory = updated.firstOrNull() ?: "Ideas"
                                     saveString(PREF_DEFAULT_CATEGORY, defaultNoteCategory)
                                 }
+                            }
+                            if (removed.isEmpty()) applyCategoryUpdate()
+                            else requestPersist(notes.map { if (it.category in removed) it.copy(category = fallback) else it }) {
+                                applyCategoryUpdate()
                             }
                         },
                         editorTextSize = editorTextSize,
@@ -948,7 +1176,31 @@ internal fun NestNoteApp(
                         totalNotes = notes.count { !it.privateNote },
                         archivedNotes = notes.count { it.archived && !it.privateNote },
                         onOpenBackupRestore = { selectedView = "Backup" },
-                        onOpenPrivateVaultSettings = { selectedView = "PrivateVaultSettings" }
+                        onOpenPrivateVaultSettings = { selectedView = "PrivateVaultSettings" },
+                        storageBackend = store.currentBackend(),
+                        screenCaptureProtectionEnabled = screenCaptureProtectionEnabled,
+                        onScreenCaptureProtectionChange = { enabled ->
+                            screenCaptureProtectionEnabled = enabled
+                            preferences.edit().putBoolean(PREF_PRIVATE_SCREEN_PROTECTION, enabled).apply()
+                        },
+                        onStorageBackendChange = { target ->
+                            if (!storageLoaded || storageRecoveryRequired) {
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Resolve storage recovery before scheduling a storage change.") }
+                            } else if (target == store.currentBackend()) {
+                                coroutineScope.launch { snackbarHostState.showSnackbar("That storage backend is already active.") }
+                            } else {
+                                runCatching { StorageBackendSwitchWorker.schedule(context, target) }
+                                    .onSuccess {
+                                        val backendName = if (target == NoteStorageBackend.SQLCIPHER) "SQLCipher" else "AES-256 Android Keystore"
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Change to $backendName scheduled for 5 hours from now. Current storage remains active until then.")
+                                        }
+                                    }
+                                    .onFailure { error ->
+                                        coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Could not schedule storage change.") }
+                                    }
+                            }
+                        }
                     )
                 } else if (selectedView == "About") {
                     AboutScreen(version = appVersion)
@@ -986,6 +1238,41 @@ internal fun NestNoteApp(
                                 style = MaterialTheme.typography.titleSmall,
                                 color = colors.onSurfaceVariant
                             )
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = colors.primaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = colors.surface.copy(alpha = 0.72f)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null,
+                                            modifier = Modifier.padding(12.dp).size(26.dp), tint = colors.primary)
+                                    }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("A little space for big ideas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            "${notes.count { !it.privateNote && !it.archived }} active notes · ${notes.count { it.pinned && !it.privateNote && !it.archived }} pinned",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(onClick = {
+                                        editorNoteId = null
+                                        editorDraftId = NoteStore.allocateNoteId(notes)
+                                        editorTemplate = null
+                                        editorVisible = true
+                                    }) {
+                                        Icon(Icons.Default.Add, contentDescription = "Create a note", tint = colors.primary)
+                                    }
+                                }
+                            }
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
@@ -1045,6 +1332,8 @@ internal fun NestNoteApp(
                                     DropdownMenuItem(text = { Text("Recently edited") }, onClick = { setSort("RECENT"); sortMenuExpanded = false })
                                     DropdownMenuItem(text = { Text("Recently created") }, onClick = { setSort("CREATED"); sortMenuExpanded = false })
                                     DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { setSort("TITLE"); sortMenuExpanded = false })
+                                    HorizontalDivider()
+                                    DropdownMenuItem(text = { Text("Encrypt all notes…") }, onClick = { sortMenuExpanded = false; confirmEncryptAll = true }, enabled = notes.any { !it.privateNote && !it.encrypted })
                                 }
                             }
                             IconButton(
@@ -1125,12 +1414,12 @@ internal fun NestNoteApp(
                                     onOpen = {
                                         if (selectedNoteIds.isNotEmpty()) {
                                             selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
-                                        } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
+                                        } else if (note.encrypted) { toggleNoteEncryption(note.id) } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
                                     },
                                     onSelect = { selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id },
                                     isSelected = note.id in selectedNoteIds,
-                                    onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
-                                    onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) },
+                                    onPin = { if (!note.encrypted) requestPersist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
+                                    onDelete = { deleteNote(note) }, onArchive = { if (!note.encrypted) requestPersist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) }, onToggleEncryption = { toggleNoteEncryption(note.id) },
                                     modifier = Modifier.animateItem())
                             }
                         }
@@ -1145,12 +1434,12 @@ internal fun NestNoteApp(
                                     onOpen = {
                                         if (selectedNoteIds.isNotEmpty()) {
                                             selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
-                                        } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
+                                        } else if (note.encrypted) { toggleNoteEncryption(note.id) } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
                                     },
                                     onSelect = { selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id },
                                     isSelected = note.id in selectedNoteIds,
-                                    onPin = { persist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
-                                    onDelete = { deleteNote(note) }, onArchive = { persist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) },
+                                    onPin = { requestPersist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
+                                    onDelete = { deleteNote(note) }, onArchive = { if (!note.encrypted) requestPersist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) }, onToggleEncryption = { toggleNoteEncryption(note.id) },
                                     modifier = Modifier.animateItem())
                             }
                         }
@@ -1211,8 +1500,8 @@ internal fun NestNoteApp(
                             updated = newest.savedAtMillis,
                             created = newest.savedAtMillis
                         )
-                        if (persist(notes + recovered)) {
-                            runCatching { DraftStore(context).clear(newest.noteId) }
+                        requestPersist(notes + recovered) {
+                            coroutineScope.launch(Dispatchers.IO) { runCatching { DraftStore(context).clear(newest.noteId) } }
                             pendingOrphanDrafts = pendingOrphanDrafts.drop(1)
                             if (pendingOrphanDrafts.isEmpty()) {
                                 showOrphanDraftDialog = false
@@ -1241,7 +1530,9 @@ internal fun NestNoteApp(
         }
 
         pendingRestore?.let { incoming ->
-            val restoreIncoming = NoteStore.remapDraftIdCollisionForRestore(notes, incoming, editorDraftId)
+            // Defense in depth: even archive restores must never introduce Private Vault records.
+            val publicIncoming = incoming.filterNot { it.privateNote }
+            val restoreIncoming = NoteStore.remapDraftIdCollisionForRestore(notes, publicIncoming, editorDraftId)
             val preview = NoteStore.merge(notes, restoreIncoming)
             val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
             AlertDialog(
@@ -1260,7 +1551,7 @@ internal fun NestNoteApp(
                     TextButton(
                         enabled = withinNoteLimit,
                         onClick = {
-                            if (persist(preview.notes, allowRecovery = true)) {
+                            requestPersist(preview.notes, allowRecovery = true) {
                                 val restoredCategories = (categoryOptions + preview.notes.map { it.category })
                                     .distinct().filter { it.isNotBlank() }
                                 if (restoredCategories != categoryOptions) {
@@ -1406,63 +1697,136 @@ internal fun NestNoteApp(
         if (showPrivateVaultGate) {
             PrivateVaultGateDialog(
                 passwordConfigured = PrivateVaultSecurity.isConfigured(context),
-                // CryptoObject/key-binding primitives now exist, but enrollment, recovery and
-                // device validation are not complete. Never expose biometric unlock yet.
-                biometricEnabled = false,
-                onDismiss = { showPrivateVaultGate = false },
-                onSubmit = { password, confirmation ->
-                    val configured = PrivateVaultSecurity.isConfigured(context)
-                    val passwordAccepted = if (configured) {
-                        when {
-                            PrivateVaultSecurity.isLockedOut(context) -> false
-                            PrivateVaultSecurity.verify(context, password) -> {
-                                PrivateVaultSecurity.clearFailedAttempts(context)
-                                true
+                biometricEnabled = privateVaultBiometricEnabled && PrivateVaultBiometricKey(context).isEnrolled(),
+                onDismiss = {
+                    showPrivateVaultGate = false
+                    pendingBiometricEnrollment = false
+                },
+                onSubmit = { password, confirmation, onResult ->
+                    // First-time setup should offer biometric enrollment immediately after the
+                    // password has successfully created and unlocked the vault.
+                    val wasConfiguredBeforeSubmit = PrivateVaultSecurity.isConfigured(context)
+                    coroutineScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            val configured = PrivateVaultSecurity.isConfigured(context)
+                            val passwordAccepted = if (configured) {
+                                when {
+                                    PrivateVaultSecurity.isLockedOut(context) -> false
+                                    PrivateVaultSecurity.verify(context, password) -> {
+                                        PrivateVaultSecurity.clearFailedAttempts(context)
+                                        true
+                                    }
+                                    else -> {
+                                        PrivateVaultSecurity.recordFailedAttempt(context)
+                                        false
+                                    }
+                                }
+                            } else {
+                                password.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH &&
+                                    password == confirmation && PrivateVaultSecurity.configure(context, password)
                             }
-                            else -> {
-                                PrivateVaultSecurity.recordFailedAttempt(context)
-                                false
-                            }
+                            val session = if (passwordAccepted) {
+                                val keyReady = if (privateNoteCrypto.isInitialized()) true
+                                    else privateNoteCrypto.initialize(password.toCharArray())
+                                if (keyReady) privateNoteCrypto.unlock(password.toCharArray()) else null
+                            } else null
+                            val unlocked = if (session == null) null else runCatching {
+                                val encryptedExisting = if (privateNoteStore.hasStoredRecords()) {
+                                    privateNoteStore.load(session)
+                                } else emptyList()
+                                val migrated = NoteStore.merge(encryptedExisting, legacyPrivateNotes).notes
+                                check(privateNoteStore.save(session, migrated)) { "Private vault encryption failed" }
+                                check(store.save(notes.filterNot { it.privateNote })) { "Public note store commit failed" }
+                                session to migrated
+                            }.getOrNull()
+                            Triple(unlocked, passwordAccepted, session != null)
                         }
-                    } else {
-                        password.length >= PrivateVaultSecurity.MIN_PASSWORD_LENGTH &&
-                            password == confirmation && PrivateVaultSecurity.configure(context, password)
-                    }
-                    val session = if (passwordAccepted) {
-                        val keyReady = if (privateNoteCrypto.isInitialized()) true
-                            else privateNoteCrypto.initialize(password.toCharArray())
-                        if (keyReady) privateNoteCrypto.unlock(password.toCharArray()) else null
-                    } else null
-                    val accepted = if (session == null) false else runCatching {
-                        val encryptedExisting = if (privateNoteStore.hasStoredRecords()) {
-                            privateNoteStore.load(session)
-                        } else emptyList()
-                        val migrated = NoteStore.merge(encryptedExisting, legacyPrivateNotes).notes
-                        // Commit encrypted private records first. Only then remove legacy private
-                        // records from the general store. Any failure leaves the vault locked.
-                        check(privateNoteStore.save(session, migrated)) { "Private vault encryption failed" }
-                        check(store.save(notes.filterNot { it.privateNote })) { "Public note store commit failed" }
-                        legacyPrivateNotes = emptyList()
-                        privateVaultSession = session
-                        notes = notes.filterNot { it.privateNote } + migrated
-                        true
-                    }.getOrDefault(false)
-                    if (accepted) {
-                        privateVaultUnlocked = true
-                        selectedView = "Private"
-                        search = ""
-                        searchVisible = false
-                        selectedNoteIds = emptySet()
-                        showPrivateVaultGate = false
-                    } else if (passwordAccepted) {
-                        coroutineScope.launch {
+                        val unlocked = result.first
+                        val accepted = unlocked != null
+                        if (unlocked != null) {
+                            privateVaultSession = unlocked.first
+                            notes = notes.filterNot { it.privateNote } + unlocked.second
+                            legacyPrivateNotes = emptyList()
+                        }
+                        onResult(accepted)
+                        if (accepted) {
+                            if (!wasConfiguredBeforeSubmit && privateVaultBiometricAvailable) {
+                                pendingBiometricEnrollment = true
+                            } else if (!wasConfiguredBeforeSubmit) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Vault created. Strong fingerprint/biometric unlock is not available on this device; you can still use your password.")
+                                }
+                            }
+                            privateVaultUnlocked = true
+                            selectedView = "Private"
+                            search = ""
+                            searchVisible = false
+                            selectedNoteIds = emptySet()
+                            showPrivateVaultGate = false
+                            if (pendingBiometricEnrollment) {
+                                pendingBiometricEnrollment = false
+                                showBiometricEnrollment = true
+                            }
+                        } else if (result.second) {
                             snackbarHostState.showSnackbar("Vault could not be safely unlocked or migrated. Existing data was preserved; try again.")
                         }
                     }
-                    accepted
                 },
-                onBiometricUnlock = { _ -> /* Intentionally disabled until enrollment/recovery validation is complete. */ }
+                onBiometricUnlock = { authenticatedCipher, onBiometricResult ->
+                    coroutineScope.launch {
+                        val unlocked = withContext(Dispatchers.IO) {
+                            val session = PrivateVaultBiometricKey(context).unlock(authenticatedCipher)
+                            if (session == null) null else runCatching {
+                                val encryptedExisting = if (privateNoteStore.hasStoredRecords()) privateNoteStore.load(session) else emptyList()
+                                val migrated = NoteStore.merge(encryptedExisting, legacyPrivateNotes).notes
+                                check(privateNoteStore.save(session, migrated)) { "Private vault encryption failed" }
+                                check(store.save(notes.filterNot { it.privateNote })) { "Public note store commit failed" }
+                                session to migrated
+                            }.getOrNull()
+                        }
+                        if (unlocked != null) {
+                            onBiometricResult(true)
+                            privateVaultSession = unlocked.first
+                            notes = notes.filterNot { it.privateNote } + unlocked.second
+                            legacyPrivateNotes = emptyList()
+                            privateVaultUnlocked = true
+                            selectedView = "Private"
+                            search = ""
+                            searchVisible = false
+                            selectedNoteIds = emptySet()
+                            showPrivateVaultGate = false
+                        } else {
+                            onBiometricResult(false)
+                            snackbarHostState.showSnackbar("Biometric unlock failed safely. Use your vault password.")
+                        }
+                    }
+                }
             )
+        }
+
+        if (showBiometricEnrollment) {
+            val session = privateVaultSession
+            if (session == null) {
+                showBiometricEnrollment = false
+            } else {
+                PrivateVaultBiometricEnrollmentDialog(
+                    session = session,
+                    onComplete = { enrolled ->
+                        if (enrolled) {
+                            privateVaultBiometricEnabled = true
+                            preferences.edit().putBoolean("private_vault_biometric_enabled", true).commit()
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Biometric unlock enabled. Your password remains available as recovery.") }
+                        }
+                        showBiometricEnrollment = false
+                    },
+                    onDismiss = {
+                        PrivateVaultBiometricKey(context).deleteEnrollment()
+                        privateVaultBiometricEnabled = false
+                        preferences.edit().putBoolean("private_vault_biometric_enabled", false).commit()
+                        showBiometricEnrollment = false
+                    }
+                )
+            }
         }
 
         if (showStorageRecoveryDialog) {
@@ -1495,8 +1859,7 @@ internal fun NestNoteApp(
                 discardVoiceChanges()
                 if (editorNote == null) {
                     editorDraftId?.let { draftId ->
-                        runCatching { VoiceAttachmentStore(context).deleteAll(draftId) }
-                        runCatching { VoiceAttachmentManifest(context).removeNote(draftId) }
+                        runCatching { com.nestnote.app.voicenote.VoiceNoteRepository(context).deleteAllForNote(draftId) }
                     }
                 }
                 closeEditor()
@@ -1519,12 +1882,14 @@ internal fun NestNoteApp(
                         !NoteStore.isSameNoteVersion(draft.updated, currentSaved.updated)
                     )
                 if (isStale) {
+                    pendingLinkedNoteAfterSave = null
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar("This note changed elsewhere. Reopen it before saving to avoid overwriting newer content.")
                     }
                 } else {
                     val savedId = existing?.id ?: editorDraftId ?: NoteStore.allocateNoteId(notes)
                     if (existing == null && NoteStore.hasDraftIdCollision(notes, savedId)) {
+                        pendingLinkedNoteAfterSave = null
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(
                                 "This draft ID is now in use. Your draft and recordings are preserved; close and reopen a new note to continue."
@@ -1540,11 +1905,25 @@ internal fun NestNoteApp(
                     val next = if (existing == null) notes + updated else notes.map {
                         if (it.id == existing.id) updated.copy(id = existing.id) else it
                     }
-                    if (persist(next)) {
-                        commitVoiceChanges()
-                        closeEditor()
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Note saved") }
-                    }
+                    requestPersist(
+                        next,
+                        onSuccess = {
+                            // Clear the recovery snapshot only after durable note persistence.
+                            coroutineScope.launch(Dispatchers.IO) { runCatching { DraftStore(context).clear(savedId) } }
+                            commitVoiceChanges()
+                            closeEditor()
+                            val linkedId = pendingLinkedNoteAfterSave
+                            if (linkedId != null) {
+                                pendingLinkedNoteAfterSave = null
+                                editorNoteId = linkedId
+                                editorDraftId = linkedId
+                                editorTemplate = null
+                                editorVisible = true
+                            }
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Note saved") }
+                        },
+                        onFailure = { pendingLinkedNoteAfterSave = null }
+                    )
                 }
             }
             val openLinkedNote: (NestNote, NestNote) -> Unit = { current, target ->
@@ -1554,13 +1933,8 @@ internal fun NestNoteApp(
                 if (target.privateNote && !privateVaultUnlocked) {
                     requestPrivateVault()
                 } else if (current != editorNote) {
+                    pendingLinkedNoteAfterSave = target.id
                     saveNote(current)
-                    if (!editorVisible) {
-                        editorNoteId = target.id
-                        editorDraftId = target.id
-                        editorTemplate = null
-                        editorVisible = true
-                    }
                 } else {
                     editorNoteId = target.id
                     editorDraftId = target.id
@@ -1576,7 +1950,7 @@ internal fun NestNoteApp(
                         keepReminder = false,
                         keepPinned = false
                     )
-                    if (persist(notes + duplicate)) {
+                    requestPersist(notes + duplicate) {
                         coroutineScope.launch { snackbarHostState.showSnackbar("Note duplicated") }
                     }
                 }
@@ -1649,6 +2023,32 @@ internal fun NestNoteApp(
                 )
             }
         }
+        if (confirmEncryptAll) {
+            val eligible = notes.filter { !it.privateNote && !it.encrypted }
+            AlertDialog(
+                onDismissRequest = { confirmEncryptAll = false },
+                title = { Text("Encrypt all ordinary notes?") },
+                text = { Text("This will encrypt and verify ${eligible.size} ordinary notes using a dedicated device-bound Android Keystore key. Private Vault notes are excluded. If the device Keystore key is permanently lost, these notes may be unrecoverable. Continue only after considering that risk.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmEncryptAll = false
+                        val replacements = runCatching { eligible.associate { it.id to encryptOrdinaryNote(it) } }.getOrElse { error ->
+                            coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Encrypt all failed; original notes were preserved.") }
+                            emptyMap()
+                        }
+                        if (replacements.isNotEmpty()) {
+                            requestPersist(notes.map { replacements[it.id] ?: it }) {
+                                selectedNoteIds = emptySet()
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted and verified ${replacements.size} ordinary notes") }
+                            }
+                        } else if (eligible.isEmpty()) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("There are no unencrypted ordinary notes.") }
+                        }
+                    }) { Text("Encrypt all") }
+                },
+                dismissButton = { TextButton(onClick = { confirmEncryptAll = false }) { Text("Cancel") } }
+            )
+        }
         if (confirmBulkDelete) {
             val deleting = notes.filter { it.id in selectedNoteIds }
             AlertDialog(
@@ -1658,10 +2058,11 @@ internal fun NestNoteApp(
                 confirmButton = {
                     TextButton(onClick = {
                         confirmBulkDelete = false
-                        if (persist(notes.filterNot { it.id in selectedNoteIds })) {
-                            deleting.forEach { note ->
-                                runCatching { VoiceAttachmentStore(context).deleteAll(note.id) }
-                                runCatching { VoiceAttachmentManifest(context).removeNote(note.id) }
+                        requestPersist(notes.filterNot { it.id in selectedNoteIds }) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                deleting.forEach { note ->
+                                    runCatching { com.nestnote.app.voicenote.VoiceNoteRepository(context).deleteAllForNote(note.id) }
+                                }
                             }
                             selectedNoteIds = emptySet()
                             coroutineScope.launch { snackbarHostState.showSnackbar("Selected notes deleted") }
@@ -1671,7 +2072,73 @@ internal fun NestNoteApp(
                 dismissButton = { TextButton(onClick = { confirmBulkDelete = false }) { Text("Cancel") } }
             )
         }
+        }
 
+    }
+}
+
+@Composable
+private fun BootLandingScreen(preferences: android.content.SharedPreferences) {
+    val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
+    var soundEnabled by remember {
+        mutableStateOf(preferences.getBoolean(PREF_BOOT_SOUND_ENABLED, true))
+    }
+    var progress by remember { mutableFloatStateOf(0.12f) }
+    val pulse = remember { Animatable(0.86f) }
+    LaunchedEffect(Unit) {
+        // Keep startup audio short, quiet, and user-controllable. Release the audio generator
+        // immediately; no audio resource or looping playback is retained.
+        if (soundEnabled) {
+            runCatching {
+                ToneGenerator(AudioManager.STREAM_SYSTEM, 28).let { tone ->
+                    tone.startTone(ToneGenerator.TONE_PROP_ACK, 110)
+                    delay(140)
+                    tone.release()
+                }
+            }
+        }
+        while (progress < 0.9f) {
+            delay(180)
+            progress = (progress + 0.075f).coerceAtMost(0.9f)
+        }
+    }
+    LaunchedEffect(Unit) {
+        pulse.animateTo(1.04f, animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = tween(950), repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ))
+    }
+    Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier.size(108.dp).graphicsLayer { scaleX = pulse.value; scaleY = pulse.value }
+                    .clip(RoundedCornerShape(32.dp)).background(colors.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Lock, contentDescription = null, tint = colors.onPrimaryContainer, modifier = Modifier.size(48.dp))
+            }
+            Spacer(Modifier.height(28.dp))
+            Text("NESTNOTE", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = colors.onBackground)
+            Spacer(Modifier.height(8.dp))
+            Text("Preparing your workspace", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+            Spacer(Modifier.height(30.dp))
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(0.68f).height(4.dp).clip(CircleShape))
+            Spacer(Modifier.height(12.dp))
+            Text("Loading notes and getting things ready…", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            Spacer(Modifier.height(30.dp))
+            TextButton(onClick = {
+                soundEnabled = !soundEnabled
+                preferences.edit().putBoolean(PREF_BOOT_SOUND_ENABLED, soundEnabled).apply()
+            }) {
+                Icon(if (soundEnabled) Icons.Default.NotificationsNone else Icons.Default.Close, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (soundEnabled) "Boot sound on" else "Boot sound off")
+            }
+        }
     }
 }
 

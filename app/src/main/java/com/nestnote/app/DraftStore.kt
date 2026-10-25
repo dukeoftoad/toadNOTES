@@ -28,10 +28,13 @@ import java.util.Properties
  * All instances share one lock. The editor creates a new DraftStore per call, so a
  * per-instance lock would not stop a write and a clear from interleaving.
  *
- * Storage format: Java [Properties] text (UTF-8). Schema version 1. Fields added after
- * version 1 (such as `format`) are optional on read, so older drafts still decode.
+ * Storage uses versioned envelopes: ordinary drafts contain a Base64-encoded Properties
+ * payload, while private drafts use AES-GCM with a dedicated Android Keystore key and
+ * authenticated context. The inner Properties payload is schema version 2; legacy plaintext
+ * files are rejected and removed rather than reclassified as ordinary drafts.
  *
- * The class never deletes notes; it only manages draft snapshots.
+ * Private drafts fail closed when the Keystore key is missing, invalidated, or cannot decrypt
+ * the envelope. The class never deletes saved notes; it only manages draft snapshots.
  */
 class DraftStore internal constructor(rootOverride: File, private val privateKeyProvider: (() -> SecretKey)? = null) {
 
@@ -109,11 +112,7 @@ class DraftStore internal constructor(rootOverride: File, private val privateKey
                 out.flush()
                 out.fd.sync()
             }
-            // renameTo replaces the target atomically on Linux/Android. Only fall back to
-            // delete-then-rename where the platform refuses to overwrite.
-            if (temp.renameTo(target)) return true
-            if (target.delete() && temp.renameTo(target)) return true
-            temp.delete()
+            if (replaceDraftFile(temp, target)) return true
             false
         }.getOrDefault(false)
     }
@@ -240,6 +239,20 @@ class DraftStore internal constructor(rootOverride: File, private val privateKey
         private const val PRIVATE_PREFIX = "NESTNOTE_DRAFT_PRIVATE_V2:"
         private val PRIVATE_AAD = "com.nestnote.app|drafts|private|v2".toByteArray(Charsets.UTF_8)
         private val LOCK = Any()
+
+        /**
+         * Replaces a draft only when the same-directory rename succeeds. On failure the old
+         * draft must remain intact; deleting it as a fallback could lose the last recoverable edit.
+         */
+        internal fun replaceDraftFile(
+            temp: File,
+            target: File,
+            rename: (File, File) -> Boolean = { source, destination -> source.renameTo(destination) }
+        ): Boolean {
+            if (rename(temp, target)) return true
+            temp.delete()
+            return false
+        }
 
         private fun getOrCreatePrivateDraftKey(): SecretKey {
             val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }

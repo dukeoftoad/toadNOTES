@@ -23,10 +23,7 @@ Description: |
   inside the note rather than opening a separate player or dialog.
 
   Notes are stored locally with encrypted payloads using AES-GCM and Android
-  Keystore. NESTNOTE has no account or cloud sync. JSON backup and restore are
-  available for note data; exported JSON backups contain plaintext note data
-  and should be stored securely. Audio attachments are currently not included
-  in the JSON backup/restore format.
+  Keystore. NESTNOTE has no account or cloud sync. Portable note transfer uses password-protected `.nestnote` archives with AES-GCM encryption. Private Vault notes and audio attachments are excluded from portable archives.
 
   Project website and release downloads are available from the project
   repository and GitHub Releases.

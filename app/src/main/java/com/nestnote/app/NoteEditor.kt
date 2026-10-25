@@ -14,6 +14,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -54,6 +58,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
@@ -66,6 +71,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.nestnote.app.voicenote.VoiceNoteRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -161,6 +167,9 @@ internal fun NoteEditorContent(
     val customTextSizeSp = remember(original?.id) {
         editorPreferences.getInt(PREF_TEXT_SIZE_SP, textSize.bodySp).coerceIn(12, 32)
     }
+    var editorZoomPercent by rememberSaveable(original?.id, draftNoteId) { mutableIntStateOf(100) }
+    var showEditorZoomControls by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
+    val effectiveBodyTextSp = (customTextSizeSp * editorZoomPercent / 100).coerceIn(10, 48)
     val editorFontStyle = remember(original?.id) {
         runCatching { EditorFontFamily.valueOf(editorPreferences.getString(PREF_EDITOR_FONT, "SANS") ?: "SANS") }
             .getOrDefault(EditorFontFamily.SANS)
@@ -343,6 +352,21 @@ internal fun NoteEditorContent(
     }
 
     fun onBodyChange(next: TextFieldValue) {
+        // A multi-character insertion containing a Markdown table is treated as a paste.
+        // Normalize only valid table blocks; normal character-by-character typing is untouched.
+        val insertedLength = next.text.length - bodyValue.text.length
+        if (insertedLength >= 8) {
+            val (formatted, cursor) = MarkdownTableFormatter.formatPasted(next.text, next.selection.start)
+            if (formatted != next.text) {
+                noteFormat = "markdown"
+                previewVisible = false
+                setBody(TextFieldValue(formatted, TextRange(cursor)))
+                android.widget.Toast.makeText(
+                    context, "Markdown table aligned", android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+        }
         val continued = if (next.selection.collapsed) {
             NoteText.continueList(bodyValue.text, next.text, next.selection.start)
         } else null
@@ -430,14 +454,11 @@ internal fun NoteEditorContent(
         if (activeVoicePlayerId == attachmentId) activeVoicePlayerId = null
     }
 
-    fun performSave(note: NestNote) {
-        onSave(note)
-    }
-
     // ---- Autosave ----
+    var draftAutosaveEnabled by remember(voiceNoteId) { mutableStateOf(true) }
     val currentHasUnsavedChanges by rememberUpdatedState(hasUnsavedChanges)
     fun currentDraftSnapshot(): DraftStore.Draft? {
-        if (!currentHasUnsavedChanges) return null
+        if (!draftAutosaveEnabled || !currentHasUnsavedChanges) return null
         if (original == null && title.isBlank() && bodyValue.text.isBlank()) return null
         return DraftStore.Draft(
             noteId = voiceNoteId,
@@ -454,6 +475,17 @@ internal fun NoteEditorContent(
             privateNote = privateNote
         )
     }
+
+    fun performSave(note: NestNote) {
+        // Flush the latest edits first so a failed save still leaves recoverable work.
+        currentDraftSnapshot()?.let { draft ->
+            runCatching { DraftStore(context).write(draft) }
+        }
+        // Prevent ON_STOP/onDispose from recreating the draft after a successful save.
+        draftAutosaveEnabled = false
+        onSave(note)
+    }
+
     // Flush the latest Compose snapshot before lifecycle hiding/removal.
     val flushLatestDraft by rememberUpdatedState {
         currentDraftSnapshot()?.let { draft ->
@@ -482,6 +514,8 @@ internal fun NoteEditorContent(
         title, bodyValue.text, category, colorIndex, backgroundIndex,
         pinned, reminder, customWallpaperUri, noteFormat, privateNote
     ) {
+        // A later edit re-enables draft persistence if the parent rejected the save.
+        draftAutosaveEnabled = true
         delay(2_000L)
         writeDraftNow()
     }
@@ -500,10 +534,27 @@ internal fun NoteEditorContent(
         SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
     }
 
-    LaunchedEffect(voiceNoteId) {
+    LaunchedEffect(voiceNoteId, original?.updated) {
         val existing = original ?: return@LaunchedEffect
-        val draft = withContext(Dispatchers.IO) { DraftStore(context).read(existing.id) }
-        if (draft != null && draft.privateNote == existing.privateNote && draft.savedAtMillis > existing.updated) {
+        val store = DraftStore(context)
+        val draft = withContext(Dispatchers.IO) { store.read(existing.id) } ?: return@LaunchedEffect
+        if (draft.privateNote != existing.privateNote) return@LaunchedEffect
+
+        // Lifecycle flushes can race with a save. A matching snapshot is already
+        // persisted content, not recoverable work, and must not trigger a popup.
+        val matchesSavedNote = draft.title == existing.title &&
+            draft.body == existing.body &&
+            draft.category == existing.category &&
+            draft.color == existing.color &&
+            draft.background == existing.background &&
+            draft.pinned == existing.pinned &&
+            draft.reminder == existing.reminder &&
+            draft.wallpaperUri == existing.wallpaperUri &&
+            draft.format == existing.format
+
+        if (matchesSavedNote || draft.savedAtMillis <= existing.updated) {
+            withContext(Dispatchers.IO) { store.clear(existing.id) }
+        } else {
             pendingDraft = draft
             showDraftRecoveryDialog = true
         }
@@ -511,12 +562,10 @@ internal fun NoteEditorContent(
 
     DisposableEffect(voiceNoteId) {
         onRegisterVoiceCommit {
-            val store = VoiceAttachmentStore(context)
-            val manifest = VoiceAttachmentManifest(context)
+            val repository = VoiceNoteRepository(context)
             val anchored = NoteText.voiceMarkers(bodyValue.text).map { it.attachmentId }.toSet()
             (pendingVoiceDeletions + sessionVoiceIds).filter { it !in anchored }.forEach { id ->
-                runCatching { store.delete(voiceNoteId, id) }
-                runCatching { manifest.remove(voiceNoteId, id) }
+                runCatching { repository.delete(voiceNoteId, id) }
             }
             pendingVoiceDeletions = emptySet()
             sessionVoiceIds = emptySet()
@@ -524,14 +573,12 @@ internal fun NoteEditorContent(
             runCatching { DraftStore(context).clear(voiceNoteId) }
         }
         onRegisterVoiceDiscard {
-            val store = VoiceAttachmentStore(context)
-            val manifest = VoiceAttachmentManifest(context)
+            val repository = VoiceNoteRepository(context)
             val ids = sessionVoiceIds
             sessionVoiceIds = emptySet()
             pendingVoiceDeletions = emptySet()
             ids.forEach { id ->
-                runCatching { store.delete(voiceNoteId, id) }
-                runCatching { manifest.remove(voiceNoteId, id) }
+                runCatching { repository.delete(voiceNoteId, id) }
             }
             runCatching { DraftStore(context).clear(voiceNoteId) }
         }
@@ -553,7 +600,7 @@ internal fun NoteEditorContent(
         if (markerIds.isNotEmpty()) {
             voiceNames = withContext(Dispatchers.IO) {
                 runCatching {
-                    VoiceAttachmentManifest(context).list(voiceNoteId, VoiceAttachmentStore(context))
+                    VoiceNoteRepository(context).list(voiceNoteId)
                         .associate { it.attachmentId to it.displayName }
                 }.getOrDefault(emptyMap())
             }
@@ -561,11 +608,21 @@ internal fun NoteEditorContent(
     }
 
     LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
-    LaunchedEffect(Unit) { if (original == null) runCatching { titleFocus.requestFocus() } }
+    LaunchedEffect(original?.id, draftNoteId, lifecycleOwner) {
+        if (original != null) return@LaunchedEffect
+        // Opening a new editor during a route/sheet transition can race the window's
+        // InputConnection becoming active. Defer focus until the transition settles,
+        // and never request it while the Activity is stopped. Cancellation on disposal
+        // prevents a stale coroutine from reopening the IME for a dismissed editor.
+        delay(150L)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            runCatching { titleFocus.requestFocus() }
+        }
+    }
 
     LaunchedEffect(voiceNoteId) {
-        val store = VoiceAttachmentStore(context)
-        val existingIds = runCatching { store.list(voiceNoteId).map { it.attachmentId } }
+        val repository = VoiceNoteRepository(context)
+        val existingIds = runCatching { repository.listPayloads(voiceNoteId).map { it.attachmentId } }
             .getOrDefault(emptyList())
             .filter { it !in pendingVoiceDeletions && it !in sessionVoiceIds }
         if (existingIds.isNotEmpty()) {
@@ -705,6 +762,44 @@ internal fun NoteEditorContent(
                         EditorPinnedChip(accent, editable) { pinned = false }
                     }
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = { showEditorZoomControls = !showEditorZoomControls }) {
+                            androidx.compose.material3.Icon(
+                                androidx.compose.material.icons.Icons.Default.FormatSize,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            androidx.compose.material3.Text("  Text size · ${editorZoomPercent}%")
+                        }
+                    }
+                    androidx.compose.animation.AnimatedVisibility(visible = showEditorZoomControls) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Text("A", style = MaterialTheme.typography.labelSmall)
+                                androidx.compose.material3.Slider(
+                                    value = editorZoomPercent.toFloat(),
+                                    onValueChange = { editorZoomPercent = (it / 5f).roundToInt() * 5 },
+                                    valueRange = 50f..200f,
+                                    steps = 29,
+                                    modifier = Modifier.weight(1f).testTag("note_editor_zoom_slider")
+                                )
+                                androidx.compose.material3.Text("A", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            androidx.compose.material3.Text(
+                                "Adjust text for editing and reading",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = muted
+                            )
+                        }
+                    }
+
                     val checklistItems = remember(bodyValue.text) {
                         NoteText.checklistItems(bodyValue.text)
                     }
@@ -738,7 +833,7 @@ internal fun NoteEditorContent(
                         onEditVoiceTextChange = { editVoiceText = it },
                         voiceNoteId = voiceNoteId,
                         textSize = textSize,
-                        bodyTextSp = customTextSizeSp,
+                        bodyTextSp = effectiveBodyTextSp,
                         fontFamily = editorFontFamily,
                         typeface = editorTypeface,
                         ink = ink,

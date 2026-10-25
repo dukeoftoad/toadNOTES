@@ -52,11 +52,15 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
@@ -76,6 +80,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -83,6 +88,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,7 +111,7 @@ private val SettingsItemKeys = listOf(
     "settings_layout",
     "settings_behavior",
     "settings_editor",
-    "settings_voice_player",
+    "settings_voice_player_section_v2",
     "settings_privacy",
     "settings_backup",
     "settings_reset"
@@ -127,6 +133,8 @@ internal fun SettingsScreen(
     onDynamicColorsChange: (Boolean) -> Unit,
     amoled: Boolean,
     onAmoledChange: (Boolean) -> Unit,
+    accentPalette: AccentPalette = AccentPalette.DEFAULT,
+    onAccentPaletteChange: (AccentPalette) -> Unit = {},
     dashboardLayout: DashboardLayout,
     onLayoutChange: (DashboardLayout) -> Unit,
     editorMode: EditorPresentationMode,
@@ -156,12 +164,17 @@ internal fun SettingsScreen(
     archivedNotes: Int,
     modifier: Modifier = Modifier,
     onOpenBackupRestore: () -> Unit = {},
-    onOpenPrivateVaultSettings: () -> Unit = {}
+    onOpenPrivateVaultSettings: () -> Unit = {},
+    storageBackend: NoteStorageBackend = NoteStorageBackend.KEYSTORE,
+    onStorageBackendChange: (NoteStorageBackend) -> Unit = {},
+    screenCaptureProtectionEnabled: Boolean = true,
+    onScreenCaptureProtectionChange: (Boolean) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
     val reducedMotion = rememberSystemReducedMotion()
     var confirmReset by rememberSaveable { mutableStateOf(false) }
+    var pendingStorageBackend by remember { mutableStateOf<NoteStorageBackend?>(null) }
     var settingsSearch by rememberSaveable { mutableStateOf("") }
     var showVoicePlayerSettings by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -445,6 +458,67 @@ internal fun SettingsScreen(
                         checked = amoled,
                         onChange = onAmoledChange
                     )
+
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
+
+                    SettingLabel("App accent colour")
+                    Text(
+                        "Choose the colour used for buttons, highlights and selected controls.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AccentPalette.values().toList().chunked(4).forEach { paletteRow ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                paletteRow.forEach { palette ->
+                                    val selectedPalette = accentPalette == palette
+                                    val swatch = if (themeMode == ThemeMode.DARK ||
+                                        (themeMode == ThemeMode.SYSTEM && isSystemInDarkTheme())
+                                    ) palette.primaryDark else palette.primaryLight
+                                    Surface(
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                                            .clickable { onAccentPaletteChange(palette) }
+                                            .semantics { contentDescription = "${palette.label} accent colour${if (selectedPalette) ", selected" else ""}" },
+                                        color = if (selectedPalette) colors.secondaryContainer else colors.surfaceVariant,
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = BorderStroke(
+                                            if (selectedPalette) 2.dp else 1.dp,
+                                            if (selectedPalette) colors.primary else colors.outlineVariant
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.size(28.dp).clip(CircleShape).background(swatch),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (selectedPalette) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = if (swatch.luminance() > 0.45f) Color.Black else Color.White, modifier = Modifier.size(17.dp))
+                                                }
+                                            }
+                                            Text(palette.label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                        }
+                                    }
+                                }
+                                repeat((4 - paletteRow.size).coerceAtLeast(0)) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                    if (accentPalette != AccentPalette.DEFAULT && dynamicColors) {
+                        Text(
+                            "Selecting a custom accent disables wallpaper colours so your palette stays consistent.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant
+                        )
+                    }
 
                     HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
 
@@ -849,7 +923,7 @@ internal fun SettingsScreen(
 
         // ---- 5. Voice Player Section (Inline Interactive Preview) ----
         if (matchesSearch("voice")) {
-            item(key = "settings_voice_player") {
+            item(key = "settings_voice_player_section_v2") {
                 val playerPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 var compactVoicePlayer by remember {
                     mutableStateOf(playerPrefs.getBoolean(PREF_VOICE_PLAYER_COMPACT, true))
@@ -874,7 +948,7 @@ internal fun SettingsScreen(
                             selected = compactVoicePlayer,
                             onClick = {
                                 compactVoicePlayer = true
-                                playerPrefs.edit().putBoolean(PREF_VOICE_PLAYER_COMPACT, true).apply()
+                                playerPrefs.edit().putBoolean(PREF_VOICE_PLAYER_COMPACT, true).putString(PREF_VOICE_PLAYER_STYLE, VoicePlayerStyle.COMPACT.name).apply()
                             },
                             modifier = Modifier.weight(1f),
                             reducedMotion = reducedMotion
@@ -887,7 +961,7 @@ internal fun SettingsScreen(
                             selected = !compactVoicePlayer,
                             onClick = {
                                 compactVoicePlayer = false
-                                playerPrefs.edit().putBoolean(PREF_VOICE_PLAYER_COMPACT, false).apply()
+                                playerPrefs.edit().putBoolean(PREF_VOICE_PLAYER_COMPACT, false).putString(PREF_VOICE_PLAYER_STYLE, VoicePlayerStyle.FULL.name).apply()
                             },
                             modifier = Modifier.weight(1f),
                             reducedMotion = reducedMotion
@@ -983,6 +1057,18 @@ internal fun SettingsScreen(
 
                     HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
 
+                    SwitchRow(
+                        title = "Protect private screens",
+                        summary = if (screenCaptureProtectionEnabled)
+                            "Blocks screenshots and hides the app preview in Recents across NESTNOTE while enabled."
+                        else
+                            "Screenshots and app previews are allowed across NESTNOTE.",
+                        checked = screenCaptureProtectionEnabled,
+                        onChange = onScreenCaptureProtectionChange
+                    )
+
+                    HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
+
                     OutlinedButton(
                         onClick = onOpenPrivateVaultSettings,
                         modifier = Modifier.fillMaxWidth().testTag("settings_private_vault"),
@@ -1008,12 +1094,12 @@ internal fun SettingsScreen(
             }
         }
 
-        // ---- 7. Data & Backup Section ----
+        // ---- 7. Data & Encrypted Archive Section ----
         if (matchesSearch("data")) {
             item(key = SettingsItemKeys[7]) {
                 SettingsSection(
                     title = "Data",
-                    subtitle = "Backup and manage your notes",
+                    subtitle = "Manage encrypted archives and local storage",
                     icon = Icons.Default.Archive
                 ) {
                     Row(
@@ -1035,13 +1121,53 @@ internal fun SettingsScreen(
                     }
 
                     Text(
-                        "Keep a portable backup of your notes or restore from a backup file.",
+                        "Create or restore a password-protected encrypted archive.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                         modifier = Modifier.padding(start = 2.dp)
                     )
 
-                    // Preserves texts "Back up notes" and "Restore backup" for tests
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
+                    SettingLabel("Encrypted note storage")
+                    Text(
+                        "Choose which private app-data store NESTNOTE uses. Switching never deletes the other store; a new SQLCipher store is initialized from the current notes only the first time.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                .clickable { if (storageBackend != NoteStorageBackend.KEYSTORE) pendingStorageBackend = NoteStorageBackend.KEYSTORE }
+                                .padding(horizontal = 4.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = storageBackend == NoteStorageBackend.KEYSTORE,
+                                onClick = { if (storageBackend != NoteStorageBackend.KEYSTORE) pendingStorageBackend = NoteStorageBackend.KEYSTORE }
+                            )
+                            Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                                Text("Android Keystore encrypted storage", style = MaterialTheme.typography.titleSmall)
+                                Text("AES-GCM encrypted note payload in app preferences", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                .clickable { if (storageBackend != NoteStorageBackend.SQLCIPHER) pendingStorageBackend = NoteStorageBackend.SQLCIPHER }
+                                .padding(horizontal = 4.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = storageBackend == NoteStorageBackend.SQLCIPHER,
+                                onClick = { if (storageBackend != NoteStorageBackend.SQLCIPHER) pendingStorageBackend = NoteStorageBackend.SQLCIPHER }
+                            )
+                            Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                                Text("Encrypted SQL database (SQLCipher)", style = MaterialTheme.typography.titleSmall)
+                                Text("Database under app-private storage; its key is wrapped by Android Keystore", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    // Opens the encrypted archive workflow.
                     OutlinedButton(
                         onClick = onOpenBackupRestore,
                         modifier = Modifier
@@ -1052,7 +1178,7 @@ internal fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Backup & restore notes", fontWeight = FontWeight.SemiBold)
+                        Text("Encrypted archive", fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.weight(1f))
                         Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
@@ -1131,6 +1257,26 @@ internal fun SettingsScreen(
     if (showVoicePlayerSettings) {
         VoicePlayerSettingsDialog(
             onDismiss = { showVoicePlayerSettings = false }
+        )
+    }
+
+    pendingStorageBackend?.let { target ->
+        val targetLabel = if (target == NoteStorageBackend.KEYSTORE) "AES-256 Android Keystore encryption" else "SQLCipher encrypted database"
+        AlertDialog(
+            onDismissRequest = { pendingStorageBackend = null },
+            title = { Text("Are you sure you want to change?") },
+            text = {
+                Text("Switch to $targetLabel in 5 hours? Your current storage stays active until then. The switch will only complete if stored notes can be read and verified. You can cancel now by choosing Cancel.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingStorageBackend = null
+                    onStorageBackendChange(target)
+                }) { Text("Schedule change") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingStorageBackend = null }) { Text("Cancel") }
+            }
         )
     }
 
@@ -2143,9 +2289,7 @@ internal fun OverviewTile(
 }
 
 // -------------------------------------------------------------------------------------------------
-// Dedicated Backup & Restore Screen
-// -------------------------------------------------------------------------------------------------
-
+// Dedicated encrypted Backup & Restore Screen
 @Composable
 internal fun BackupRestoreScreen(
     totalNotes: Int,
@@ -2153,240 +2297,118 @@ internal fun BackupRestoreScreen(
     pinnedNotes: Int,
     lastBackupAt: Long,
     backupStatus: String,
-    automaticBackupEnabled: Boolean,
-    automaticBackupLastRun: Long,
-    automaticBackupStatus: String,
-    onAutomaticBackupChange: (Boolean) -> Unit,
-    onExportNotes: (Boolean) -> Unit,
-    onImportNotes: () -> Unit,
+    onChooseBackupFolder: () -> Unit,
+    backupFolderConfigured: Boolean,
+    onExportEncryptedArchive: (Boolean, String) -> Unit,
+    onImportEncryptedArchive: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val reducedMotion = rememberSystemReducedMotion()
-    var showBackupDetails by rememberSaveable { mutableStateOf(false) }
     var includeArchivedInBackup by rememberSaveable { mutableStateOf(true) }
+    var archivePassword by rememberSaveable { mutableStateOf("") }
 
     Column(
-        modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+        modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Hero Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
             border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.6f))
         ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Encrypted note archive", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Your notes, in your control",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
+                    "Move notes between devices using password-protected encrypted archives.",
+                    style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant
                 )
-                Text(
-                    "Keep a copy of your notes or bring notes back from a backup file.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    BackupStatTile(
-                        label = "Active",
-                        count = (totalNotes - archivedNotes).coerceAtLeast(0),
-                        icon = Icons.Default.Edit,
-                        modifier = Modifier.weight(1f)
-                    )
-                    BackupStatTile(
-                        label = "Archived",
-                        count = archivedNotes,
-                        icon = Icons.Default.Archive,
-                        modifier = Modifier.weight(1f)
-                    )
-                    BackupStatTile(
-                        label = "Pinned",
-                        count = pinnedNotes,
-                        icon = Icons.Default.PushPin,
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BackupStatTile("Active", (totalNotes - archivedNotes).coerceAtLeast(0), Icons.Default.Edit, Modifier.weight(1f))
+                    BackupStatTile("Archived", archivedNotes, Icons.Default.Archive, Modifier.weight(1f))
+                    BackupStatTile("Pinned", pinnedNotes, Icons.Default.PushPin, Modifier.weight(1f))
                 }
             }
         }
 
-        // Automatic Backup Section
         SettingsSection(
-            title = "Automatic backup",
-            subtitle = "Scheduled copies stay privately on this device",
-            icon = Icons.Default.Tune
+            title = "Archive location",
+            subtitle = "Choose where encrypted archives are stored",
+            icon = Icons.Default.FolderOpen
         ) {
-            SwitchRow(
-                title = "Enable daily automatic backup",
-                summary = "Saves the latest copy in NESTNOTE's private app storage.",
-                checked = automaticBackupEnabled,
-                onChange = onAutomaticBackupChange
-            )
             Text(
-                if (!automaticBackupEnabled) {
-                    "Next run: not scheduled."
-                } else {
-                    "Last run: " + (if (automaticBackupLastRun > 0L) {
-                        SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(automaticBackupLastRun)) + " · " + automaticBackupStatus
-                    } else "Not run yet") + ". Next run: approximately within 24 hours; Android may defer background work. The private copy is not uploaded to cloud storage."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-                modifier = Modifier.padding(start = 2.dp)
+                if (backupFolderConfigured) "Folder access is saved. Encrypted archives will be stored in Documents/NESTNOTE."
+                else "Choose a folder once and grant NESTNOTE access to store encrypted archives.",
+                style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant
             )
+            OutlinedButton(onClick = onChooseBackupFolder, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (backupFolderConfigured) "Change archive folder" else "Choose archive folder")
+            }
         }
 
-        // Backup Status Card
         SettingsSection(
-            title = "Backup status",
-            subtitle = "Know when your notes were last protected",
+            title = "Archive status",
+            subtitle = "Last encrypted archive operation",
             icon = Icons.Default.Security
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (backupStatus == "Success") colors.primaryContainer else colors.surfaceContainerHighest,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            if (backupStatus == "Success") Icons.Default.Check else Icons.Default.Archive,
-                            contentDescription = null,
-                            tint = if (backupStatus == "Success") colors.primary else colors.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        if (lastBackupAt > 0L) "Last backup: " + SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(lastBackupAt))
-                        else "No backup recorded yet",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        if (lastBackupAt > 0L) "$backupStatus · backup file saved to the chosen destination"
-                        else "Create a backup and save it somewhere safe.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant
-                    )
-                }
-            }
+            Text(
+                if (lastBackupAt > 0L) "Last operation: " + SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(lastBackupAt)) + " · $backupStatus"
+                else "No encrypted archive has been created in this installation.",
+                style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant
+            )
         }
 
-        // Back Up Notes Section (Contains exact string "Back up notes")
         SettingsSection(
-            title = "Back up notes",
-            subtitle = "Save a portable copy to your device",
-            icon = Icons.Default.Archive
+            title = "Password-protected archive",
+            subtitle = "AES-GCM encrypted .nestnote file",
+            icon = Icons.Default.Lock
         ) {
             Text(
-                "Create a NESTNOTE backup file that you can keep or move to another device.",
-                style = MaterialTheme.typography.bodyMedium
+                "Use a strong password of at least 10 characters. Keep it separately; NESTNOTE cannot recover a forgotten archive password. Voice recordings are not included.",
+                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
             )
-            Text(
-                "Includes note text and note settings. Voice recordings and audio attachments are not included.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant
-            )
-
             SwitchRow(
                 title = "Include archived notes",
-                summary = "Turn off to export active notes only",
+                summary = "Turn off to archive active notes only",
                 checked = includeArchivedInBackup,
                 onChange = { includeArchivedInBackup = it }
             )
-
-            FilledTonalButton(
-                onClick = { onExportNotes(includeArchivedInBackup) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("settings_backup"),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Create backup", fontWeight = FontWeight.SemiBold)
-            }
-        }
-
-        // Restore Backup Section (Contains exact string "Restore backup" for tests)
-        SettingsSection(
-            title = "Restore backup",
-            subtitle = "Review before applying changes",
-            icon = Icons.Default.FileOpen
-        ) {
-            Text(
-                "Choose a NESTNOTE backup file to inspect and review its changes before restoring.",
-                style = MaterialTheme.typography.bodyMedium
+            OutlinedTextField(
+                value = archivePassword,
+                onValueChange = { archivePassword = it.take(256) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Archive password (10+ characters)") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation()
             )
-
             OutlinedButton(
-                onClick = onImportNotes,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("settings_restore"),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, colors.primary)
+                onClick = {
+                    val password = archivePassword
+                    archivePassword = ""
+                    onExportEncryptedArchive(includeArchivedInBackup, password)
+                },
+                enabled = backupFolderConfigured && archivePassword.length >= 10,
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Create encrypted archive")
+            }
+            OutlinedButton(
+                onClick = {
+                    val password = archivePassword
+                    archivePassword = ""
+                    onImportEncryptedArchive(password)
+                },
+                enabled = backupFolderConfigured && archivePassword.length >= 10,
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
             ) {
                 Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Choose backup file", fontWeight = FontWeight.SemiBold)
-            }
-
-            TextButton(
-                onClick = { showBackupDetails = !showBackupDetails },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (showBackupDetails) "Hide restore rules" else "How restore works")
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    if (showBackupDetails) Icons.Default.Close else Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            AnimatedVisibility(
-                visible = showBackupDetails,
-                enter = fadeIn(NestMotion.fast(reducedMotion)) + slideInVertically(
-                    animationSpec = NestMotion.spatial(reducedMotion),
-                    initialOffsetY = { -it / 3 }
-                ),
-                exit = fadeOut(NestMotion.fast(reducedMotion)) + slideOutVertically(
-                    animationSpec = NestMotion.fast(reducedMotion),
-                    targetOffsetY = { -it / 3 }
-                )
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = colors.surfaceContainerHighest.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "• Your existing notes are not cleared.\n• Notes in the backup are merged with local notes.\n• When the same note exists in both places, the most recently edited version is kept.\n• You can cancel at the review step before changes are applied.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant
-                        )
-                    }
-                }
+                Text("Restore encrypted archive")
             }
         }
     }
@@ -2440,6 +2462,27 @@ private fun VoicePlayerSettingsDialog(onDismiss: () -> Unit) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getFloat(PREF_VOICE_PLAYER_SPEED, 1f)
         )
+    }
+    val playerPreferences = remember(context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    var playerStyle by rememberSaveable {
+        mutableStateOf(
+            playerPreferences.getString(PREF_VOICE_PLAYER_STYLE, null)
+                ?.let { runCatching { VoicePlayerStyle.valueOf(it) }.getOrNull() }
+                ?: if (compactVoicePlayer) VoicePlayerStyle.COMPACT else VoicePlayerStyle.FULL
+        )
+    }
+    var playerSizePercent by rememberSaveable {
+        mutableIntStateOf(playerPreferences.getInt(PREF_VOICE_PLAYER_SIZE_PERCENT, DEFAULT_VOICE_PLAYER_SIZE_PERCENT)
+            .coerceIn(MIN_VOICE_PLAYER_SIZE_PERCENT, MAX_VOICE_PLAYER_SIZE_PERCENT))
+    }
+
+    fun choosePlayerStyle(style: VoicePlayerStyle) {
+        playerStyle = style
+        compactVoicePlayer = style == VoicePlayerStyle.COMPACT || style == VoicePlayerStyle.MINIMAL
+        playerPreferences.edit()
+            .putString(PREF_VOICE_PLAYER_STYLE, style.name)
+            .putBoolean(PREF_VOICE_PLAYER_COMPACT, compactVoicePlayer)
+            .apply()
     }
 
     Dialog(
@@ -2506,92 +2549,84 @@ private fun VoicePlayerSettingsDialog(onDismiss: () -> Unit) {
                 HorizontalDivider(color = colors.outlineVariant)
 
                 Text("Player style", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Choose a layout that suits each note. The size control scales the player without changing the audio.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant
+                )
 
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            compactVoicePlayer = true
-                            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                .putBoolean(PREF_VOICE_PLAYER_COMPACT, true).apply()
-                        }
-                        .testTag("voice_player_style_compact"),
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (compactVoicePlayer) colors.secondaryContainer else colors.surfaceContainerLow,
-                    border = BorderStroke(1.dp, if (compactVoicePlayer) colors.primary else colors.outlineVariant)
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        FilledIconButton(
-                            onClick = {
-                                compactVoicePlayer = true
-                                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                    .putBoolean(PREF_VOICE_PLAYER_COMPACT, true).apply()
-                            },
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(Icons.Default.Mic, contentDescription = null)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Compact", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "Round play/pause button, short waveform, minimal height.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.onSurfaceVariant
-                            )
-                        }
-                        RadioButton(
-                            selected = compactVoicePlayer,
-                            onClick = {
-                                compactVoicePlayer = true
-                                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                    .putBoolean(PREF_VOICE_PLAYER_COMPACT, true).apply()
-                            }
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Player size", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("${playerSizePercent}%", style = MaterialTheme.typography.labelLarge, color = colors.primary)
                     }
+                    TextButton(onClick = {
+                        playerSizePercent = DEFAULT_VOICE_PLAYER_SIZE_PERCENT
+                        playerPreferences.edit().putInt(PREF_VOICE_PLAYER_SIZE_PERCENT, playerSizePercent).apply()
+                    }) { Text("Reset") }
                 }
+                Slider(
+                    value = playerSizePercent.toFloat(),
+                    onValueChange = { value ->
+                        playerSizePercent = value.roundToInt().coerceIn(MIN_VOICE_PLAYER_SIZE_PERCENT, MAX_VOICE_PLAYER_SIZE_PERCENT)
+                        playerPreferences.edit().putInt(PREF_VOICE_PLAYER_SIZE_PERCENT, playerSizePercent).apply()
+                    },
+                    valueRange = MIN_VOICE_PLAYER_SIZE_PERCENT.toFloat()..MAX_VOICE_PLAYER_SIZE_PERCENT.toFloat(),
+                    steps = 14,
+                    modifier = Modifier.fillMaxWidth().testTag("voice_player_size_slider")
+                )
+                Text(
+                    "75% compact  ·  100% default  ·  150% large",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant
+                )
 
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            compactVoicePlayer = false
-                            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                .putBoolean(PREF_VOICE_PLAYER_COMPACT, false).apply()
-                        }
-                        .testTag("voice_player_style_full"),
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (!compactVoicePlayer) colors.secondaryContainer else colors.surfaceContainerLow,
-                    border = BorderStroke(1.dp, if (!compactVoicePlayer) colors.primary else colors.outlineVariant)
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        FilledIconButton(
-                            onClick = {
-                                compactVoicePlayer = false
-                                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                    .putBoolean(PREF_VOICE_PLAYER_COMPACT, false).apply()
-                            },
-                            modifier = Modifier.size(42.dp)
+                HorizontalDivider(color = colors.outlineVariant)
+
+                Text("Choose a player layout", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    VoicePlayerStyle.values().forEach { style ->
+                        val selected = playerStyle == style
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { choosePlayerStyle(style) }
+                                .testTag("voice_player_style_${style.name.lowercase()}"),
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (selected) colors.secondaryContainer else colors.surfaceContainerLow,
+                            border = BorderStroke(1.dp, if (selected) colors.primary else colors.outlineVariant)
                         ) {
-                            Icon(Icons.Default.Mic, contentDescription = null)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Full", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "Larger player with recording details and a seek control.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.onSurfaceVariant
-                            )
-                        }
-                        RadioButton(
-                            selected = !compactVoicePlayer,
-                            onClick = {
-                                compactVoicePlayer = false
-                                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                    .putBoolean(PREF_VOICE_PLAYER_COMPACT, false).apply()
+                            Row(
+                                Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (selected) colors.primary else colors.surfaceVariant,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            when (style) {
+                                                VoicePlayerStyle.COMPACT -> Icons.Default.PlayArrow
+                                                VoicePlayerStyle.FULL -> Icons.Default.Mic
+                                                VoicePlayerStyle.WAVEFORM -> Icons.Default.GraphicEq
+                                                VoicePlayerStyle.MINIMAL -> Icons.Default.PlayArrow
+                                                VoicePlayerStyle.TRANSPORT -> Icons.Default.Forward10
+                                            },
+                                            contentDescription = null,
+                                            tint = if (selected) colors.onPrimary else colors.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(style.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text(style.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                                }
+                                RadioButton(selected = selected, onClick = { choosePlayerStyle(style) })
                             }
-                        )
+                        }
                     }
                 }
 

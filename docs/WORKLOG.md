@@ -1,3 +1,13 @@
+## 2026-10-24 — Remove plaintext JSON backup/import
+
+- Removed plaintext JSON export/import controls and file handling from the Backup & restore screen.
+- Removed the scheduled plaintext JSON worker/scheduler and its WorkManager dependency.
+- Retained password-protected AES-GCM `.nestnote` archives as the sole user-facing portability flow; Private Vault notes and voice attachments are excluded.
+- Renamed the serializer APIs to `encodeArchivePayload` / `decodeArchivePayload` to make their internal archive role explicit. Local storage continues using its existing JSON representation.
+- Deleted standalone tests for the removed user-facing JSON backup feature and updated archive payload tests and security/release documentation. Existing user-created `.json` files are not automatically deleted from storage.
+
+---
+
 ## 2026-10-23 — Private Vault security-critical path follow-up
 
 - Hardened `PrivateNoteCrypto.initialize` to fail if wrapped-key metadata cannot be committed.
@@ -31,16 +41,16 @@
 
 - Rechecked `NoteFilters.visibleNotes`: Home, All notes, Pinned, Reminders, category views, Archived, and query terms/operators apply the private-note exclusion for ordinary views; Private view is the only intended list view that includes active private notes.
 - Rechecked insights defense-in-depth and Settings archived counts: calculations/counts now use public notes only.
-- Rechecked the user-facing JSON export path: it calls `NoteStore.notesForBackup`, excluding private notes regardless of the archived-note option. Regression tests cover active/archived public and private records.
+- Historical audit note: the former JSON export selector excluded private notes. Plaintext JSON export/import has since been removed; current portability uses password-protected encrypted `.nestnote` archives.
 - **New release-blocking finding:** `DraftStore` writes editor draft text as plaintext files and does not persist `privateNote`. Private editor drafts therefore do not inherit `NoteStore` AES-GCM encryption and orphan recovery cannot reliably retain the vault boundary. This needs a dedicated code fix and regression tests; this documentation update does not claim it is fixed.
-- Serializer boundary: `encodeBackup` itself can serialize private records if a caller passes them directly. Keep all user-facing exports routed through the filtering selector and test this call boundary; do not claim the serializer encrypts or filters by itself.
+- Historical serializer note: the former `encodeBackup` API did not encrypt or filter records. Current `encodeArchivePayload` is internal to the authenticated encrypted archive flow.
 - Exact-head CI must be rerun after these test/documentation updates. Device-only lifecycle/biometric/screenshot checks remain outstanding.
 
 ---
 
 ## 2026-10-23 — Priority audit pass: plaintext export and metadata isolation
 
-- Fixed user-facing backup selection to exclude all private notes from plaintext JSON exports, whether archived notes are included or not.
+- Historical: the former JSON export selector excluded private notes; plaintext JSON export/import has since been removed.
 - Added regression coverage for both export modes, including archived private records.
 - Added defense-in-depth filtering inside `NoteInsightsScreen` and fixed the Settings archived count so private note data does not influence ordinary-user metadata.
 - Updated the threat model and release checklist to distinguish plaintext export of ordinary notes from independent vault encryption. The backup serialization format is still not encrypted; callers that explicitly serialize private notes can still produce plaintext.
@@ -433,7 +443,7 @@ Branch: `feature/phase-5-settings-editor-ux` (from `main` after PR #4 merge). No
 - **Validation at implementation time:** the pure logic in `NoteText.kt` was compiled with a standalone Kotlin compiler and its cases passed. The Compose UI and Robolectric/instrumentation suites were not built locally because no Android SDK was available.
 - **Android CI:** [run #38196257185 — success](https://github.com/dukeoftoad/toadNOTES/actions/runs/38196257185) on implementation commit `37055c10c5064129517ddd2efd82e4fc0928a921`, and [follow-up run #38196444610 — success](https://github.com/dukeoftoad/toadNOTES/actions/runs/38196444610) on branch head `7e9134a295ae93c41bb7e8c7a6412ff7ca89a9e4`. Both runs passed unit tests, the API 36 debug APK build, Android instrumentation-test compilation, and test-APK signing. Instrumentation tests were compiled, not run on a device; no emulator or physical-device testing is claimed.
 - **Review status:** [PR #5](https://github.com/dukeoftoad/toadNOTES/pull/5) was opened as a draft and is ready to move to review after the final documentation commit's CI check. It targets `main`; no merge performed, awaiting owner review.
-- **Known limits:** reminders are still metadata only; checkboxes toggle via the toolbar rather than by tapping; import accepts only NESTNOTE JSON backups.
+- **Historical known limits:** reminders were metadata only; checkboxes toggled via the toolbar; the former JSON import accepted NESTNOTE JSON backups. JSON import has since been removed.
 
 
 ### Phase 5 documentation reconciliation — 2026-10-12
@@ -456,7 +466,7 @@ Branch: `feature/phase-5-settings-editor-ux` (from `main` after PR #4 merge). No
 - [x] Validate note collections for duplicate/non-positive IDs, invalid timestamps, field length limits, and maximum record count.
 - [x] Make local persistence report commit success/failure; keep the editor open when a note save fails.
 - [x] Distinguish unreadable local storage from a fresh install. Corrupt stored bytes are left untouched; normal note writes are blocked until recovery.
-- [x] Add versioned JSON backup envelopes (schema version 1) while retaining import compatibility for legacy JSON-array backups.
+- [x] Historical: versioned JSON backup envelopes were used by an earlier user-facing feature; JSON backup/import is now removed.
 - [x] Validate a complete backup and show an add/update preview before applying restore; restore merges without deleting notes absent from the backup.
 - [x] Add unit coverage for duplicate IDs, invalid/oversized data, corrupt local storage recovery, backup versioning, and legacy backup compatibility.
 - [x] Android CI passed for the initial storage/backup increment (run #129, commit `c3155b2a92d16996f025bc8be09d762613e2ef2f`). Newer editor lifecycle/stale-draft commits still require CI validation.
@@ -917,13 +927,13 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Updated the lifecycle stop handler so backgrounding while the Private view or a private-note editor is visible relocks the vault, navigates away, and closes the editor UI. This addresses the identified mismatch between vault route state and independently saveable editor visibility state.
 - Added regression coverage for lockout escalation through the 15-minute cap, active-cooldown boundary behavior, mixed public/private backup round trips, and exclusion of private notes from ordinary note views/search.
 - **Validation:** Android CI passed for the earlier head `d1ddff8b97fd88cc311c71d0c5c0a58ec2320828` (run [#873](https://github.com/dukeoftoad/toadNOTES/actions/runs/39909930289)). Follow-up changes fixed FLAG_SECURE ownership across route changes, aligned security documentation, and blocked linked-note navigation from opening a private target without vault authentication. Exact-head CI for the latest commit must pass before merge. Activity/process recreation, biometric outcomes, FLAG_SECURE/Recents behavior, wall-clock manipulation, and full ordinary-surface filtering still require emulator/device validation. Keep release blocked until evidence is recorded.
-- **Threat-model limitation remains:** vault password gates UI access; it is not a separate content-encryption key. Exported JSON backups may contain readable private-note content.
+- Historical threat-model note: older plaintext JSON exports could contain readable note content. Current portable archives are password-protected and exclude Private Vault notes.
 
 
 ## 2026-10-23 — Document Private Vault UI lock vs cryptographic isolation
 - Added `docs/SECURITY.md` to distinguish Android Keystore-backed local-storage encryption from the vault's password/biometric UI gate.
 - Added `docs/THREAT_MODEL.md` describing assets, trust boundaries, threats, residual risks, and requirements for any future independent vault encryption.
-- Updated README to state explicitly that the vault password does not derive/unlock a separate encryption key and that exported JSON backups may contain readable private-note content.
+- Historical documentation update for the retired JSON export path; current README describes encrypted `.nestnote` archives.
 - Documentation boundary: these edits clarify the existing design; they do not add cryptographic isolation. Exact-head CI and all device-dependent vault checks remain pending.
 
 
@@ -951,3 +961,43 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Extracted cross-store password change compensation into `PrivateVaultPasswordChange` and added tests for key-rewrap failure, verifier-update failure with rollback, rollback failure requiring lock/recovery, and success. Added integration tests for real crypto rewrap preserving records and rejecting the old password after success.
 - Existing migration tests cover the boundary after isolated-store commit and before legacy-store cleanup by creating fresh store/crypto objects. Existing draft tests cover encrypted-at-rest recovery through a fresh store instance; backup tests cover private-note exclusion and restore round trips.
 - **Not yet verified:** a true Android process kill between migration phases, an Android device/emulator biometric prompt and key invalidation, process/activity recreation on device, restore followed by private-draft recovery, or exact-head CI. Robolectric object recreation is not a substitute for actual OS process termination. Keep PR #93 draft until CI and device/emulator evidence are available.
+
+
+## 2026-10-23 — Private Vault biometric enrollment and unlock wired into UI
+
+- Reused the existing AndroidX BiometricPrompt dependency and PrivateVaultBiometricKey Android Keystore AES-GCM wrapping primitive rather than adding a second biometric stack.
+- Settings opt-in now requests password authentication, then presents an explicit biometric enrollment prompt. The preference is persisted as enabled only after the authenticated CryptoObject cipher successfully wraps the current vault data key.
+- Vault unlock now exposes strong-biometric authentication only when the setting is enabled and a valid enrollment exists. Unlock consumes only the cipher returned by the successful BiometricPrompt.CryptoObject callback, unwraps the same vault data key, and uses the existing encrypted-store migration path. Password remains the fallback and recovery route.
+- Disabling biometric unlock deletes the stored wrapped-key enrollment and Android Keystore alias. Enrollment/prompt failures leave password access available and do not enable biometric unlock.
+- **Still required before release:** exact-head CI success and physical-device/emulator verification of enrollment, successful unlock, cancellation/failure, biometric-enrollment invalidation, and password fallback. The implementation is wired; these platform-specific checks must not be inferred from Robolectric tests.
+
+
+## 2026-10-23 — Private Vault UI polish
+
+- Refined the Privacy settings vault entry into a clearer hero card with consistent rounded icon containers, setup/protection state, private-note count, and a single primary action.
+- Added short fade/slide entrances, animated content-size changes, and animated biometric/password validation feedback. Motion uses Compose animation APIs so Android's system animation scale remains respected.
+- Improved the biometric status messaging and recovery-method hierarchy; made the backup warning easier to scan while retaining the important plain-text-export warning.
+- Refined password and enrollment dialogs with icon-led titles, consistent field shapes, better spacing, and animated inline errors. No security policy, key derivation, or vault data flow was changed by the visual pass.
+- Exact-head Android CI is pending; verify on small and large screens, dark/light themes, and with system animations reduced before release.
+
+## Power tools expansion — Text Toolbox
+- Added an offline Text Toolbox entry under More → Power tools.
+- Provides live word/character/line counts, estimated reading time, uppercase/lowercase/title-case transforms, whitespace cleanup, copy, and clear actions.
+- Uses the existing Material 3 card and rounded-control styling. Text is transient screen state and is not persisted by the tool.
+- Validation: Android CI must compile and test the updated branch before this addition is considered verified.
+
+## 2026-10-23 — Home UX, editor zoom, and documentation refresh
+- Refreshed Home with a Material 3 quick-create hero, active-note and pinned-note counts, and a direct new-note action. Existing filters, sorting, search, layout toggle, and note-card actions remain in place.
+- Added an expandable editor/reader text-size slider from 50% to 200% in 5% increments. It scales the displayed note body and preview only; saved note content is unchanged.
+- Documented the new zoom control, Home layout, and Text Toolbox in README, changelog, development guide, and roadmap.
+- Clarified version status: v1.3.10 remains the latest published stable release; v1.3.11 is the current repository candidate and is not published yet. The app Gradle defaults remain versionName 1.3.11/versionCode 1; release automation must set an increasing version code.
+- Validation not yet complete: wait for exact-head Android CI and manually check compact/expanded screens, light/dark themes, large text/accessibility, slider behavior in edit and read modes, and confirm zoom does not alter saved content.
+
+
+## 2026-10-25 — Delayed storage-backend migration safety follow-up
+
+- Added regression tests for the SQLCipher-to-Android-Keystore migration path using the latest source-note snapshot: a newer edit and a newly created note must both be present after the target copy is verified and selected.
+- Added fail-closed tests for an unavailable/wrong Keystore key, corrupted stored ciphertext, and invalid source records. Each asserts that the active backend selection and original stored ciphertext remain unchanged.
+- CI can validate the migration logic and failure preservation, but it cannot prove Android OS process/device-reboot behavior or simulate every real Keystore/database I/O failure. Those remain device/emulator release gates.
+- Device test procedure: schedule a backend switch and confirm the active backend stays unchanged; inspect WorkManager's unique work nestnote_delayed_storage_backend_switch and verify its initial delay is five hours; force-stop/relaunch the app and reboot the device while the work is pending; edit an existing note and create a new one before the delay expires; after execution, verify both records and their latest content in the target backend. Repeat with missing Keystore alias, tampered ciphertext, unreadable SQLCipher database, and a simulated failed target write; confirm the worker fails without changing the active backend or deleting/overwriting source artifacts.
+- Status: automated regression tests added; exact-head CI and physical-device/emulator checks pending. Do not mark reboot persistence or injected storage failures as device-verified until observed.

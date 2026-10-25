@@ -1,6 +1,8 @@
 package com.nestnote.app
 
 import android.content.Context
+import android.util.Base64
+import org.json.JSONArray
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -54,4 +56,43 @@ class PrivateNoteStoreTest {
         )
         assertFalse(runCatching { store.load(wrong) }.isSuccess)
     }
+    @Test fun tamperedPrivateRecordCiphertextFailsClosed() {
+        val note = NestNote(id = 1004L, title = "Private tamper", body = "must not load", privateNote = true)
+        assertTrue(store.save(session, listOf(note)))
+        val prefs = context.getSharedPreferences("nestnote_private_note_records", Context.MODE_PRIVATE)
+        val records = JSONArray(prefs.getString("encrypted_records", null))
+        val item = records.getJSONObject(0)
+        val prefix = "NESTNOTE_PRIVATE_RECORD_V1:"
+        val envelope = item.getString("ciphertext")
+        val payload = Base64.decode(envelope.removePrefix(prefix), Base64.NO_WRAP)
+        payload[payload.lastIndex] = (payload.last().toInt() xor 1).toByte()
+        item.put("ciphertext", prefix + Base64.encodeToString(payload, Base64.NO_WRAP))
+        assertTrue(prefs.edit().putString("encrypted_records", records.toString()).commit())
+
+        assertFalse(runCatching { store.load(session) }.isSuccess)
+    }
+
+    @Test fun recordIdSubstitutionFailsAuthenticatedRead() {
+        val note = NestNote(id = 1005L, title = "Bound identity", body = "authenticated id", privateNote = true)
+        assertTrue(store.save(session, listOf(note)))
+        val prefs = context.getSharedPreferences("nestnote_private_note_records", Context.MODE_PRIVATE)
+        val records = JSONArray(prefs.getString("encrypted_records", null))
+        records.getJSONObject(0).put("id", 1006L)
+        assertTrue(prefs.edit().putString("encrypted_records", records.toString()).commit())
+
+        assertFalse(runCatching { store.load(session) }.isSuccess)
+    }
+
+    @Test fun unsupportedPrivateStoreSchemaFailsClosedWithoutClearingBytes() {
+        val note = NestNote(id = 1007L, title = "Preserve ciphertext", body = "do not overwrite", privateNote = true)
+        assertTrue(store.save(session, listOf(note)))
+        val prefs = context.getSharedPreferences("nestnote_private_note_records", Context.MODE_PRIVATE)
+        val originalRecords = prefs.getString("encrypted_records", null)
+        assertTrue(prefs.edit().putInt("schema_version", 999).commit())
+
+        assertFalse(runCatching { store.load(session) }.isSuccess)
+        assertEquals(originalRecords, prefs.getString("encrypted_records", null))
+        assertEquals(999, prefs.getInt("schema_version", -1))
+    }
+
 }

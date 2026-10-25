@@ -13,6 +13,9 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -40,7 +43,10 @@ internal fun BulkSelectionBar(
     onTogglePin: () -> Unit,
     onToggleArchive: () -> Unit,
     onDelete: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    onSelectAll: () -> Unit,
+    onEncrypt: (() -> Unit)?,
+    onDecrypt: (() -> Unit)?
 ) {
     val colors = MaterialTheme.colorScheme
     var categoryMenu by remember { mutableStateOf(false) }
@@ -57,6 +63,9 @@ internal fun BulkSelectionBar(
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text("$selectedCount selected", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            IconButton(onClick = onSelectAll) { Icon(Icons.Default.SelectAll, contentDescription = "Select all notes") }
+            if (onEncrypt != null) IconButton(onClick = onEncrypt) { Icon(Icons.Default.Lock, contentDescription = "Encrypt selected notes") }
+            if (onDecrypt != null) IconButton(onClick = onDecrypt) { Icon(Icons.Default.LockOpen, contentDescription = "Decrypt selected notes") }
             androidx.compose.foundation.layout.Box {
                 IconButton(onClick = { categoryMenu = true }) {
                     Icon(Icons.Default.Category, contentDescription = "Move selected notes to category")

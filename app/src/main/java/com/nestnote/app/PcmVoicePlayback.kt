@@ -21,7 +21,7 @@ import java.nio.ByteOrder
  */
 internal class PcmVoicePlayback(
     @Suppress("UNUSED_PARAMETER") context: Context,
-    private val store: VoiceAttachmentStore,
+    private val readAttachment: (noteId: Long, attachmentId: String) -> ByteArray,
     private val attachment: VoiceAttachment,
     private val startAtMs: Long = 0L,
     private val playbackSpeed: Float = 1f,
@@ -58,7 +58,7 @@ internal class PcmVoicePlayback(
         stopped = false
         Thread({
             val result = runCatching {
-                val pcm = store.read(attachment.noteId, attachment.attachmentId)
+                val pcm = readAttachment(attachment.noteId, attachment.attachmentId)
                 PcmPlaybackFormat.validateAuthenticatedPcm(pcm)
                 pcm
             }

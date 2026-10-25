@@ -143,7 +143,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 // Dashboard note card.
 
 @Composable
-internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit, onSelect: () -> Unit = {}, isSelected: Boolean = false, modifier: Modifier = Modifier) {
+internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit, onSelect: () -> Unit = {}, isSelected: Boolean = false, onToggleEncryption: () -> Unit = {}, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
     val haptics = LocalHapticFeedback.current
@@ -219,7 +219,8 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                             modifier = Modifier.testTag("note_export_markdown")
                         )
                         DropdownMenuItem(text = { Text(if (isSelected) "Remove from selection" else "Select note") }, onClick = { menu = false; onSelect() }, leadingIcon = { Icon(Icons.Default.CheckCircleOutline, null) })
-                        DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onOpen() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
+                        DropdownMenuItem(text = { Text(if (note.encrypted) "Decrypt note" else "Encrypt note") }, onClick = { menu = false; onToggleEncryption() }, leadingIcon = { Icon(if (note.encrypted) Icons.Default.LockOpen else Icons.Default.Lock, null) }, modifier = Modifier.testTag("note_toggle_encryption"))
+                        DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; if (!note.encrypted) onOpen() }, enabled = !note.encrypted, leadingIcon = { Icon(Icons.Default.Edit, null) })
                         DropdownMenuItem(text = { Text(if (note.archived) "Restore from archive" else "Archive") }, onClick = { menu = false; onArchive() }, leadingIcon = { Icon(if (note.archived) Icons.Default.Unarchive else Icons.Default.Archive, null) })
                         HorizontalDivider()
                         DropdownMenuItem(

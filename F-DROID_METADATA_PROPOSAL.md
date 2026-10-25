@@ -8,13 +8,13 @@ This document records the metadata prepared for a possible merge request to the 
 - **License:** `GPL-3.0-only`
 - **Source code:** https://github.com/dukeoftoad/toadNOTES
 - **Issue tracker:** https://github.com/dukeoftoad/toadNOTES/issues
-- **Latest published upstream release:** `v1.3.10` ([GitHub Release](https://github.com/dukeoftoad/toadNOTES/releases/tag/v1.3.10)). The v1.3.11 release record is now on `main` but is not a published upstream version; do not use it as an upstream version until its stable tag is published.
+- **Current release candidate:** `v1.4.6`. This candidate is not a published upstream release until the `v1.4.6` tag and GitHub Release are verified. Recheck the [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases) page before submitting metadata; do not label this candidate as published.
 - **Build system:** Gradle / Android Gradle Plugin
 - **Build environment observed in CI:** Java 17, Gradle 8.13, Android SDK platform 36, build tools 36.0.0
 - **Minimum SDK:** 26
 - **Suggested category:** Writing
 - **Suggested summary:** Local-first encrypted notes with Markdown and voice attachments.
-- **Suggested description:** NESTNOTE is a native Android note-taking app for creating, organizing, searching, archiving, and backing up notes. It supports categories, checklists, Markdown formatting and preview, themes, voice recording with a review-before-attach flow, WAV import, and inline playback cards for multiple audio attachments. Notes are stored locally; note payloads are encrypted using AES-GCM with a key held by Android Keystore. The app has no account-based cloud sync. JSON backups contain plaintext note data, and audio attachments are not currently included in JSON backup/restore.
+- **Suggested description:** NESTNOTE is a native Android note-taking app for creating, organizing, searching, archiving, and backing up notes. It supports categories, checklists, Markdown formatting and preview, themes, voice recording with a review-before-attach flow, WAV import, and inline playback cards for multiple audio attachments. Notes are stored locally; note payloads are encrypted using AES-GCM with a key held by Android Keystore. The app has no account-based cloud sync. Portable note transfer uses password-protected encrypted archives; Private Vault notes and audio attachments are excluded.
 
 ## Proposed build recipe — validation required before submission
 
@@ -25,7 +25,7 @@ The project Gradle configuration accepts `-PversionName` and `-PversionCode`. A 
 Candidate build commands in the existing CI toolchain (validate these for the exact tag before submission):
 
 ```sh
-gradle --no-daemon testDebugUnitTest -PversionName=1.3.11 -PversionCode=REPLACE_WITH_VERIFIED_MONOTONIC_CODE
+gradle --no-daemon testDebugUnitTest -PversionName=1.4.6 -PversionCode=REPLACE_WITH_VERIFIED_MONOTONIC_CODE
 gradle --no-daemon assembleRelease -PversionName=1.3.11 -PversionCode=<monotonic-version-code>
 ```
 

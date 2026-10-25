@@ -7,16 +7,38 @@ import android.provider.Settings
 import android.util.Base64
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -33,6 +56,7 @@ import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.Cipher
+import kotlinx.coroutines.launch
 
 internal object PrivateVaultSecurity {
     const val MIN_PASSWORD_LENGTH = 6
@@ -164,19 +188,21 @@ internal fun PrivateVaultGateDialog(
     passwordConfigured: Boolean,
     biometricEnabled: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: (password: String, confirmation: String) -> Boolean,
-    onBiometricUnlock: (Cipher) -> Unit
+    onSubmit: (password: String, confirmation: String, onResult: (Boolean) -> Unit) -> Unit,
+    onBiometricUnlock: (Cipher, (Boolean) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
     val activity = context.findFragmentActivity()
     val biometricAvailable = remember(activity, passwordConfigured, biometricEnabled) {
         passwordConfigured && biometricEnabled && activity != null &&
-            BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
+            BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
             BiometricManager.BIOMETRIC_SUCCESS
     }
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+    var submitting by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     fun launchBiometricPrompt() {
         val host = activity ?: return
@@ -195,7 +221,11 @@ internal fun PrivateVaultGateDialog(
                         error = "Biometric authentication did not authorize the vault key. Use your password."
                     } else {
                         error = ""
-                        onBiometricUnlock(cipher)
+                        submitting = true
+                        onBiometricUnlock(cipher) { unlocked ->
+                            submitting = false
+                            if (!unlocked) error = "Vault could not be opened safely. Use your password."
+                        }
                     }
                 }
 
@@ -205,6 +235,7 @@ internal fun PrivateVaultGateDialog(
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     // Cancellation is not an unlock; keep the password fallback available.
+                    submitting = false
                     error = if (errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
                         errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
                         errorCode == BiometricPrompt.ERROR_CANCELED
@@ -221,11 +252,34 @@ internal fun PrivateVaultGateDialog(
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(authenticatedCipher))
     }
 
+    // Prefer fingerprint on entry when this device has a valid enrollment, while leaving
+    // password unlock immediately available if the user cancels or biometric auth fails.
+    LaunchedEffect(biometricAvailable) {
+        if (biometricAvailable && PrivateVaultBiometricKey(context).isEnrolled()) {
+            launchBiometricPrompt()
+        }
+    }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (passwordConfigured) "Unlock Private Vault" else "Set up Private Vault") },
+        onDismissRequest = { if (!submitting) onDismiss() },
+        title = {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Icon(
+                        if (passwordConfigured) Icons.Default.Lock else Icons.Default.Security,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(10.dp).size(24.dp)
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(if (passwordConfigured) "Welcome back" else "Secure your private notes")
+                    Text(if (passwordConfigured) "PRIVATE VAULT" else "FIRST-TIME SETUP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     if (passwordConfigured) {
                         "Enter your vault password to reveal hidden notes, or use an enrolled strong biometric."
@@ -239,8 +293,15 @@ internal fun PrivateVaultGateDialog(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Password") },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = if (passwordVisible) "Hide password" else "Show password")
+                        }
+                    },
+                    enabled = !submitting,
+                    shape = RoundedCornerShape(14.dp)
                 )
                 if (!passwordConfigured) {
                     OutlinedTextField(
@@ -249,38 +310,55 @@ internal fun PrivateVaultGateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Confirm password") },
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        enabled = !submitting,
+                        shape = RoundedCornerShape(14.dp)
                     )
                 }
-                if (error.isNotBlank()) {
-                    Text(error, color = MaterialTheme.colorScheme.error)
+                AnimatedVisibility(visible = error.isNotBlank(), enter = fadeIn(tween(160)) + slideInVertically(tween(180)) { -it / 4 }, exit = fadeOut(tween(100))) {
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                if (!onSubmit(password, confirmation)) {
-                    val retryAt = PrivateVaultSecurity.retryAtMillis(context)
-                    error = when {
-                        passwordConfigured && retryAt > SystemClock.elapsedRealtime() -> {
-                            val seconds = ((retryAt - SystemClock.elapsedRealtime() + 999L) / 1_000L)
-                            "Too many attempts. Try again in $seconds seconds."
+            TextButton(enabled = !submitting, onClick = {
+                if (submitting) return@TextButton
+                submitting = true
+                error = ""
+                onSubmit(password, confirmation) { accepted ->
+                    submitting = false
+                    if (!accepted) {
+                        val retryAt = PrivateVaultSecurity.retryAtMillis(context)
+                        error = when {
+                            passwordConfigured && retryAt > SystemClock.elapsedRealtime() -> {
+                                val seconds = ((retryAt - SystemClock.elapsedRealtime() + 999L) / 1_000L)
+                                "Too many attempts. Try again in $seconds seconds."
+                            }
+                            passwordConfigured -> "Incorrect password."
+                            else -> "Passwords must match and contain at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters."
                         }
-                        passwordConfigured -> "Incorrect password."
-                        else -> "Passwords must match and contain at least ${PrivateVaultSecurity.MIN_PASSWORD_LENGTH} characters."
                     }
                 }
-            }) { Text(if (passwordConfigured) "Unlock with password" else "Create password") }
+            }) {
+                if (submitting) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text("Unlocking…")
+                    }
+                } else Text(if (passwordConfigured) "Unlock vault" else "Create vault")
+            }
         },
         dismissButton = {
             Column {
                 if (biometricAvailable && PrivateVaultBiometricKey(context).isEnrolled()) {
-                    TextButton(onClick = ::launchBiometricPrompt) {
+                    TextButton(enabled = !submitting, onClick = ::launchBiometricPrompt) {
+                        Icon(Icons.Default.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(7.dp))
                         Text("Unlock with fingerprint")
                     }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(enabled = !submitting, onClick = onDismiss) { Text("Cancel") }
             }
         }
     )
@@ -290,4 +368,101 @@ private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (th
     is FragmentActivity -> this
     is ContextWrapper -> baseContext.findFragmentActivity()
     else -> null
+}
+
+
+/**
+ * Explicit enrollment flow. The vault must already be unlocked with the password before this
+ * dialog is shown; only the authenticated CryptoObject cipher can wrap the vault data key.
+ */
+@Composable
+internal fun PrivateVaultBiometricEnrollmentDialog(
+    session: PrivateNoteCrypto.Session,
+    onComplete: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val activity = context.findFragmentActivity()
+    var message by remember { mutableStateOf("") }
+    var promptLaunched by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Icon(Icons.Default.Fingerprint, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(10.dp).size(24.dp))
+                }
+                Text("Enable biometric unlock")
+            }
+        },
+        text = {
+            Column(modifier = Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Confirm your fingerprint or strong device biometric to protect the vault key. Your vault password will remain available as a recovery method.")
+                AnimatedVisibility(visible = message.isNotBlank(), enter = fadeIn(tween(160)) + slideInVertically(tween(180)) { -it / 4 }, exit = fadeOut(tween(100))) {
+                    Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = activity != null && !promptLaunched,
+                onClick = {
+                    val host = activity ?: return@TextButton
+                    val biometric = PrivateVaultBiometricKey(context)
+                    val cipher = biometric.createEnrollmentCipher()
+                    if (cipher == null) {
+                        message = "Couldn't prepare a secure biometric key. Your vault remains password-protected."
+                        return@TextButton
+                    }
+                    promptLaunched = true
+                    val prompt = BiometricPrompt(
+                        host,
+                        ContextCompat.getMainExecutor(host),
+                        object : BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                val authenticatedCipher = result.cryptoObject?.cipher
+                                val enrolled = authenticatedCipher != null &&
+                                    biometric.completeEnrollment(session, authenticatedCipher)
+                                if (enrolled) onComplete(true) else {
+                                    val reason = if (authenticatedCipher == null) {
+                                        "Android did not return the authenticated encryption cipher."
+                                    } else {
+                                        biometric.lastEnrollmentFailure ?: "The secure enrollment step did not complete."
+                                    }
+                                    biometric.deleteEnrollment()
+                                    promptLaunched = false
+                                    message = "$reason Biometric unlock was not enabled; use your vault password."
+                                }
+                            }
+
+                            override fun onAuthenticationFailed() {
+                                message = "Biometric not recognized. Try again."
+                            }
+
+                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                promptLaunched = false
+                                message = if (
+                                    errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
+                                    errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                                    errorCode == BiometricPrompt.ERROR_CANCELED
+                                ) "Enrollment cancelled. Your vault remains password-protected."
+                                else errString.toString()
+                            }
+                        }
+                    )
+                    val info = BiometricPrompt.PromptInfo.Builder()
+                        .setTitle("Enable Private Vault biometric unlock")
+                        .setSubtitle("Authenticate to securely wrap the vault key")
+                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        .setNegativeButtonText("Cancel")
+                        .build()
+                    prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
+                }
+            ) { Text("Authenticate and enable") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Not now") }
+        }
+    )
 }

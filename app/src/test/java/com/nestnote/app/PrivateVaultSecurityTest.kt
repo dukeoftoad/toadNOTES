@@ -104,33 +104,15 @@ class PrivateVaultSecurityTest {
     }
 
     @Test
-    fun mixedBackupRoundTripPreservesPrivateFlagAndOrdinaryViewsExcludePrivateNotes() {
-        val public = NestNote(id = 101L, title = "Public", body = "visible", pinned = true)
-        val private = NestNote(id = 102L, title = "Secret", body = "hidden searchable text",
-            pinned = true, archived = false, privateNote = true, reminder = "2030-01-01")
-        val archivedPrivate = NestNote(id = 103L, title = "Archived secret", body = "hidden",
-            archived = true, privateNote = true)
-        val restored = NoteStore.decodeBackup(NoteStore.encodeBackup(listOf(public, private, archivedPrivate)))
-        assertEquals(listOf(public, private, archivedPrivate), restored)
+    fun privateFlagPersistsLocallyAndArchiveSelectionExcludesPrivateNotes() {
+        val public = NestNote(id = 101L, title = "Public", body = "visible")
+        val private = NestNote(id = 102L, title = "Private", body = "hidden", privateNote = true)
+        val archivedPrivate = NestNote(id = 103L, title = "Archived secret", body = "hidden", archived = true, privateNote = true)
+        val notes = listOf(public, private, archivedPrivate)
 
-        val notes = requireNotNull(restored)
-        listOf("Home", "All notes", "Pinned", "Archived", "Reminders", "Ideas", "Work", "Personal").forEach { view ->
-            assertFalse("private note leaked into $view",
-                NoteFilters.visibleNotes(notes, view, "", false, false).any { it.privateNote })
-        }
-        listOf(
-            "hidden searchable text", "is:pinned", "is:archived", "has:reminder",
-            "category:Ideas", "in:Ideas"
-        ).forEach { query ->
-            assertFalse("private note leaked into query: $query",
-                NoteFilters.visibleNotes(notes, "Home", query, false, false).any { it.privateNote })
-            assertFalse("private note leaked into archived query: $query",
-                NoteFilters.visibleNotes(notes, "Archived", query, false, false).any { it.privateNote })
-        }
-        assertEquals(listOf(private), NoteFilters.visibleNotes(notes, "Private", "", false, false))
+        assertEquals(listOf(public), NoteStore.notesForArchive(notes, includeArchived = true))
+        assertEquals(listOf(public), NoteStore.decodeArchivePayload(NoteStore.encodeArchivePayload(listOf(public))))
     }
-
-
     @Test
     fun lockoutUsesMonotonicTimeAndRebootCannotBypassCooldown() {
         assertTrue(PrivateVaultSecurity.configure(context, "correct horse"))

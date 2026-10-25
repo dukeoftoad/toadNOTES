@@ -1,9 +1,11 @@
 package com.nestnote.app
 
 import android.content.Context
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import androidx.biometric.BiometricPrompt
 import java.nio.ByteBuffer
 import java.security.KeyStore
@@ -28,24 +30,73 @@ internal class PrivateVaultBiometricKey(context: Context) {
         deleteEnrollment()
         Cipher.getInstance(TRANSFORMATION).apply {
             init(Cipher.ENCRYPT_MODE, generateKey())
-            updateAAD(AAD)
         }
     }.getOrNull()
 
+    /** Safe, non-secret explanation for the most recent enrollment failure. */
+    var lastEnrollmentFailure: String? = null
+        private set
+
     /** Persist only after BiometricPrompt successfully authenticates the enrollment Cipher. */
-    fun completeEnrollment(session: PrivateNoteCrypto.Session, authenticatedCipher: Cipher?): Boolean =
-        runCatching {
-            val cipher = requireNotNull(authenticatedCipher) { "Missing authenticated enrollment cipher" }
-            require(cipher.algorithm == TRANSFORMATION)
-            val ciphertext = cipher.doFinal(session.key.encoded)
+    fun completeEnrollment(session: PrivateNoteCrypto.Session, authenticatedCipher: Cipher?): Boolean {
+        lastEnrollmentFailure = null
+        return try {
+            val cipher = authenticatedCipher
+                ?: return enrollmentFailed("Android did not return the authenticated encryption cipher.")
+            if (cipher.algorithm != TRANSFORMATION) {
+                return enrollmentFailed("Android returned an unexpected encryption cipher.")
+            }
+            val keyBytes = session.key.encoded
+                ?: return enrollmentFailed("The vault key could not be prepared for secure wrapping.")
+            if (keyBytes.size != KEY_BYTES) {
+                return enrollmentFailed("The vault key has an unexpected size.")
+            }
+            val ciphertext = try {
+                cipher.updateAAD(AAD)
+                cipher.doFinal(keyBytes)
+            } catch (error: Exception) {
+                // Log provider diagnostics without logging key material or ciphertext. The UI
+                // intentionally shows only a safe summary, so this helps diagnose OEM failures.
+                Log.e(
+                    LOG_TAG,
+                    "Biometric key wrapping failed: cipher=${cipher.algorithm}, " +
+                        "inputBytes=${keyBytes.size}, exception=${error.javaClass.name}, " +
+                        "message=${error.message}",
+                    error
+                )
+                return enrollmentFailed(
+                    when (error) {
+                        is android.security.keystore.UserNotAuthenticatedException ->
+                            "Android did not authorize the biometric key operation. Unlock the device and try again."
+                        is java.security.InvalidKeyException ->
+                            "Android rejected the biometric key. Check that strong biometrics are enrolled, then try again."
+                        else -> "Secure key wrapping failed (${error.javaClass.simpleName})."
+                    }
+                )
+            }
             val payload = ByteBuffer.allocate(cipher.iv.size + ciphertext.size)
                 .put(cipher.iv).put(ciphertext).array()
-            check(prefs.edit()
+            val saved = prefs.edit()
                 .putInt(VERSION, SCHEMA_VERSION)
                 .putString(WRAPPED_KEY, Base64.encodeToString(payload, Base64.NO_WRAP))
-                .commit())
+                .commit()
+            if (!saved) return enrollmentFailed("Android could not save the secure enrollment record.")
             true
-        }.getOrDefault(false)
+        } catch (error: Exception) {
+            Log.e(
+                LOG_TAG,
+                "Biometric enrollment persistence/setup failed: " +
+                    "${error.javaClass.name}: ${error.message}",
+                error
+            )
+            enrollmentFailed("Secure enrollment failed (${error.javaClass.simpleName}).")
+        }
+    }
+
+    private fun enrollmentFailed(reason: String): Boolean {
+        lastEnrollmentFailure = reason
+        return false
+    }
 
     /** Prepares the only Cipher that may be passed to BiometricPrompt.CryptoObject. */
     fun createUnlockCipher(): Cipher? = runCatching {
@@ -54,7 +105,6 @@ internal class PrivateVaultBiometricKey(context: Context) {
         ByteBuffer.wrap(payload).get(iv)
         Cipher.getInstance(TRANSFORMATION).apply {
             init(Cipher.DECRYPT_MODE, existingKey(), GCMParameterSpec(TAG_BITS, iv))
-            updateAAD(AAD)
         }
     }.getOrNull()
 
@@ -67,14 +117,14 @@ internal class PrivateVaultBiometricKey(context: Context) {
         require(authenticatedCipher.algorithm == TRANSFORMATION)
         val payload = wrappedPayload() ?: return null
         val ciphertext = payload.copyOfRange(IV_BYTES, payload.size)
+        authenticatedCipher.updateAAD(AAD)
         val keyBytes = authenticatedCipher.doFinal(ciphertext)
         require(keyBytes.size == KEY_BYTES)
         PrivateNoteCrypto.Session(SecretKeySpec(keyBytes, "AES"))
     }.getOrNull()
 
-    fun isEnrolled(): Boolean = prefs.getInt(VERSION, -1) == SCHEMA_VERSION &&
-        !prefs.getString(WRAPPED_KEY, null).isNullOrBlank() &&
-        runCatching { existingKey() }.isSuccess
+    /** True only when the persisted envelope and an actually usable auth-bound key are present. */
+    fun isEnrolled(): Boolean = createUnlockCipher() != null
 
     fun deleteEnrollment(): Boolean = runCatching {
         prefs.edit().remove(VERSION).remove(WRAPPED_KEY).commit().also {
@@ -93,18 +143,25 @@ internal class PrivateVaultBiometricKey(context: Context) {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS)
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE).apply {
-            init(
-                KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                )
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(KEY_BITS)
-                    .setUserAuthenticationRequired(true)
-                    .setInvalidatedByBiometricEnrollment(true)
-                    .build()
+            val builder = KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
             )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(KEY_BITS)
+                .setUserAuthenticationRequired(true)
+                .setInvalidatedByBiometricEnrollment(true)
+
+            // Android 11+: require strong biometric authentication specifically.
+            // Device-credential unlock must not satisfy this biometric CryptoObject path.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                builder.setUserAuthenticationParameters(
+                    0,
+                    KeyProperties.AUTH_BIOMETRIC_STRONG
+                )
+            }
+            init(builder.build())
         }.generateKey()
     }
 
@@ -115,6 +172,7 @@ internal class PrivateVaultBiometricKey(context: Context) {
     }
 
     companion object {
+        private const val LOG_TAG = "NestNoteBiometric"
         private const val PREFS = "nestnote_private_vault_biometric"
         private const val VERSION = "schema_version"
         private const val WRAPPED_KEY = "wrapped_vault_key"
