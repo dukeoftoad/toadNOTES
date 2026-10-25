@@ -1,19 +1,21 @@
 name: Android Emulator UI Tests (ReactiveCircus)
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'app/src/**'
-      - 'app/build.gradle.kts'
-      - 'build.gradle.kts'
-      - 'gradle/**'
-      - 'gradlew'
-      - '.github/workflows/android-ui-tests.yml'
+  # Expensive emulator tests are manual-only; do not start any CI from PR updates.
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number whose latest commit was approved
+        required: true
+        type: string
+      expected_sha:
+        description: Full 40-character PR head SHA approved by the repository owner
+        required: true
+        type: string
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
-  group: android-ui-tests-${{ github.ref }}
+  group: android-ui-tests-pr-${{ inputs.pr_number }}
   cancel-in-progress: true
 jobs:
   instrumentation-tests:
@@ -21,7 +23,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Verify approved PR head is still current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid PR number"; exit 1; }
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Expected SHA must be a full 40-character lowercase commit SHA"; exit 1; }
+          PR_JSON="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          ACTUAL_SHA="$(jq -r '.head.sha' <<< "$PR_JSON")"
+          PR_STATE="$(jq -r '.state' <<< "$PR_JSON")"
+          [[ "$PR_STATE" == "open" && "$ACTUAL_SHA" == "$EXPECTED_SHA" ]] || { echo "::error::PR is closed or approval is stale"; exit 1; }
+          gh api --paginate "repos/$REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.user.login == \"$REPOSITORY_OWNER\" and .body == \"/approve-ci $EXPECTED_SHA\") | .id" \
+            | grep -q . || { echo "::error::No owner approval comment exists for this exact SHA"; exit 1; }
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

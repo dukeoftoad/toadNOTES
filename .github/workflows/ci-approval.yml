@@ -1,0 +1,52 @@
+name: Approve latest PR commit before CI
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  issues: read
+jobs:
+  approve-and-dispatch:
+    if: ${{ github.event.issue.pull_request != null && github.event.comment.user.login == github.repository_owner }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate exact SHA approval and dispatch Android CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # Approval is explicit and must be exactly: /approve-ci <full-current-head-sha>
+          if [[ ! "$COMMENT_BODY" =~ ^/approve-ci\ ([0-9a-f]{40})$ ]]; then
+            echo "No CI approval command found; no workflow dispatched."
+            exit 0
+          fi
+          APPROVED_SHA="${BASH_REMATCH[1]}"
+          PR_JSON="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          PR_AUTHOR="$(jq -r '.user.login' <<< "$PR_JSON")"
+          PR_STATE="$(jq -r '.state' <<< "$PR_JSON")"
+          CURRENT_SHA="$(jq -r '.head.sha' <<< "$PR_JSON")"
+          HEAD_REF="$(jq -r '.head.ref' <<< "$PR_JSON")"
+          HEAD_REPO="$(jq -r '.head.repo.full_name // empty' <<< "$PR_JSON")"
+          if [[ "$COMMENT_AUTHOR" != "$REPOSITORY_OWNER" ]]; then
+            echo "::error::Only the repository owner can approve CI."
+            exit 1
+          fi
+          if [[ "$PR_STATE" != "open" || -z "$HEAD_REPO" || "$HEAD_REPO" != "$REPOSITORY" ]]; then
+            echo "::error::PR must be open and its head branch must be in this repository."
+            exit 1
+          fi
+          if [[ "$APPROVED_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::Stale approval. Current head is $CURRENT_SHA. Comment /approve-ci $CURRENT_SHA to approve the latest commit."
+            exit 1
+          fi
+          echo "Owner approved exact latest PR head: $CURRENT_SHA"
+          gh workflow run android-ci.yml --repo "$REPOSITORY" --ref "$HEAD_REF" \
+            -f "pr_number=$PR_NUMBER" -f "expected_sha=$CURRENT_SHA"
+          echo "Dispatched Android CI for PR #$PR_NUMBER at $CURRENT_SHA."
