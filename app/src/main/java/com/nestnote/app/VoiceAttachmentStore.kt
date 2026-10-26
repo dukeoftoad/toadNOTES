@@ -249,7 +249,7 @@ class VoiceAttachmentStore internal constructor(
         private const val TAG_BITS = TAG_BYTES * 8
         private const val HEADER_BYTES = 4 + IV_BYTES
         private const val BUFFER_BYTES = 16 * 1024
-        const val MAX_AUDIO_BYTES = 25 * 1024 * 1024
+        const val MAX_AUDIO_BYTES = 100 * 1024 * 1024
         private const val MAX_ENCRYPTED_BYTES = MAX_AUDIO_BYTES + HEADER_BYTES + TAG_BYTES
         private const val EXTENSION = ".nva"
         private const val TEMP_PREFIX = "."

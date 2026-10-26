@@ -126,6 +126,12 @@ class VoiceAttachmentStoreTest {
         catch (expected: IllegalArgumentException) { }
     }
 
+    @Test fun importAndRecordingSizeLimitsAreExplicit() {
+        assertEquals(100 * 1024 * 1024, VoiceAttachmentStore.MAX_AUDIO_BYTES)
+        assertEquals(25 * 1024 * 1024, com.nestnote.app.voicenote.VoiceNoteRepository.MAX_RECORDING_BYTES)
+        assertEquals(100 * 1024 * 1024, com.nestnote.app.voicenote.VoiceNoteRepository.MAX_IMPORT_BYTES)
+    }
+
     @Test fun oversizedInputIsRejectedWithoutPublishingFile() {
         val root = Files.createTempDirectory("nestnote-voice-large").toFile()
         val store = store(root)

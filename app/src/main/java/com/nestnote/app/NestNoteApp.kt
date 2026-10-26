@@ -1,99 +1,25 @@
 package com.nestnote.app
 
 import android.app.Activity
-import android.app.DatePickerDialog
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.Intent
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import android.app.TimePickerDialog
 import android.os.Build
-import android.os.Bundle
-import android.media.AudioManager
-import android.media.ToneGenerator
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.BookmarkAdd
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
-import androidx.compose.material.icons.filled.Title
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.FormatStrikethrough
-import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material.icons.filled.FormatBold
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.FormatQuote
-import androidx.compose.material.icons.filled.FormatListNumbered
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -103,37 +29,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -142,30 +45,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 private const val PREF_PRIVATE_SCREEN_PROTECTION = "private_screen_protection_enabled"
-private const val PREF_BOOT_SOUND_ENABLED = "boot_sound_enabled"
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
-internal enum class AccentPalette(val label: String, val primaryLight: Color, val primaryDark: Color, val secondaryLight: Color, val secondaryDark: Color) {
-    DEFAULT("Default", Color(0xFF526B55), Color(0xFFB4D0B0), Color(0xFF526477), Color(0xFFB8C8E2)),
-    OCEAN("Ocean", Color(0xFF006A9C), Color(0xFF8CCFFF), Color(0xFF41617D), Color(0xFFB5D2F0)),
-    LAVENDER("Lavender", Color(0xFF6750A4), Color(0xFFD0BCFF), Color(0xFF625B71), Color(0xFFCCC2DC)),
-    ROSE("Rose", Color(0xFFB3265E), Color(0xFFFFB1C8), Color(0xFF76565F), Color(0xFFE8BFC9)),
-    FOREST("Forest", Color(0xFF386A20), Color(0xFFA4D68B), Color(0xFF52634A), Color(0xFFC0D9B2)),
-    SUNSET("Sunset", Color(0xFF9C4328), Color(0xFFFFB59D), Color(0xFF77574D), Color(0xFFE8BFB2)),
-    AMBER("Amber", Color(0xFF805600), Color(0xFFFFD27A), Color(0xFF6D5D3F), Color(0xFFE4C99A));
-
-    fun applyTo(scheme: androidx.compose.material3.ColorScheme, dark: Boolean) = scheme.copy(
-        primary = if (dark) primaryDark else primaryLight,
-        onPrimary = if (dark) Color(0xFF19351B) else Color.White,
-        primaryContainer = if (dark) primaryDark.copy(alpha = 0.24f) else primaryLight.copy(alpha = 0.12f),
-        onPrimaryContainer = if (dark) Color(0xFFE0EBDD) else primaryLight,
-        secondary = if (dark) secondaryDark else secondaryLight,
-        tertiary = if (dark) secondaryDark else secondaryLight
-    )
-}
+internal const val PREF_BOOT_SOUND_ENABLED = "boot_sound_enabled"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -465,19 +347,7 @@ internal fun NestNoteApp(
     fun encryptOrdinaryNote(note: NestNote): NestNote {
         require(!note.privateNote && !note.encrypted) { "Only unencrypted ordinary notes can be encrypted here." }
         val payload = ordinaryNoteCrypto.encrypt(note)
-        val locked = note.copy(
-            title = NoteStore.ENCRYPTED_NOTE_TITLE,
-            body = "",
-            category = "Encrypted",
-            color = 0,
-            pinned = false,
-            reminder = "",
-            background = 0,
-            wallpaperUri = "",
-            format = "plain",
-            encrypted = true,
-            encryptedPayload = payload
-        )
+        val locked = OrdinaryNoteRecordTransform.lockedRecord(note, payload)
         // Verify authenticated decryption and identity before the source record can be replaced.
         val verified = ordinaryNoteCrypto.decrypt(locked)
         check(verified == note) { "Encrypted note verification failed." }
@@ -508,7 +378,7 @@ internal fun NestNoteApp(
         }
     }
     fun encryptSelectedNotes() {
-        val selected = notes.filter { it.id in selectedNoteIds && !it.privateNote && !it.encrypted }
+        val selected = OrdinaryNoteSelection.forEncryption(notes, selectedNoteIds)
         if (selected.isEmpty()) {
             coroutineScope.launch { snackbarHostState.showSnackbar("No unencrypted ordinary notes are selected.") }
             return
@@ -517,13 +387,13 @@ internal fun NestNoteApp(
             coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Bulk encryption failed; no notes were changed.") }
             return
         }
-        requestPersist(notes.map { replacements[it.id] ?: it }) {
+        requestPersist(OrdinaryNoteSelection.applyReplacements(notes, replacements)) {
             selectedNoteIds = emptySet()
             coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted and verified ${replacements.size} notes") }
         }
     }
     fun decryptSelectedNotes() {
-        val selected = notes.filter { it.id in selectedNoteIds && it.encrypted && !it.privateNote }
+        val selected = OrdinaryNoteSelection.forDecryption(notes, selectedNoteIds)
         if (selected.isEmpty()) {
             coroutineScope.launch { snackbarHostState.showSnackbar("No encrypted ordinary notes are selected.") }
             return
@@ -532,7 +402,7 @@ internal fun NestNoteApp(
             coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Bulk decryption failed; no notes were changed.") }
             return
         }
-        requestPersist(notes.map { replacements[it.id] ?: it }) {
+        requestPersist(OrdinaryNoteSelection.applyReplacements(notes, replacements)) {
             selectedNoteIds = emptySet()
             coroutineScope.launch { snackbarHostState.showSnackbar("Decrypted and verified ${replacements.size} notes") }
         }
@@ -611,12 +481,7 @@ internal fun NestNoteApp(
                     val fileName = displayName.ifBlank {
                         uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: ""
                     }
-                    val firstHeading = Regex("(?m)^#\\s+(.+?)\\s*$").find(markdown)
-                    val title = firstHeading?.groupValues?.get(1)?.trim().orEmpty()
-                        .ifBlank { fileName.ifBlank { "Imported note" } }
-                    val body = if (firstHeading != null) markdown.removeRange(firstHeading.range).trim()
-                        else markdown.trim()
-                    title to body
+                    MarkdownNoteParser.parse(markdown, fileName)
                 }.getOrNull()
             }
         }
@@ -624,21 +489,12 @@ internal fun NestNoteApp(
             snackbarHostState.showSnackbar("Couldn't read one or more Markdown files. Nothing was imported.")
             return
         }
-        val now = System.currentTimeMillis()
-        val usedNotes = notes.toMutableList()
-        val imported = parsed.filterNotNull().mapIndexed { index, (title, body) ->
-            val timestamp = now + index
-            val note = NestNote(
-                id = NoteStore.allocateNoteId(usedNotes, timestamp),
-                title = title,
-                body = body,
-                category = defaultNoteCategory,
-                updated = timestamp,
-                created = timestamp
-            )
-            usedNotes += note
-            note
-        }
+        val imported = MarkdownNoteFactory.create(
+            parsedNotes = parsed.filterNotNull(),
+            existingNotes = notes,
+            category = defaultNoteCategory,
+            now = System.currentTimeMillis()
+        )
         if (persist(imported + notes)) {
             selectedView = "Home"
             snackbarHostState.showSnackbar(
@@ -747,68 +603,26 @@ internal fun NestNoteApp(
                         Column(
                             modifier = Modifier
                         ) {
-                            AnimatedContent(
-                                targetState = when (selectedView) { "Private" -> "Private Vault"; "PrivateVaultSettings" -> "Private Vault settings"; "Settings" -> "Settings"; "Backup" -> "Encrypted archives"; "About" -> "About & help"; "Templates" -> "Note templates"; "Insights" -> "Note insights"; "Shortcuts" -> "Keyboard shortcuts"; "More" -> "More"; "Pinned" -> "Pinned notes"; "Archived" -> "Archived notes"; "Categories" -> "Categories"; else -> "NestNote" },
-                                transitionSpec = {
-                                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(180)) +
-                                        slideInVertically(
-                                            animationSpec = androidx.compose.animation.core.tween(180),
-                                            initialOffsetY = { it / 8 }
-                                        )) togetherWith
-                                        (fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
-                                            slideOutVertically(
-                                                animationSpec = androidx.compose.animation.core.tween(100),
-                                                targetOffsetY = { -it / 10 }
-                                            ))
-                                },
-                                label = "tab-title-transition"
-                            ) { title ->
-                                Text(
-                                    title,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.2.sp
-                                )
-                            }
-                            Text(
-                                when (selectedView) { "Private" -> "Hidden notes · unlocked"; "PrivateVaultSettings" -> "Authentication and privacy controls"; "Settings" -> "Make your notes feel like yours"; "Backup" -> "Protect and manage your notes"; "About" -> "Version, licence and how NESTNOTE works"; "Templates" -> "A faster start for your next note"; "Insights" -> "Private patterns from your own notes"; "Shortcuts" -> "Hardware keyboard controls"; "More" -> "More ways to organize your notes"; else -> "Your thoughts, organized." },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.onSurfaceVariant
-                            )
+                            AppDestinationHeader(selectedView)
                         }
                     },
                     navigationIcon = {
-                        if (selectedView == "Private") {
-                            IconButton(onClick = { lockPrivateVault() }) {
-                                Icon(Icons.Default.LockOpen, contentDescription = "Lock Private Vault")
-                            }
-                        } else if (selectedView in moreSubViews) {
-                            IconButton(onClick = { selectedView = "More" }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to More")
-                            }
-                        }
+                        AppDestinationNavigationIcon(
+                            destination = selectedView,
+                            isMoreSubDestination = selectedView in moreSubViews,
+                            onLockPrivateVault = { lockPrivateVault() },
+                            onBackToMore = { selectedView = "More" }
+                        )
                     },
                     actions = {
                         if (selectedView == "Home" || selectedView == "All notes") {
-                            IconButton(
-                                onClick = {
+                            AppDestinationSearchAction(
+                                searchVisible = searchVisible,
+                                onToggle = {
                                     searchVisible = !searchVisible
                                     if (!searchVisible) search = ""
-                                },
-                                modifier = Modifier
-                                    .padding(end = 8.dp)
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (searchVisible) colors.primaryContainer else colors.surfaceContainerHigh
-                                    )
-                                    .testTag("home_search_icon")
-                            ) {
-                                Icon(
-                                    if (searchVisible) Icons.Default.Close else Icons.Default.Search,
-                                    contentDescription = if (searchVisible) "Close search" else "Search notes",
-                                    tint = if (searchVisible) colors.onPrimaryContainer else colors.onSurface
-                                )
-                            }
+                                }
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface)
@@ -871,110 +685,28 @@ internal fun NestNoteApp(
                         .animateContentSize(animationSpec = tween(durationMillis = 200))
                 ) {
                 if (storageRecoveryRequired) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = colors.errorContainer,
-                        contentColor = colors.onErrorContainer
-                    ) {
-                        Row(
-                            Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CloudOff, contentDescription = null, modifier = Modifier.size(22.dp))
-                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                                Text("Notes need recovery", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    "Stored notes couldn't be read. Nothing was overwritten. Restore a backup before creating, editing, or deleting notes.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            TextButton(onClick = { selectedView = "Settings" }) { Text("Open") }
+                    AppStorageRecoveryNotice(onOpenSettings = { selectedView = "Settings" })
+                }
+                AppDashboardFilters(
+                    searchVisible = searchVisible,
+                    search = search,
+                    savedSearches = savedSearches,
+                    selectedView = selectedView,
+                    categories = categoryOptions,
+                    onSearchChange = { search = it },
+                    onSaveSearch = { query ->
+                        if (query !in savedSearches && savedSearches.size < 12) {
+                            savedSearches = savedSearches + query
+                            preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
                         }
-                    }
-                }
-                if (searchVisible) {
-                    OutlinedTextField(
-                        value = search, onValueChange = { search = it },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("note_search_field"),
-                        placeholder = { Text("Search · is:pinned · has:voice · after:YYYY-MM-DD") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (search.isNotBlank()) IconButton(
-                                    onClick = {
-                                        val query = search.trim()
-                                        if (query !in savedSearches && savedSearches.size < 12) {
-                                            savedSearches = savedSearches + query
-                                            preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
-                                        }
-                                    },
-                                    enabled = search.trim() in savedSearches || savedSearches.size < 12
-                                ) { Icon(Icons.Default.BookmarkAdd, contentDescription = "Save search") }
-                                IconButton(onClick = {
-                                    searchVisible = false
-                                    search = ""
-                                }) { Icon(Icons.Default.Close, contentDescription = "Close search field") }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = colors.surfaceContainerLow,
-                            focusedContainerColor = colors.surfaceContainerLow,
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedBorderColor = colors.primary
-                        )
-                    )
-                }
-                if (savedSearches.isNotEmpty() && (selectedView == "Home" || selectedView == "All notes")) {
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        savedSearches.forEach { query ->
-                            FilterChip(
-                                selected = search == query,
-                                onClick = { search = query },
-                                label = { Text(query, maxLines = 1) },
-                                trailingIcon = {
-                                    IconButton(
-                                        onClick = {
-                                            savedSearches = savedSearches - query
-                                            preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
-                                        },
-                                        modifier = Modifier.size(26.dp)
-                                    ) { Icon(Icons.Default.Close, contentDescription = "Remove saved search", modifier = Modifier.size(16.dp)) }
-                                }
-                            )
-                        }
-                    }
-                }
-                if (selectedView == "Home" || selectedView == "All notes" || categoryOptions.contains(selectedView)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(start = 18.dp, end = 18.dp, bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = selectedView == "Home" || selectedView == "All notes",
-                            onClick = { selectedView = "Home" },
-                            label = { Text("All notes") },
-                            leadingIcon = if (selectedView == "Home" || selectedView == "All notes") {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
-                        )
-                        categoryOptions.forEach { category ->
-                            FilterChip(
-                                selected = selectedView == category,
-                                onClick = { selectedView = category },
-                                label = { Text(category) }
-                            )
-                        }
-                    }
-                }
+                    },
+                    onCloseSearch = { searchVisible = false; search = "" },
+                    onRemoveSavedSearch = { query ->
+                        savedSearches = savedSearches - query
+                        preferences.edit().putStringSet(PREF_SAVED_SEARCHES, savedSearches.toMutableSet()).apply()
+                    },
+                    onSelectView = { selectedView = it }
+                )
                 if (selectedView == "More") {
                     MoreScreen(
                         pinnedCount = notes.count { it.pinned && !it.archived && !it.privateNote },
@@ -1057,6 +789,8 @@ internal fun NestNoteApp(
                             }
                         }
                     )
+                } else if (selectedView == "CallRecordings") {
+                    CallRecordingsScreen(onBack = { selectedView = "Settings" })
                 } else if (selectedView == "PrivateVaultSettings") {
                     PrivateVaultSettingsScreen(
                         passwordConfigured = PrivateVaultSecurity.isConfigured(context),
@@ -1177,6 +911,7 @@ internal fun NestNoteApp(
                         archivedNotes = notes.count { it.archived && !it.privateNote },
                         onOpenBackupRestore = { selectedView = "Backup" },
                         onOpenPrivateVaultSettings = { selectedView = "PrivateVaultSettings" },
+                        onOpenCallRecordings = { selectedView = "CallRecordings" },
                         storageBackend = store.currentBackend(),
                         screenCaptureProtectionEnabled = screenCaptureProtectionEnabled,
                         onScreenCaptureProtectionChange = { enabled ->
@@ -1205,150 +940,42 @@ internal fun NestNoteApp(
                 } else if (selectedView == "About") {
                     AboutScreen(version = appVersion)
                 } else if (selectedView == "Categories") {
-                    val activeCategoryCounts = remember(notes) {
-                        categoryOptions.associateWith { category -> notes.count { it.category == category && !it.archived && !it.privateNote } }
-                    }
-                    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Categories", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        categoryOptions.chunked(2).forEach { pair ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                pair.forEach { category ->
-                                    Card(
-                                        modifier = Modifier.weight(1f).clickable { selectedView = category },
-                                        border = BorderStroke(1.dp, colors.outlineVariant)
-                                    ) {
-                                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                            Text(category, style = MaterialTheme.typography.titleMedium)
-                                            Text("${activeCategoryCounts[category] ?: 0} active notes", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                }
-                                if (pair.size == 1) Spacer(Modifier.weight(1f))
-                            }
-                        }
-                    }
+                    AppCategoriesScreen(
+                        notes = notes,
+                        categories = categoryOptions,
+                        onSelectCategory = { selectedView = it }
+                    )
                 } else {
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (selectedView == "Home") {
-                            Text(
-                                remember { NoteText.greetingFor(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) },
-                                style = MaterialTheme.typography.titleSmall,
-                                color = colors.onSurfaceVariant
-                            )
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = colors.primaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = colors.surface.copy(alpha = 0.72f)
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = null,
-                                            modifier = Modifier.padding(12.dp).size(26.dp), tint = colors.primary)
-                                    }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text("A little space for big ideas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            "${notes.count { !it.privateNote && !it.archived }} active notes · ${notes.count { it.pinned && !it.privateNote && !it.archived }} pinned",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = colors.onSurfaceVariant
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        editorNoteId = null
-                                        editorDraftId = NoteStore.allocateNoteId(notes)
-                                        editorTemplate = null
-                                        editorVisible = true
-                                    }) {
-                                        Icon(Icons.Default.Add, contentDescription = "Create a note", tint = colors.primary)
-                                    }
-                                }
-                            }
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    when (selectedView) {
-                                        "All notes" -> "All your notes"
-                                        "Pinned" -> "Pinned notes"
-                                        "Reminders" -> "Things to remember"
-                                        "Archived" -> "Archived notes"
-                                        else -> selectedView
-                                    },
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "${filteredNotes.size} notes",
-                                    color = colors.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
+                    AppDashboardHeader(
+                        selectedView = selectedView,
+                        notes = notes,
+                        filteredCount = filteredNotes.size,
+                        dark = dark,
+                        layout = dashboardLayout,
+                        sortByTitle = sortByTitle,
+                        sortByCreated = sortByCreated,
+                        canEncryptAll = notes.any { !it.privateNote && !it.encrypted },
+                        onCreateNote = {
+                            editorNoteId = null
+                            editorDraftId = NoteStore.allocateNoteId(notes)
+                            editorTemplate = null
+                            editorVisible = true
+                        },
+                        onImportMarkdown = {
+                            markdownImportLauncher.launch(arrayOf("text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"))
+                        },
+                        onToggleTheme = {
+                            val next = if (dark) ThemeMode.LIGHT else ThemeMode.DARK
+                            themeMode = next
+                            saveString(PREF_THEME, next.name)
+                        },
+                        onSetSort = { setSort(it) },
+                        onEncryptAll = { confirmEncryptAll = true },
+                        onToggleLayout = {
+                            dashboardLayout = if (dashboardLayout == DashboardLayout.GRID) DashboardLayout.LIST else DashboardLayout.GRID
+                            saveString(PREF_LAYOUT, dashboardLayout.name)
                         }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                if (selectedView == "Home") "Your notes" else "Notes",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (selectedView == "Home") {
-                                IconButton(
-                                    onClick = { markdownImportLauncher.launch(arrayOf("text/markdown", "text/plain", "text/x-markdown", "application/octet-stream")) },
-                                    modifier = Modifier.testTag("import_markdown_button")
-                                ) {
-                                    Icon(Icons.Default.FileOpen, contentDescription = "Import Markdown file")
-                                }
-                            }
-                            IconButton(
-                                onClick = {
-                                    val next = if (dark) ThemeMode.LIGHT else ThemeMode.DARK
-                                    themeMode = next
-                                    saveString(PREF_THEME, next.name)
-                                }
-                            ) {
-                                Icon(
-                                    if (dark) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                    contentDescription = if (dark) "Switch to light theme" else "Switch to dark theme"
-                                )
-                            }
-                            var sortMenuExpanded by remember { mutableStateOf(false) }
-                            Box {
-                                TextButton(onClick = { sortMenuExpanded = true }) {
-                                    Text(when { sortByTitle -> "Title A–Z"; sortByCreated -> "Recently created"; else -> "Recently edited" }, style = MaterialTheme.typography.labelLarge)
-                                }
-                                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                    DropdownMenuItem(text = { Text("Recently edited") }, onClick = { setSort("RECENT"); sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Recently created") }, onClick = { setSort("CREATED"); sortMenuExpanded = false })
-                                    DropdownMenuItem(text = { Text("Title A–Z") }, onClick = { setSort("TITLE"); sortMenuExpanded = false })
-                                    HorizontalDivider()
-                                    DropdownMenuItem(text = { Text("Encrypt all notes…") }, onClick = { sortMenuExpanded = false; confirmEncryptAll = true }, enabled = notes.any { !it.privateNote && !it.encrypted })
-                                }
-                            }
-                            IconButton(
-                                onClick = {
-                                    dashboardLayout = if (dashboardLayout == DashboardLayout.GRID) DashboardLayout.LIST else DashboardLayout.GRID
-                                    saveString(PREF_LAYOUT, dashboardLayout.name)
-                                }
-                            ) {
-                                Icon(
-                                    if (dashboardLayout == DashboardLayout.GRID) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
-                                    contentDescription = "Switch dashboard layout"
-                                )
-                            }
-                        }
-                    }
+                    )
                     if (!storageLoaded) {
                         Column(
                             Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 44.dp),
@@ -1359,90 +986,53 @@ internal fun NestNoteApp(
                             Text("Loading your notes…", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         }
                     } else if (filteredNotes.isEmpty()) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 44.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            NestEmptyIllustration(
-                                when {
-                                    search.isNotBlank() -> Icons.Default.Search
-                                    selectedView == "Archived" -> Icons.Default.Archive
-                                    selectedView == "Pinned" -> Icons.Default.PushPin
-                                    selectedView == "Reminders" -> Icons.Default.NotificationsNone
-                                    else -> Icons.Default.Add
-                                }
-                            )
-                            Text(
-                                when {
-                                    search.isNotBlank() -> "No matching notes"
-                                    selectedView == "Archived" -> "Nothing archived yet"
-                                    selectedView == "Pinned" -> "No pinned notes yet"
-                                    selectedView == "Reminders" -> "No reminders yet"
-                                    categoryOptions.contains(selectedView) -> "No $selectedView notes yet"
-                                    else -> "A fresh page awaits"
-                                },
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                when {
-                                    search.isNotBlank() -> "Try another search, or clear it to see all your notes."
-                                    selectedView == "Archived" -> "Notes you archive will be kept here, away from your main lists."
-                                    selectedView == "Pinned" -> "Pin important notes to keep them easy to find."
-                                    selectedView == "Reminders" -> "Add a reminder to a note and it will show up here."
-                                    categoryOptions.contains(selectedView) -> "Notes assigned to this category will appear here."
-                                    else -> "Create a note and let ideas flow."
-                                },
-                                color = colors.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            if (search.isNotBlank()) {
-                                TextButton(onClick = { search = "" }) { Text("Clear search") }
-                            }
-                        }
-                    } else if (dashboardLayout == DashboardLayout.GRID) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 155.dp),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 100.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            gridItems(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps,
-                                    onOpen = {
-                                        if (selectedNoteIds.isNotEmpty()) {
-                                            selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
-                                        } else if (note.encrypted) { toggleNoteEncryption(note.id) } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
-                                    },
-                                    onSelect = { selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id },
-                                    isSelected = note.id in selectedNoteIds,
-                                    onPin = { if (!note.encrypted) requestPersist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
-                                    onDelete = { deleteNote(note) }, onArchive = { if (!note.encrypted) requestPersist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) }, onToggleEncryption = { toggleNoteEncryption(note.id) },
-                                    modifier = Modifier.animateItem())
-                            }
-                        }
+                        AppNotesEmptyState(
+                            search = search,
+                            selectedView = selectedView,
+                            categoryOptions = categoryOptions,
+                            onClearSearch = { search = "" }
+                        )
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 100.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filteredNotes, key = { it.id }) { note ->
-                                NoteCard(note, compact = dashboardDensity == DashboardDensity.COMPACT, colorStyle = noteColorStyle, showPreview = showNotePreviews, showTimestamp = showNoteTimestamps,
-                                    onOpen = {
-                                        if (selectedNoteIds.isNotEmpty()) {
-                                            selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
-                                        } else if (note.encrypted) { toggleNoteEncryption(note.id) } else { editorNoteId = note.id; editorDraftId = note.id; editorTemplate = null; editorVisible = true }
-                                    },
-                                    onSelect = { selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id },
-                                    isSelected = note.id in selectedNoteIds,
-                                    onPin = { requestPersist(notes.map { if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it }) },
-                                    onDelete = { deleteNote(note) }, onArchive = { if (!note.encrypted) requestPersist(notes.map { if (it.id == note.id) it.copy(archived = !it.archived, pinned = if (it.archived) it.pinned else false, updated = System.currentTimeMillis()) else it }) }, onToggleEncryption = { toggleNoteEncryption(note.id) },
-                                    modifier = Modifier.animateItem())
-                            }
-                        }
+                        AppNoteCollection(
+                            notes = filteredNotes,
+                            layout = dashboardLayout,
+                            compact = dashboardDensity == DashboardDensity.COMPACT,
+                            colorStyle = noteColorStyle,
+                            showPreview = showNotePreviews,
+                            showTimestamp = showNoteTimestamps,
+                            selectedNoteIds = selectedNoteIds,
+                            onOpen = { note ->
+                                if (selectedNoteIds.isNotEmpty()) {
+                                    selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
+                                } else if (note.encrypted) {
+                                    toggleNoteEncryption(note.id)
+                                } else {
+                                    editorNoteId = note.id
+                                    editorDraftId = note.id
+                                    editorTemplate = null
+                                    editorVisible = true
+                                }
+                            },
+                            onSelect = { note ->
+                                selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
+                            },
+                            onPin = { note ->
+                                requestPersist(notes.map {
+                                    if (it.id == note.id) it.copy(pinned = !it.pinned, updated = System.currentTimeMillis()) else it
+                                })
+                            },
+                            onDelete = { note -> deleteNote(note) },
+                            onArchive = { note ->
+                                if (!note.encrypted) requestPersist(notes.map {
+                                    if (it.id == note.id) it.copy(
+                                        archived = !it.archived,
+                                        pinned = if (it.archived) it.pinned else false,
+                                        updated = System.currentTimeMillis()
+                                    ) else it
+                                })
+                            },
+                            onToggleEncryption = { note -> toggleNoteEncryption(note.id) }
+                        )
                     }
                 }
                 }
@@ -1451,80 +1041,44 @@ internal fun NestNoteApp(
 
         if (showOrphanDraftDialog && pendingOrphanDrafts.isNotEmpty()) {
             val newest = pendingOrphanDrafts.first()
-            val count = pendingOrphanDrafts.size
             val draftDateFormatter = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
             val preview = newest.title.ifBlank {
                 newest.body.lineSequence().firstOrNull { it.isNotBlank() }?.take(40).orEmpty()
             }.ifBlank { "Untitled" }
-            AlertDialog(
-                onDismissRequest = { showOrphanDraftDialog = false },
-                title = {
-                    Text(if (count == 1) "Recover unsaved note?" else "Recover unsaved notes?")
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            if (count == 1) {
-                                "A draft from ${draftDateFormatter.format(Date(newest.savedAtMillis))} was found."
-                            } else {
-                                "$count drafts from previous sessions were found. The most recent is:"
-                            }
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = colors.surfaceContainerHighest
-                        ) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(preview, style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    draftDateFormatter.format(Date(newest.savedAtMillis)),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = colors.onSurfaceVariant
-                                )
-                            }
-                        }
+            OrphanDraftRecoveryDialog(
+                count = pendingOrphanDrafts.size,
+                preview = preview,
+                savedAtLabel = draftDateFormatter.format(Date(newest.savedAtMillis)),
+                onDismiss = { showOrphanDraftDialog = false },
+                onRecover = {
+                    val recovered = NestNote(
+                        id = newest.noteId,
+                        title = newest.title,
+                        body = newest.body,
+                        category = newest.category,
+                        color = newest.color,
+                        background = newest.background,
+                        pinned = newest.pinned,
+                        reminder = newest.reminder,
+                        wallpaperUri = newest.wallpaperUri,
+                        updated = newest.savedAtMillis,
+                        created = newest.savedAtMillis
+                    )
+                    requestPersist(notes + recovered) {
+                        coroutineScope.launch(Dispatchers.IO) { runCatching { DraftStore(context).clear(newest.noteId) } }
+                        pendingOrphanDrafts = pendingOrphanDrafts.drop(1)
+                        if (pendingOrphanDrafts.isEmpty()) showOrphanDraftDialog = false
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Draft recovered") }
                     }
                 },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val recovered = NestNote(
-                            id = newest.noteId,
-                            title = newest.title,
-                            body = newest.body,
-                            category = newest.category,
-                            color = newest.color,
-                            background = newest.background,
-                            pinned = newest.pinned,
-                            reminder = newest.reminder,
-                            wallpaperUri = newest.wallpaperUri,
-                            updated = newest.savedAtMillis,
-                            created = newest.savedAtMillis
-                        )
-                        requestPersist(notes + recovered) {
-                            coroutineScope.launch(Dispatchers.IO) { runCatching { DraftStore(context).clear(newest.noteId) } }
-                            pendingOrphanDrafts = pendingOrphanDrafts.drop(1)
-                            if (pendingOrphanDrafts.isEmpty()) {
-                                showOrphanDraftDialog = false
-                            }
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Draft recovered") }
+                onDiscardAll = {
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            pendingOrphanDrafts.forEach { runCatching { DraftStore(context).clear(it.noteId) } }
                         }
-                    }) { Text("Recover") }
-                },
-                dismissButton = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                        TextButton(onClick = {
-                            coroutineScope.launch {
-                                withContext(Dispatchers.IO) {
-                                    pendingOrphanDrafts.forEach {
-                                        runCatching { DraftStore(context).clear(it.noteId) }
-                                    }
-                                }
-                            }
-                            pendingOrphanDrafts = emptyList()
-                            showOrphanDraftDialog = false
-                        }) { Text("Discard all") }
-                        TextButton(onClick = { showOrphanDraftDialog = false }) { Text("Later") }
                     }
+                    pendingOrphanDrafts = emptyList()
+                    showOrphanDraftDialog = false
                 }
             )
         }
@@ -1535,164 +1089,43 @@ internal fun NestNoteApp(
             val restoreIncoming = NoteStore.remapDraftIdCollisionForRestore(notes, publicIncoming, editorDraftId)
             val preview = NoteStore.merge(notes, restoreIncoming)
             val withinNoteLimit = NoteStore.isValidNoteCollection(preview.notes)
-            AlertDialog(
-                onDismissRequest = { pendingRestore = null },
-                title = { Text("Review backup restore") },
-                text = {
-                    Text(
-                        if (withinNoteLimit) {
-                            "This backup will add ${preview.added} notes and update ${preview.updated} existing notes. Voice recordings are not included. Notes not present in the backup will not be deleted."
-                        } else {
-                            "This restore would exceed NESTNOTE's ${NoteStore.MAX_NOTES}-note limit. Remove notes or choose a smaller backup before restoring."
+            BackupRestoreReviewDialog(
+                addedCount = preview.added,
+                updatedCount = preview.updated,
+                withinNoteLimit = withinNoteLimit,
+                maxNotes = NoteStore.MAX_NOTES,
+                onDismiss = { pendingRestore = null },
+                onRestore = {
+                    requestPersist(preview.notes, allowRecovery = true) {
+                        val restoredCategories = (categoryOptions + preview.notes.map { it.category })
+                            .distinct().filter { it.isNotBlank() }
+                        if (restoredCategories != categoryOptions) {
+                            categoryOptions = restoredCategories
+                            preferences.edit().putStringSet(PREF_CUSTOM_CATEGORIES, restoredCategories.toMutableSet()).apply()
                         }
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        enabled = withinNoteLimit,
-                        onClick = {
-                            requestPersist(preview.notes, allowRecovery = true) {
-                                val restoredCategories = (categoryOptions + preview.notes.map { it.category })
-                                    .distinct().filter { it.isNotBlank() }
-                                if (restoredCategories != categoryOptions) {
-                                    categoryOptions = restoredCategories
-                                    preferences.edit().putStringSet(PREF_CUSTOM_CATEGORIES, restoredCategories.toMutableSet()).apply()
-                                }
-                                pendingRestore = null
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
-                                }
-                            }
+                        pendingRestore = null
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Restored ${preview.added} new and ${preview.updated} updated notes")
                         }
-                    ) { Text("Restore notes") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
+                    }
                 }
             )
         }
 
-        if (showExternalMarkdownDialog) {
-            AlertDialog(
-                onDismissRequest = { showExternalMarkdownDialog = false },
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            openedExternalMarkdownTitle,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Box {
-                            IconButton(
-                                onClick = { externalMarkdownMoreMenuExpanded = true },
-                                modifier = Modifier.testTag("external_markdown_more_button")
-                            ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More Markdown viewer options")
-                            }
-                            DropdownMenu(
-                                expanded = externalMarkdownMoreMenuExpanded,
-                                onDismissRequest = { externalMarkdownMoreMenuExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(if (showExternalMarkdownZoomControls) "Hide text size controls" else "Text size") },
-                                    leadingIcon = { Icon(Icons.Default.FormatSize, contentDescription = null) },
-                                    onClick = {
-                                        showExternalMarkdownZoomControls = !showExternalMarkdownZoomControls
-                                        externalMarkdownMoreMenuExpanded = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Use default size (${defaultMarkdownZoomPercent}%)") },
-                                    onClick = {
-                                        externalMarkdownZoomPercent = defaultMarkdownZoomPercent
-                                        externalMarkdownMoreMenuExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 560.dp)
-                    ) {
-                        AnimatedVisibility(visible = showExternalMarkdownZoomControls) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    IconButton(
-                                        enabled = externalMarkdownZoomPercent > 50,
-                                        onClick = { externalMarkdownZoomPercent = (externalMarkdownZoomPercent - 5).coerceAtLeast(50) }
-                                    ) { Text("−", style = MaterialTheme.typography.titleLarge) }
-                                    Text(
-                                        text = "$externalMarkdownZoomPercent%",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        modifier = Modifier.widthIn(min = 52.dp),
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                    IconButton(
-                                        enabled = externalMarkdownZoomPercent < 200,
-                                        onClick = { externalMarkdownZoomPercent = (externalMarkdownZoomPercent + 5).coerceAtMost(200) }
-                                    ) { Text("+", style = MaterialTheme.typography.titleLarge) }
-                                }
-                                Slider(
-                                    value = externalMarkdownZoomPercent.toFloat(),
-                                    onValueChange = { externalMarkdownZoomPercent = (it / 5f).toInt() * 5 },
-                                    valueRange = 50f..200f,
-                                    steps = 29,
-                                    modifier = Modifier.fillMaxWidth().testTag("external_markdown_zoom_slider")
-                                )
-                            }
-                        }
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = false)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            AndroidView(
-                                factory = { viewContext ->
-                                    TextView(viewContext).apply {
-                                        movementMethod = LinkMovementMethod.getInstance()
-                                        setTextColor(colors.onSurface.toArgb())
-                                        textSize = 16f * externalMarkdownZoomPercent / 100f
-                                        setPadding(4, 4, 4, 4)
-                                    }
-                                },
-                                update = { textView ->
-                                    textView.text = MarkdownPreview.toSpanned(
-                                        context,
-                                        openedExternalMarkdownContent,
-                                        colors.onSurface.toArgb()
-                                    )
-                                    textView.textSize = 16f * externalMarkdownZoomPercent / 100f
-                                    textView.movementMethod = LinkMovementMethod.getInstance()
-                                },
-                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showExternalMarkdownDialog = false }) {
-                        Text("Close")
-                    }
-                }
-            )
-        }
+        ExternalMarkdownPreviewDialog(
+            visible = showExternalMarkdownDialog,
+            onVisibleChange = { showExternalMarkdownDialog = it },
+            title = openedExternalMarkdownTitle,
+            markdown = openedExternalMarkdownContent,
+            zoomPercent = externalMarkdownZoomPercent,
+            onZoomPercentChange = { externalMarkdownZoomPercent = it },
+            showZoomControls = showExternalMarkdownZoomControls,
+            onShowZoomControlsChange = { showExternalMarkdownZoomControls = it },
+            moreMenuExpanded = externalMarkdownMoreMenuExpanded,
+            onMoreMenuExpandedChange = { externalMarkdownMoreMenuExpanded = it },
+            defaultZoomPercent = defaultMarkdownZoomPercent,
+            context = context
+        )
 
         if (showPrivateVaultGate) {
             PrivateVaultGateDialog(
@@ -1830,18 +1263,9 @@ internal fun NestNoteApp(
         }
 
         if (showStorageRecoveryDialog) {
-            AlertDialog(
-                onDismissRequest = { showStorageRecoveryDialog = false },
-                title = { Text("Local notes need recovery") },
-                text = { Text("NESTNOTE couldn't read the saved notes. The stored data has been left untouched. Open Settings and restore a backup before creating, editing, or deleting notes.") },
-                confirmButton = {
-                    TextButton(onClick = { showStorageRecoveryDialog = false; selectedView = "Settings" }) {
-                        Text("Open backup settings")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showStorageRecoveryDialog = false }) { Text("Later") }
-                }
+            AppStorageRecoveryDialog(
+                onDismiss = { showStorageRecoveryDialog = false },
+                onOpenSettings = { showStorageRecoveryDialog = false; selectedView = "Settings" }
             )
         }
 
@@ -2006,70 +1430,52 @@ internal fun NestNoteApp(
                 }
             }
             if (confirmSystemDiscard) {
-                AlertDialog(
-                    onDismissRequest = { confirmSystemDiscard = false },
-                    title = { Text("Discard changes?") },
-                    text = {
-                        Text(
-                            if (editorNote == null) {
-                                "Your unsaved note and any voice recordings attached to this new draft will be discarded."
-                            } else {
-                                "Your unsaved changes and newly staged voice recordings will be discarded. Voice recordings already saved to this note will be kept."
-                            }
-                        )
-                    },
-                    confirmButton = { TextButton(onClick = discardEditor) { Text("Discard") } },
-                    dismissButton = { TextButton(onClick = { confirmSystemDiscard = false }) { Text("Keep editing") } }
+                ConfirmSystemDiscardDialog(
+                    isNewNote = editorNote == null,
+                    onDiscard = discardEditor,
+                    onKeepEditing = { confirmSystemDiscard = false }
                 )
             }
         }
         if (confirmEncryptAll) {
-            val eligible = notes.filter { !it.privateNote && !it.encrypted }
-            AlertDialog(
-                onDismissRequest = { confirmEncryptAll = false },
-                title = { Text("Encrypt all ordinary notes?") },
-                text = { Text("This will encrypt and verify ${eligible.size} ordinary notes using a dedicated device-bound Android Keystore key. Private Vault notes are excluded. If the device Keystore key is permanently lost, these notes may be unrecoverable. Continue only after considering that risk.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        confirmEncryptAll = false
-                        val replacements = runCatching { eligible.associate { it.id to encryptOrdinaryNote(it) } }.getOrElse { error ->
-                            coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Encrypt all failed; original notes were preserved.") }
-                            emptyMap()
+            val eligible = OrdinaryNoteSelection.eligibleForEncryption(notes)
+            ConfirmEncryptAllDialog(
+                eligibleCount = eligible.size,
+                onDismiss = { confirmEncryptAll = false },
+                onConfirm = {
+                    confirmEncryptAll = false
+                    val replacements = runCatching { eligible.associate { it.id to encryptOrdinaryNote(it) } }.getOrElse { error ->
+                        coroutineScope.launch { snackbarHostState.showSnackbar(error.message ?: "Encrypt all failed; original notes were preserved.") }
+                        emptyMap()
+                    }
+                    if (replacements.isNotEmpty()) {
+                        requestPersist(OrdinaryNoteSelection.applyReplacements(notes, replacements)) {
+                            selectedNoteIds = emptySet()
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted and verified ${replacements.size} ordinary notes") }
                         }
-                        if (replacements.isNotEmpty()) {
-                            requestPersist(notes.map { replacements[it.id] ?: it }) {
-                                selectedNoteIds = emptySet()
-                                coroutineScope.launch { snackbarHostState.showSnackbar("Encrypted and verified ${replacements.size} ordinary notes") }
-                            }
-                        } else if (eligible.isEmpty()) {
-                            coroutineScope.launch { snackbarHostState.showSnackbar("There are no unencrypted ordinary notes.") }
-                        }
-                    }) { Text("Encrypt all") }
-                },
-                dismissButton = { TextButton(onClick = { confirmEncryptAll = false }) { Text("Cancel") } }
+                    } else if (eligible.isEmpty()) {
+                        coroutineScope.launch { snackbarHostState.showSnackbar("There are no unencrypted ordinary notes.") }
+                    }
+                }
             )
         }
         if (confirmBulkDelete) {
             val deleting = notes.filter { it.id in selectedNoteIds }
-            AlertDialog(
-                onDismissRequest = { confirmBulkDelete = false },
-                title = { Text("Delete ${deleting.size} notes?") },
-                text = { Text("This permanently removes the selected notes and their voice recordings.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        confirmBulkDelete = false
-                        requestPersist(notes.filterNot { it.id in selectedNoteIds }) {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                deleting.forEach { note ->
-                                    runCatching { com.nestnote.app.voicenote.VoiceNoteRepository(context).deleteAllForNote(note.id) }
-                                }
+            ConfirmBulkDeleteDialog(
+                count = deleting.size,
+                onDismiss = { confirmBulkDelete = false },
+                onConfirm = {
+                    confirmBulkDelete = false
+                    requestPersist(notes.filterNot { it.id in selectedNoteIds }) {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            deleting.forEach { note ->
+                                runCatching { com.nestnote.app.voicenote.VoiceNoteRepository(context).deleteAllForNote(note.id) }
                             }
-                            selectedNoteIds = emptySet()
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Selected notes deleted") }
                         }
-                    }) { Text("Delete", color = colors.error) }
-                },
-                dismissButton = { TextButton(onClick = { confirmBulkDelete = false }) { Text("Cancel") } }
+                        selectedNoteIds = emptySet()
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Selected notes deleted") }
+                    }
+                }
             )
         }
         }
@@ -2077,70 +1483,6 @@ internal fun NestNoteApp(
     }
 }
 
-@Composable
-private fun BootLandingScreen(preferences: android.content.SharedPreferences) {
-    val context = LocalContext.current
-    val colors = MaterialTheme.colorScheme
-    var soundEnabled by remember {
-        mutableStateOf(preferences.getBoolean(PREF_BOOT_SOUND_ENABLED, true))
-    }
-    var progress by remember { mutableFloatStateOf(0.12f) }
-    val pulse = remember { Animatable(0.86f) }
-    LaunchedEffect(Unit) {
-        // Keep startup audio short, quiet, and user-controllable. Release the audio generator
-        // immediately; no audio resource or looping playback is retained.
-        if (soundEnabled) {
-            runCatching {
-                ToneGenerator(AudioManager.STREAM_SYSTEM, 28).let { tone ->
-                    tone.startTone(ToneGenerator.TONE_PROP_ACK, 110)
-                    delay(140)
-                    tone.release()
-                }
-            }
-        }
-        while (progress < 0.9f) {
-            delay(180)
-            progress = (progress + 0.075f).coerceAtMost(0.9f)
-        }
-    }
-    LaunchedEffect(Unit) {
-        pulse.animateTo(1.04f, animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = tween(950), repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ))
-    }
-    Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier.size(108.dp).graphicsLayer { scaleX = pulse.value; scaleY = pulse.value }
-                    .clip(RoundedCornerShape(32.dp)).background(colors.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Lock, contentDescription = null, tint = colors.onPrimaryContainer, modifier = Modifier.size(48.dp))
-            }
-            Spacer(Modifier.height(28.dp))
-            Text("NESTNOTE", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = colors.onBackground)
-            Spacer(Modifier.height(8.dp))
-            Text("Preparing your workspace", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
-            Spacer(Modifier.height(30.dp))
-            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(0.68f).height(4.dp).clip(CircleShape))
-            Spacer(Modifier.height(12.dp))
-            Text("Loading notes and getting things ready…", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-            Spacer(Modifier.height(30.dp))
-            TextButton(onClick = {
-                soundEnabled = !soundEnabled
-                preferences.edit().putBoolean(PREF_BOOT_SOUND_ENABLED, soundEnabled).apply()
-            }) {
-                Icon(if (soundEnabled) Icons.Default.NotificationsNone else Icons.Default.Close, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (soundEnabled) "Boot sound on" else "Boot sound off")
-            }
-        }
-    }
-}
 
 private tailrec fun Context.findActivityForSecureWindow(): Activity? = when (this) {
     is Activity -> this

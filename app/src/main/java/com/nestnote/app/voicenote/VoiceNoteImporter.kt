@@ -38,8 +38,8 @@ class VoiceNoteImporter(
         val name = VoiceAudioImportPolicy.ensureAudioExtension(providedName, mimeType)
 
         val declaredSize = querySize(uri)
-        if (declaredSize != null && declaredSize > VoiceNoteRepository.MAX_RECORDING_BYTES) {
-            throw IOException("Audio file exceeds the ${VoiceNoteRepository.MAX_RECORDING_BYTES / (1024 * 1024)} MB limit")
+        if (declaredSize != null && declaredSize > VoiceNoteRepository.MAX_IMPORT_BYTES) {
+            throw IOException("Audio file exceeds the ${VoiceNoteRepository.MAX_IMPORT_BYTES / (1024 * 1024)} MB limit")
         }
 
         val duration = readDurationMillis(uri)
@@ -58,15 +58,18 @@ class VoiceNoteImporter(
     }
 
     private fun queryDisplayName(uri: Uri): String {
-        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (index >= 0) cursor.getString(index)?.trim()?.takeIf(String::isNotEmpty)?.let {
-                    return it.take(MAX_DISPLAY_NAME_LENGTH)
-                }
-            }
+        return try {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) cursor.getString(index)?.trim()
+                        ?.takeIf { it.isNotEmpty() }?.take(MAX_DISPLAY_NAME_LENGTH)
+                    else null
+                } else null
+            } ?: "Imported audio"
+        } catch (_: Exception) {
+            "Imported audio"
         }
-        return "Imported audio"
     }
 
     private fun querySize(uri: Uri): Long? = runCatching {
@@ -91,10 +94,6 @@ class VoiceNoteImporter(
 
     private companion object {
         const val MAX_DISPLAY_NAME_LENGTH = 160
-        val AUDIO_EXTENSIONS = setOf(
-            "aac", "aif", "aiff", "amr", "ape", "flac", "m4a", "m4b", "mka", "mp3",
-            "mpc", "oga", "ogg", "opus", "wav", "weba", "webm", "wma", "3ga", "3gp"
-        )
     }
 }
 /** Pure import policy kept separate so extension/MIME behavior is covered by JVM tests. */

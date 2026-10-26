@@ -143,6 +143,7 @@ class VoiceNoteRepository private constructor(
     }
 
     companion object {
-        const val MAX_RECORDING_BYTES: Int = VoiceAttachmentStore.MAX_AUDIO_BYTES
+        const val MAX_RECORDING_BYTES: Int = 25 * 1024 * 1024
+        const val MAX_IMPORT_BYTES: Int = 100 * 1024 * 1024
     }
 }
