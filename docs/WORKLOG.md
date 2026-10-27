@@ -1075,3 +1075,9 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Fixes: all three regexes now accept both dashed and dash-less hex UUID forms (arbitrary/wrong-length payloads stay hidden); `VoiceNoteImporter` now generates the canonical dashed UUID; `NoteLinkSupport` excludes voice-marker labels from note-link titles, resolution, and backlink matching (new `isVoiceMarkerLabel`).
 - Tests: `NoteTextTest.dashlessImportedVoiceMarkersResolveLikeCanonicalOnes`, `dashlessIdsKeepMalformedPayloadsHidden`, and a new `NoteLinkSupportTest` (marker exclusion, resolve/backlink guards, wrap bounds).
 - Validation: unit tests + lint via Android CI on exact head; on-device re-import of the affected recording and inline playback remain release gates.
+
+## 2026-10-27 — CI results for the imported-voice-marker batch
+
+- Run 40475022960 on `cf11111` failed at `:app:compileDebugUnitTestKotlin`: the new NoteTextTest cases used `assertTrue` without importing it and an untyped `emptyList()` assertion the compiler could not infer. Main sources compiled clean.
+- Fix pushed in `4895eff`; run 40477112350 passed on exact head: lint, all unit tests (including the dash-less marker and NoteLinkSupport regressions), API 36 debug APK, instrumentation-test compilation, and minified release compilation.
+- Device-only release gates: re-import an audio file and confirm the chip shows its name with a working inline player; confirm the "Missing notes" line is gone for notes that only contain voice markers; verify existing dash-less markers from 1.4.9 and earlier resolve after update.
