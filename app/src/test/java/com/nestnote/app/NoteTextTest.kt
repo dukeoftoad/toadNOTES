@@ -4,6 +4,7 @@ import java.util.Calendar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NoteTextTest {
@@ -517,7 +518,7 @@ class NoteTextTest {
         // Tolerance is limited to hex UUID shapes: arbitrary text, wrong lengths and
         // non-hex payloads must stay hidden from the rendered preview.
         val body = "a [[voice:not-a-uuid]] b [[voice:123]] c [[voice:zzzzzzzz89c34486a8d281e5dbace545]] d"
-        assertEquals(emptyList(), NoteText.voiceMarkers(body).map { it.attachmentId })
+        assertEquals(emptyList<String>(), NoteText.voiceMarkers(body).map { it.attachmentId })
         // Three candidate markers, each demoted to a "Voice note" text segment:
         // 4 surrounding text pieces + 3 demoted payloads, none playable.
         assertEquals(7, NoteText.voiceSegments(body).count { it.attachmentId == null })
