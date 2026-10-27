@@ -35,6 +35,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
@@ -668,9 +669,9 @@ internal fun NoteEditorContent(
             },
             dismissButton = {
                 TextButton(onClick = { showReminderDatePicker = false }) { Text("Cancel") }
-            },
-            title = { Text("Reminder date") }
+            }
         ) {
+            // DatePicker renders its own header/title; DatePickerDialog has no title slot.
             DatePicker(state = dateState)
         }
     }

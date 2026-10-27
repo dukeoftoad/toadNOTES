@@ -110,6 +110,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -210,7 +211,7 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                             // guaranteeing text contrast toward the bottom of the card.
                             Brush.verticalGradient(listOf(tint.copy(alpha = if (tintIsDark) 0.78f else 0.62f), tint.copy(alpha = if (tintIsDark) 0.92f else 0.82f)))
                         } else {
-                            Color.Transparent
+                            SolidColor(Color.Transparent)
                         }
                     )
                     .padding(if (compact) 10.dp else 16.dp)
