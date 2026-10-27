@@ -8,7 +8,7 @@ This document records the metadata prepared for a possible merge request to the 
 - **License:** `GPL-3.0-only`
 - **Source code:** https://github.com/dukeoftoad/toadNOTES
 - **Issue tracker:** https://github.com/dukeoftoad/toadNOTES/issues
-- **Current release candidate:** `v1.4.6`. This candidate is not a published upstream release until the `v1.4.6` tag and GitHub Release are verified. Recheck the [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases) page before submitting metadata; do not label this candidate as published.
+- **Current release candidate:** `v1.4.7`. This candidate is not a published upstream release until the `v1.4.7` tag and GitHub Release are verified. Recheck the [GitHub Releases](https://github.com/dukeoftoad/toadNOTES/releases) page before submitting metadata; do not label this candidate as published.
 - **Build system:** Gradle / Android Gradle Plugin
 - **Build environment observed in CI:** Java 17, Gradle 8.13, Android SDK platform 36, build tools 36.0.0
 - **Minimum SDK:** 26
@@ -25,7 +25,7 @@ The project Gradle configuration accepts `-PversionName` and `-PversionCode`. A 
 Candidate build commands in the existing CI toolchain (validate these for the exact tag before submission):
 
 ```sh
-gradle --no-daemon testDebugUnitTest -PversionName=1.4.6 -PversionCode=REPLACE_WITH_VERIFIED_MONOTONIC_CODE
+gradle --no-daemon testDebugUnitTest -PversionName=1.4.7 -PversionCode=REPLACE_WITH_VERIFIED_MONOTONIC_CODE
 gradle --no-daemon assembleRelease -PversionName=1.3.11 -PversionCode=<monotonic-version-code>
 ```
 

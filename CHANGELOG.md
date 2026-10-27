@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to NESTNOTE are documented here. The current release candidate is **1.4.6**.
+All notable changes to NESTNOTE are documented here. The current release candidate is **1.4.7**.
 
-## [Unreleased] — Performance & interface refresh
+## [1.4.7] — Performance & interface refresh
 
 ### Performance (frame skipping eliminated at the source)
 - The theme `ColorScheme` is now cached and only rebuilt when the theme actually changes. Previously a fresh scheme (dynamic-colour extraction, accent blending, AMOLED overlay) was allocated on every recomposition — including every keystroke in dashboard search — forcing the whole UI tree to recompose.

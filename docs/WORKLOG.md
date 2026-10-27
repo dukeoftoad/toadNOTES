@@ -1001,3 +1001,10 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - CI can validate the migration logic and failure preservation, but it cannot prove Android OS process/device-reboot behavior or simulate every real Keystore/database I/O failure. Those remain device/emulator release gates.
 - Device test procedure: schedule a backend switch and confirm the active backend stays unchanged; inspect WorkManager's unique work nestnote_delayed_storage_backend_switch and verify its initial delay is five hours; force-stop/relaunch the app and reboot the device while the work is pending; edit an existing note and create a new one before the delay expires; after execution, verify both records and their latest content in the target backend. Repeat with missing Keystore alias, tampered ciphertext, unreadable SQLCipher database, and a simulated failed target write; confirm the worker fails without changing the active backend or deleting/overwriting source artifacts.
 - Status: automated regression tests added; exact-head CI and physical-device/emulator checks pending. Do not mark reboot persistence or injected storage failures as device-verified until observed.
+
+## 2026-10-27 — Version bump to 1.4.7
+
+- Bumped Gradle defaults to versionName 1.4.7 / versionCode 10407 in `app/build.gradle.kts`.
+- Updated current-release references in `README.md`, root `CHANGELOG.md` (1.4.7 section added for the performance & interface refresh), `docs/CHANGELOG.md`, `F-DROID_METADATA_PROPOSAL.md`, and `docs/release-notes/v1.4.7.md` (new).
+- CI workflow examples intentionally retain `v1.4.6` as an illustrative tag format example.
+- Status: metadata and docs aligned to 1.4.7; publication still requires a stable `v1.4.7` tag, passing CI, signing verification, and release gates.

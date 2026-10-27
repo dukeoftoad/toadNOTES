@@ -8,6 +8,15 @@
 - Archive payload serialization remains an internal implementation detail; Private Vault notes and voice attachments are excluded.
 
 
+## v1.4.7 — Performance & interface refresh
+
+Versioned notes: [docs/release-notes/v1.4.7.md](release-notes/v1.4.7.md).
+
+- App release metadata updated to versionName 1.4.7 / versionCode 10407.
+- Performance: theme `ColorScheme` cached and rebuilt only on theme change; note wallpapers decode off the main thread with power-of-two downsampling and a shared LRU cache; editor-derived work debounced via `snapshotFlow` with a cached linked-note title index and allocation-free word counting; voice playback notifications refresh on a one-second loop and idle players drop always-on animations; draft flushes moved off the main thread during editor close; dashboard statistics hoisted to `remember(notes)` with a shared date formatter and `contentType` on lazy lists.
+- Interface: complete Material 3 colour foundation (`surfaceContainerHighest`, `tertiary`, `tertiaryContainer`, `surfaceDim`/`surfaceBright`); opaque tonal accent containers with dark-aware `onPrimary`; first-class dark skin with 15 deep note tints and dark-aware note cards; tonal category chips and wallpaper scrims on note cards; Material 3 date and time pickers for reminders; refreshed dashboard hero, pill search field, and actionable empty states; all remaining ad-hoc tweens routed through the shared motion tokens honouring the system "Remove animations" preference.
+- Publishing still requires a stable tag and successful release workflow; this entry is not proof of publication.
+
 ## v1.4.6 — Release candidate
 
 - Align app release metadata and current documentation with version 1.4.6.
@@ -20,7 +29,7 @@
 
 Versioned notes: [docs/release-notes/v1.3.11.md](release-notes/v1.3.11.md).
 
-This is a historical release record retained for traceability. The current candidate is v1.4.6; publishing it still requires a stable tag and successful release workflow.
+This is a historical release record retained for traceability. The current candidate is v1.4.7; publishing it still requires a stable tag and successful release workflow.
 
 ### Fixed
 - Improve editor foreground contrast on dark surfaces using surface luminance and theme-provided colors.
