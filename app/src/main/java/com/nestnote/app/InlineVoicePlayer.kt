@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 
 /**
  * Raw PCM byte rate for the voice-note format. Envelope overhead (32 bytes)
@@ -260,8 +262,12 @@ internal fun InlineVoicePlayer(
 
     // Keep a compact media notification in the Android shade while this voice note is active.
     // The callback routes notification actions back to the same player instance.
+    // positionMs updates at 10Hz; keying this effect on it restarted the coroutine (and
+    // re-ran channel/binder IPC) ten times per second, so the live position is read through
+    // rememberUpdatedState and the shade refreshes on a one-second loop instead.
+    val currentPosition by rememberUpdatedState(positionMs)
     LaunchedEffect(
-        isActive, player, paused, positionMs, shownDuration, displayName, notificationPermissionRevision
+        isActive, player, paused, shownDuration, displayName, notificationPermissionRevision
     ) {
         if (isActive && player != null) {
             val notificationPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -275,24 +281,31 @@ internal fun InlineVoicePlayer(
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             } else {
-                VoicePlaybackNotifications.show(
-                    context = context,
-                    attachmentId = attachmentId,
-                    displayName = displayName,
-                    positionMs = positionMs,
-                    durationMs = shownDuration,
-                    paused = paused
-                ) { action ->
-                    when (action) {
-                        VoicePlaybackNotifications.Action.TOGGLE -> {
-                            if (paused) {
-                                runCatching { player?.resume() }.onSuccess { paused = false }
-                            } else {
-                                runCatching { player?.pause() }.onSuccess { paused = true }
+                suspend fun postNotification() {
+                    VoicePlaybackNotifications.show(
+                        context = context,
+                        attachmentId = attachmentId,
+                        displayName = displayName,
+                        positionMs = currentPosition,
+                        durationMs = shownDuration,
+                        paused = paused
+                    ) { action ->
+                        when (action) {
+                            VoicePlaybackNotifications.Action.TOGGLE -> {
+                                if (paused) {
+                                    runCatching { player?.resume() }.onSuccess { paused = false }
+                                } else {
+                                    runCatching { player?.pause() }.onSuccess { paused = true }
+                                }
                             }
+                            VoicePlaybackNotifications.Action.STOP -> onStopRequested()
                         }
-                        VoicePlaybackNotifications.Action.STOP -> onStopRequested()
                     }
+                }
+                postNotification()
+                while (true) {
+                    delay(1000)
+                    postNotification()
                 }
             }
         } else {
@@ -691,24 +704,34 @@ private fun InlinePlayingEqualizer(reducedMotion: Boolean) {
 /** Minimal Material-themed waveform; bars animate only while playback is active. */
 @Composable
 private fun InlineVoiceWaveform(playing: Boolean, reducedMotion: Boolean, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "voice-waveform")
     val levels = listOf(0.28f, 0.62f, 0.42f, 0.9f, 0.5f, 0.74f, 0.34f, 0.82f, 0.46f, 0.68f, 0.3f, 0.58f)
+    // Create the infinite transition only while actually animating. It used to run twelve
+    // frame-rate animations on every idle player whose values were ignored.
+    val transition = if (playing && !reducedMotion) {
+        rememberInfiniteTransition(label = "voice-waveform")
+    } else {
+        null
+    }
     Row(
         modifier = modifier.height(22.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         levels.forEachIndexed { index, level ->
-            val animated by transition.animateFloat(
-                initialValue = level * 0.55f,
-                targetValue = level,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 360 + (index % 5) * 90, delayMillis = index * 23),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "voice-wave-$index"
-            )
-            val heightFraction = if (playing && !reducedMotion) animated else level * 0.72f
+            val heightFraction: Float = if (transition != null) {
+                val animated by transition.animateFloat(
+                    initialValue = level * 0.55f,
+                    targetValue = level,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 360 + (index % 5) * 90, delayMillis = index * 23),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "voice-wave-$index"
+                )
+                animated
+            } else {
+                level * 0.72f
+            }
             Box(
                 Modifier.weight(1f)
                     .height((20f * heightFraction.coerceIn(0.18f, 1f)).dp)

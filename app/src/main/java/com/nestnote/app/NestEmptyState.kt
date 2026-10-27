@@ -50,14 +50,20 @@ internal fun NestEmptyIllustration(badge: ImageVector, modifier: Modifier = Modi
     val colors = MaterialTheme.colorScheme
     val reducedMotion = rememberSystemReducedMotion()
 
-    val transition = rememberInfiniteTransition(label = "empty-float")
-    val floatPhase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "empty-float-phase"
-    )
-    val phase = if (reducedMotion) 0.5f else floatPhase
+    // Only run the float animation when motion is allowed; the transition used to keep
+    // ticking under "Remove animations" while its value was forced static.
+    val phase = if (reducedMotion) {
+        0.5f
+    } else {
+        val transition = rememberInfiniteTransition(label = "empty-float")
+        val floatPhase by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "empty-float-phase"
+        )
+        floatPhase
+    }
 
     var badgeShown by remember(badge) { mutableStateOf(false) }
     LaunchedEffect(badge) { badgeShown = true }

@@ -5,14 +5,12 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 
-import android.app.DatePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
-import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -174,16 +172,22 @@ internal val nestNoteTypography = baseTypography.copy(
 )
 
 // Warm "paper and terracotta" palette used when wallpaper colours are off or unavailable.
+// Every M3 container role is filled in so screens never fall back to the framework's
+// default lavender/mauve, which clashed with the warm identity.
 internal val nestNoteLightScheme = lightColorScheme(
     primary = Color(0xFFC4552D), onPrimary = Color.White,
     primaryContainer = Color(0xFFFFDBD0), onPrimaryContainer = Color(0xFF3A0B00),
     secondary = Color(0xFF77574E), onSecondary = Color.White,
     secondaryContainer = Color(0xFFFFDBD0), onSecondaryContainer = Color(0xFF2C150F),
+    tertiary = Color(0xFF7A5900), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFDEA6), onTertiaryContainer = Color(0xFF261A00),
     background = Color(0xFFF6F1EA), onBackground = Color(0xFF26221F),
     surface = Color(0xFFFFFBF7), onSurface = Color(0xFF26221F),
     surfaceVariant = Color(0xFFEFE5DD), onSurfaceVariant = Color(0xFF6B625B),
+    surfaceDim = Color(0xFFDFD8CF), surfaceBright = Color(0xFFFFFBF7),
     surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFFBF5EF),
     surfaceContainer = Color(0xFFF6EFE8), surfaceContainerHigh = Color(0xFFF0E8E0),
+    surfaceContainerHighest = Color(0xFFEAE1D8),
     outline = Color(0xFFA89E94), outlineVariant = Color(0xFFE7DFD5)
 )
 internal val nestNoteDarkScheme = darkColorScheme(
@@ -191,11 +195,15 @@ internal val nestNoteDarkScheme = darkColorScheme(
     primaryContainer = Color(0xFF5A2A18), onPrimaryContainer = Color(0xFFFFDBD0),
     secondary = Color(0xFFE7BDB1), onSecondary = Color(0xFF442A22),
     secondaryContainer = Color(0xFF5D4037), onSecondaryContainer = Color(0xFFFFDBD0),
+    tertiary = Color(0xFFEBBE5C), onTertiary = Color(0xFF3F2E00),
+    tertiaryContainer = Color(0xFF5B4300), onTertiaryContainer = Color(0xFFFFDEA6),
     background = Color(0xFF171412), onBackground = Color(0xFFF2EBE3),
     surface = Color(0xFF1B1714), onSurface = Color(0xFFF2EBE3),
     surfaceVariant = Color(0xFF342E29), onSurfaceVariant = Color(0xFFC3B8AD),
+    surfaceDim = Color(0xFF171412), surfaceBright = Color(0xFF3C3733),
     surfaceContainerLowest = Color(0xFF110E0C), surfaceContainerLow = Color(0xFF221E1B),
     surfaceContainer = Color(0xFF27221F), surfaceContainerHigh = Color(0xFF302A26),
+    surfaceContainerHighest = Color(0xFF3B342F),
     outline = Color(0xFF8F857B), outlineVariant = Color(0xFF3F3832)
 )
 
@@ -203,7 +211,9 @@ internal val nestNoteDarkScheme = darkColorScheme(
 internal fun ColorScheme.asAmoled(): ColorScheme = copy(
     background = Color.Black, surface = Color.Black,
     surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF0B0B0B),
-    surfaceContainer = Color(0xFF121212), surfaceContainerHigh = Color(0xFF1A1A1A)
+    surfaceContainer = Color(0xFF121212), surfaceContainerHigh = Color(0xFF1A1A1A),
+    surfaceContainerHighest = Color(0xFF242424),
+    outlineVariant = Color(0xFF2A2A2A)
 )
 
 /** Shared motion tokens so every screen animates with the same feel. */
@@ -238,3 +248,18 @@ internal val noteTints = listOf(
     Color(0xFFE5F0E9), Color(0xFFF2EADF), Color(0xFFE9EBF0),
     Color(0xFFFFE4E1), Color(0xFFF0F5DB)
 )
+
+/** Dark-theme counterparts of [noteTints]: same 15 hues, deep muted surfaces. */
+internal val noteTintsDark = listOf(
+    Color(0xFF262220), Color(0xFF352528), Color(0xFF352823),
+    Color(0xFF332D1B), Color(0xFF253026), Color(0xFF1F3030), Color(0xFF232E38),
+    Color(0xFF2D2836), Color(0xFF262B38), Color(0xFF34262F),
+    Color(0xFF242E29), Color(0xFF2F2A24), Color(0xFF272B31),
+    Color(0xFF362626), Color(0xFF2A3223)
+)
+
+/** Theme-aware note tint: light pastels in light mode, deep tonal surfaces in dark. */
+internal fun noteTint(colorIndex: Int, dark: Boolean): Color {
+    val index = colorIndex.coerceIn(0, noteTints.lastIndex)
+    return (if (dark) noteTintsDark else noteTints)[index]
+}

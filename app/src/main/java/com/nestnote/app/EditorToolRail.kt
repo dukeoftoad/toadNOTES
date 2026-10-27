@@ -155,10 +155,10 @@ internal fun EditorToolRail(
                                 ) {
                                     Box(
                                         Modifier.size(34.dp).clip(CircleShape).background(tint)
-                                            .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F), CircleShape),
+                                            .border(if (isSelected) 3.dp else 1.dp, if (isSelected) colors.onSurface else colors.outline, CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF383044))
+                                        if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = colors.onSurface)
                                     }
                                 }
                                 }
@@ -199,7 +199,7 @@ internal fun EditorToolRail(
                                 val isSelected = index == backgroundIndex && customWallpaperUri.isBlank()
                                 Box(
                                     Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
-                                        .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF383044) else Color(0xFF77734F), RoundedCornerShape(12.dp))
+                                        .border(if (isSelected) 3.dp else 1.dp, if (isSelected) colors.onSurface else colors.outline, RoundedCornerShape(12.dp))
                                         .clickable(role = Role.Button) { onBackgroundSelected(index) }
                                         .semantics { contentDescription = name + (if (isSelected) ", selected" else ""); this.selected = isSelected }
                                         .testTag("note_background_$index")

@@ -10,14 +10,23 @@ internal fun noteLinkTitles(body: String): List<String> = noteLinkPattern.findAl
     .distinctBy { it.lowercase() }
     .toList()
 
-internal fun resolveNoteLinks(body: String, notes: List<NestNote>, excludingId: Long? = null): List<ResolvedNoteLink> {
-    val byTitle = notes.filter { it.id != excludingId }.associateBy { it.title.trim().lowercase() }
-    return noteLinkPattern.findAll(body).mapNotNull { match ->
+internal fun resolveNoteLinks(body: String, notes: List<NestNote>, excludingId: Long? = null): List<ResolvedNoteLink> =
+    resolveNoteLinks(body, notesByTitle(notes, excludingId))
+
+/**
+ * Title index over [notes]. Building it is O(N) with thousands of string allocations, so
+ * callers that resolve links on every keystroke should cache the map (keyed on the note
+ * list) and reuse [resolveNoteLinks] below with only the body changing.
+ */
+internal fun notesByTitle(notes: List<NestNote>, excludingId: Long? = null): Map<String, NestNote> =
+    notes.filter { it.id != excludingId }.associateBy { it.title.trim().lowercase() }
+
+internal fun resolveNoteLinks(body: String, byTitle: Map<String, NestNote>): List<ResolvedNoteLink> =
+    noteLinkPattern.findAll(body).mapNotNull { match ->
         val label = match.groupValues[1].trim()
         val target = byTitle[label.lowercase()] ?: return@mapNotNull null
         ResolvedNoteLink(label, target)
     }.distinctBy { it.note.id }.toList()
-}
 
 internal fun notesLinkingTo(title: String, notes: List<NestNote>, excludingId: Long? = null): List<NestNote> {
     val key = title.trim().lowercase()

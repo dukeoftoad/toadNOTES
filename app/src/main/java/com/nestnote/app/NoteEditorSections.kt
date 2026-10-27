@@ -438,12 +438,12 @@ internal fun EditorBottomBar(
         enter = if (reducedMotion) {
             fadeIn(snap()) + slideInVertically(snap()) { it }
         } else {
-            fadeIn() + slideInVertically { it }
+            fadeIn(NestMotion.fast()) + slideInVertically(NestMotion.spatial()) { it }
         },
         exit = if (reducedMotion) {
             fadeOut(snap()) + slideOutVertically(snap()) { it }
         } else {
-            fadeOut() + slideOutVertically { it }
+            fadeOut(NestMotion.fast()) + slideOutVertically(NestMotion.fast()) { it }
         }
     ) {
         Column(Modifier.imePadding()) {
@@ -634,7 +634,9 @@ internal fun ColumnScope.EditorBodySection(
     // Markdown preview remains an optional editing aid, not a prerequisite
     // for playing attachments from a saved note.
     val hasInlineVoiceNotes = remember(body) {
-        NoteText.voiceSegments(body).any { it.attachmentId != null }
+        // Fast path: a plain substring probe skips the full segment scan for the common
+        // case of notes without inline voice markers.
+        body.contains("[[voice:") && NoteText.voiceSegments(body).any { it.attachmentId != null }
     }
     if (editable && (noteFormat == "markdown" || hasInlineVoiceNotes)) {
         val reducedMotion = rememberSystemReducedMotion()
@@ -791,10 +793,17 @@ internal fun EditorRelatedNotes(
         val currentIsPrivate = notes.firstOrNull { it.id == currentId }?.privateNote ?: false
         notes.filter { it.privateNote == currentIsPrivate }
     }
-    val links = remember(body, relatedNotes, currentId) { resolveNoteLinks(body, relatedNotes, currentId) }
+    // One O(body) scan per body change resolves both directions; the O(N) title index is
+    // cached on the note list instead of being rebuilt on every keystroke.
+    val relatedByTitle = remember(relatedNotes, currentId) { notesByTitle(relatedNotes, currentId) }
+    val linkIndex = remember(body, relatedByTitle) {
+        val resolved = resolveNoteLinks(body, relatedByTitle)
+        val resolvedTitles = resolved.map { it.label.lowercase() }.toSet()
+        resolved to noteLinkTitles(body).filterNot { it.lowercase() in resolvedTitles }
+    }
+    val links = linkIndex.first
+    val missing = linkIndex.second
     val backlinks = remember(title, relatedNotes, currentId) { notesLinkingTo(title, relatedNotes, currentId) }
-    val resolvedTitles = remember(links) { links.map { it.label.lowercase() }.toSet() }
-    val missing = remember(body, resolvedTitles) { noteLinkTitles(body).filterNot { it.lowercase() in resolvedTitles } }
     if (links.isNotEmpty() || backlinks.isNotEmpty() || missing.isNotEmpty()) {
         Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (links.isNotEmpty()) {

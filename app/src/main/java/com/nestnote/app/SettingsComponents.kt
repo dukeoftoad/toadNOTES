@@ -686,16 +686,23 @@ internal fun AnimatedWaveformPreview(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val transition = rememberInfiniteTransition(label = "waveform-anim")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (reducedMotion || !active) 0f else (2f * Math.PI.toFloat()),
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "waveform-phase"
-    )
+    // Only run the infinite transition while the preview is actually animating; it used to
+    // tick at frame rate on every idle settings row with its value pinned to 0.
+    val phase = if (reducedMotion || !active) {
+        0f
+    } else {
+        val transition = rememberInfiniteTransition(label = "waveform-anim")
+        val animatedPhase by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 2f * Math.PI.toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(1400),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "waveform-phase"
+        )
+        animatedPhase
+    }
 
     Canvas(modifier = modifier) {
         val barCount = 20

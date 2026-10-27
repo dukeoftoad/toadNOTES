@@ -2,6 +2,25 @@
 
 All notable changes to NESTNOTE are documented here. The current release candidate is **1.4.6**.
 
+## [Unreleased] — Performance & interface refresh
+
+### Performance (frame skipping eliminated at the source)
+- The theme `ColorScheme` is now cached and only rebuilt when the theme actually changes. Previously a fresh scheme (dynamic-colour extraction, accent blending, AMOLED overlay) was allocated on every recomposition — including every keystroke in dashboard search — forcing the whole UI tree to recompose.
+- Note wallpapers decode off the main thread with power-of-two downsampling and a shared LRU cache. Previously camera-resolution images were decoded synchronously inside composition (multi-hundred-millisecond freezes per card, repeated while scrolling).
+- Editor-derived data (voice-marker ids, interactive checklist) now refreshes through a short debounce instead of five full-body O(n) scans per keystroke; the linked-note title index is cached on the note list instead of being rebuilt while typing; word counting is a single allocation-free pass.
+- Voice playback notifications refresh on a one-second loop instead of restarting a coroutine (with binder IPC) ten times per second; idle voice players no longer run twelve always-on frame-rate animations; empty states and settings previews animate only when motion is active and allowed.
+- Draft flushes no longer run encoding + fsync on the main thread while the editor close animation plays (ON_STOP keeps the synchronous write as a process-death safeguard).
+- Dashboard statistics (pinned/archived/public/private counts, selection set, fallback note id, editor default format) are computed once per data change instead of several full-list scans per recomposition; dashboard root no longer wraps the whole note list in `animateContentSize`; note cards share one date formatter; lazy lists declare `contentType`.
+
+### Interface
+- Complete Material 3 colour foundation: `surfaceContainerHighest`, `tertiary`, `tertiaryContainer`, and `surfaceDim`/`surfaceBright` are now defined for the warm light/dark schemes, removing default lavender/mauve leaks across settings, dialogs, and empty states.
+- Accent palettes generate proper opaque tonal containers (no alpha compositing), with per-palette dark-theme `onPrimary` colors that follow the selected hue.
+- Dark mode is a first-class skin: 15 deep-toned note tints matching the pastel palette, dark-aware note cards with adaptive ink, and a note-coloured editor canvas.
+- Note cards: tonal category chip, gradient wallpaper scrim for reliable text contrast, refined checklist progress bar.
+- Reminders use Material 3 date and time pickers instead of framework dialogs (theme- and AMOLED-aware).
+- Dashboard hero shows greeting, active/pinned stat pills, and a filled create button; search field is a pill with autofocus and animated reveal; empty states offer a primary "Create a note" action.
+- All remaining ad-hoc tweens route through the shared motion tokens, so every transition honours the system "Remove animations" preference.
+
 ## [1.4.6] — Release candidate
 
 This version updates release metadata to 1.4.6 and carries forward the current feature set. Publish only after exact-tag CI, signing, and release gates are verified.

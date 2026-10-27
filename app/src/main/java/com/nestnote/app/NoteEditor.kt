@@ -1,8 +1,6 @@
 package com.nestnote.app
 
 import android.Manifest
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -31,9 +29,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -72,11 +78,18 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import com.nestnote.app.voicenote.VoiceNoteRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.debounce
 import kotlin.math.roundToInt
+
+/** App-lifetime writer for fire-and-forget draft flushes; outlives editor disposal. */
+private val draftFlushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
  * Unified create/edit note editor.
@@ -128,6 +141,12 @@ internal fun NoteEditorContent(
         mutableStateOf(TextFieldValue(original?.body ?: template?.body.orEmpty()))
     }
     val body = bodyValue.text
+
+    // ---- Reminder picker state (Material 3) ----
+    // Declared early because pickReminder() (a local function below) seeds these.
+    var showReminderDatePicker by remember { mutableStateOf(false) }
+    var showReminderTimePicker by remember { mutableStateOf(false) }
+    var pendingReminderDate by remember { mutableStateOf<Calendar?>(null) }
 
     // ---- Undo/redo ----
     val undoManager = remember(original?.id, draftNoteId) { TextUndoManager() }
@@ -213,11 +232,15 @@ internal fun NoteEditorContent(
     // Use perceived surface brightness, not only the red channel, to classify dark themes.
     // This keeps editor ink and secondary text readable with tinted/dynamic color schemes.
     val darkEditor = colors.surface.luminance() < 0.5f
-    val ink = if (darkEditor) colors.onSurface else Color(0xFF292633)
-    val muted = if (darkEditor) colors.onSurfaceVariant else Color(0xFF66616D)
-    val accent = if (darkEditor) colors.primary else Color(0xFF514783)
+    // Ink derives from the theme so the editor follows the user's accent palette and
+    // dynamic-colour scheme; the previous fixed purple accent ignored both.
+    val ink = colors.onSurface
+    val muted = colors.onSurfaceVariant
+    val accent = colors.primary
     val editorCanvas = if (backgroundIndex == 0) {
-        if (darkEditor) colors.surface else noteTints[colorIndex]
+        // Note colour identity now follows dark mode too: deep tonal tints instead of a
+        // flat surface, matching the dashboard cards.
+        if (darkEditor) noteTint(colorIndex, dark = true) else noteTint(colorIndex, dark = false)
     } else {
         colors.surface
     }
@@ -337,18 +360,8 @@ internal fun NoteEditorContent(
         // Seed the picker from the existing reminder when there is one. Users
         // expecting "edit reminder" should not have to re-scroll to the same date.
         val seed = NoteTextParsing.parseReminderOrNull(reminder) ?: Calendar.getInstance()
-        DatePickerDialog(context, { _, year, month, day ->
-            TimePickerDialog(context, { _, hour, minute ->
-                val picked = Calendar.getInstance().apply { set(year, month, day, hour, minute, 0) }
-                if (picked.timeInMillis <= System.currentTimeMillis()) {
-                    android.widget.Toast.makeText(
-                        context, "Pick a time in the future", android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    reminder = NoteText.formatReminder(picked)
-                }
-            }, seed.get(Calendar.HOUR_OF_DAY), seed.get(Calendar.MINUTE), true).show()
-        }, seed.get(Calendar.YEAR), seed.get(Calendar.MONTH), seed.get(Calendar.DAY_OF_MONTH)).show()
+        pendingReminderDate = seed
+        showReminderDatePicker = true
     }
 
     fun onBodyChange(next: TextFieldValue) {
@@ -478,18 +491,30 @@ internal fun NoteEditorContent(
 
     fun performSave(note: NestNote) {
         // Flush the latest edits first so a failed save still leaves recoverable work.
+        // The flushed snapshot equals the note being saved, so a fire-and-forget write
+        // landing after the parent clears drafts is identical content and harmless.
         currentDraftSnapshot()?.let { draft ->
-            runCatching { DraftStore(context).write(draft) }
+            draftFlushScope.launch { runCatching { DraftStore(context).write(draft) } }
         }
         // Prevent ON_STOP/onDispose from recreating the draft after a successful save.
         draftAutosaveEnabled = false
         onSave(note)
     }
 
-    // Flush the latest Compose snapshot before lifecycle hiding/removal.
+    // Flush the latest Compose snapshot before lifecycle hiding/removal. ON_STOP keeps a
+    // synchronous write: the app is already leaving the foreground, so the stall costs no
+    // frames and protects the last edits against an imminent process death. The dispose
+    // path (sheet/dialog animating out) writes asynchronously instead — encoding + fsync
+    // inline there used to drop frames exactly while the close animation was running.
     val flushLatestDraft by rememberUpdatedState {
         currentDraftSnapshot()?.let { draft ->
             runCatching { DraftStore(context).write(draft) }.getOrDefault(false)
+        } ?: true
+    }
+    val flushLatestDraftAsync by rememberUpdatedState {
+        currentDraftSnapshot()?.let { draft ->
+            draftFlushScope.launch { runCatching { DraftStore(context).write(draft) } }
+            true
         } ?: true
     }
     suspend fun writeDraftNow() {
@@ -504,8 +529,7 @@ internal fun NoteEditorContent(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            // A synchronous final flush closes the debounce gap on route/sheet removal.
-            flushLatestDraft()
+            flushLatestDraftAsync()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -595,7 +619,20 @@ internal fun NoteEditorContent(
         )
     }
 
-    val markerIds = remember(body) { NoteText.voiceMarkers(body).map { it.attachmentId }.distinct() }
+    // Voice marker ids feed the attachment-name lookup and the chip transformation. Scanning
+    // the whole body on every keystroke janks typing on long notes, so the opening body seeds
+    // the state and a short debounce refreshes it while typing.
+    val markerIdsState = remember(original?.id, draftNoteId) {
+        mutableStateOf(NoteText.voiceMarkers(bodyValue.text).map { it.attachmentId }.distinct())
+    }
+    val markerIds = markerIdsState.value
+    LaunchedEffect(original?.id, draftNoteId) {
+        snapshotFlow { bodyValue.text }
+            .debounce(250)
+            .collect { text ->
+                markerIdsState.value = NoteText.voiceMarkers(text).map { it.attachmentId }.distinct()
+            }
+    }
     LaunchedEffect(voiceNoteId, markerIds) {
         if (markerIds.isNotEmpty()) {
             voiceNames = withContext(Dispatchers.IO) {
@@ -608,6 +645,71 @@ internal fun NoteEditorContent(
     }
 
     LaunchedEffect(hasUnsavedChanges) { onUnsavedChangesChange(hasUnsavedChanges) }
+
+    // ---- Reminder pickers (Material 3, theme- and AMOLED-aware) ----
+    // The old flow launched framework DatePickerDialog/TimePickerDialog, which ignore the
+    // app theme entirely. State-driven M3 pickers render inside the editor's own styling.
+    if (showReminderDatePicker) {
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = pendingReminderDate?.timeInMillis)
+        DatePickerDialog(
+            onDismissRequest = { showReminderDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showReminderDatePicker = false
+                    val millis = dateState.selectedDateMillis
+                    if (millis != null) {
+                        val seed = pendingReminderDate ?: Calendar.getInstance()
+                        pendingReminderDate = (seed.clone() as Calendar).apply {
+                            timeInMillis = millis
+                        }
+                        showReminderTimePicker = true
+                    }
+                }) { Text("Next") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReminderDatePicker = false }) { Text("Cancel") }
+            },
+            title = { Text("Reminder date") }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+    if (showReminderTimePicker) {
+        val seed = pendingReminderDate ?: Calendar.getInstance()
+        val timeState = rememberTimePickerState(
+            initialHour = seed.get(Calendar.HOUR_OF_DAY),
+            initialMinute = seed.get(Calendar.MINUTE),
+            is24Hour = android.text.format.DateFormat.is24HourFormat(context)
+        )
+        AlertDialog(
+            onDismissRequest = { showReminderTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showReminderTimePicker = false
+                    val base = pendingReminderDate ?: return@TextButton
+                    val picked = (base.clone() as Calendar).apply {
+                        set(Calendar.HOUR_OF_DAY, timeState.hour)
+                        set(Calendar.MINUTE, timeState.minute)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    if (picked.timeInMillis <= System.currentTimeMillis()) {
+                        android.widget.Toast.makeText(
+                            context, "Pick a time in the future", android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        reminder = NoteText.formatReminder(picked)
+                    }
+                }) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReminderTimePicker = false }) { Text("Cancel") }
+            },
+            title = { Text("Reminder time") },
+            text = { TimePicker(state = timeState) }
+        )
+    }
+
     LaunchedEffect(original?.id, draftNoteId, lifecycleOwner) {
         if (original != null) return@LaunchedEffect
         // Opening a new editor during a route/sheet transition can race the window's
@@ -800,9 +902,13 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    val checklistItems = remember(bodyValue.text) {
-                        NoteText.checklistItems(bodyValue.text)
+                    val checklistItemsState = remember(original?.id, draftNoteId) { mutableStateOf(NoteText.checklistItems(bodyValue.text)) }
+                    LaunchedEffect(original?.id, draftNoteId) {
+                        snapshotFlow { bodyValue.text }
+                            .debounce(250)
+                            .collect { text -> checklistItemsState.value = NoteText.checklistItems(text) }
                     }
+                    val checklistItems = checklistItemsState.value
                     if (checklistItems.isNotEmpty()) {
                         EditorChecklistCard(
                             items = checklistItems,

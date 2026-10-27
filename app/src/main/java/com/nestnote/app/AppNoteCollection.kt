@@ -37,7 +37,7 @@ internal fun AppNoteCollection(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            gridItems(notes, key = { it.id }) { note ->
+            gridItems(notes, key = { it.id }, contentType = { "note" }) { note ->
                 NoteCard(
                     note,
                     compact = compact,
@@ -61,7 +61,7 @@ internal fun AppNoteCollection(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(notes, key = { it.id }) { note ->
+            items(notes, key = { it.id }, contentType = { "note" }) { note ->
                 NoteCard(
                     note,
                     compact = compact,

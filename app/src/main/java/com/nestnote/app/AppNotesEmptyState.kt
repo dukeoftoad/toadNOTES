@@ -3,6 +3,7 @@ package com.nestnote.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -10,7 +11,9 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,7 +28,8 @@ internal fun AppNotesEmptyState(
     search: String,
     selectedView: String,
     categoryOptions: List<String>,
-    onClearSearch: () -> Unit
+    onClearSearch: () -> Unit,
+    onCreateNote: () -> Unit
 ) {
     val categorySelected = categoryOptions.contains(selectedView)
     Column(
@@ -66,6 +70,15 @@ internal fun AppNotesEmptyState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium
         )
-        if (search.isNotBlank()) TextButton(onClick = onClearSearch) { Text("Clear search") }
+        // Primary call to action instead of the old text-only affordance.
+        if (search.isNotBlank()) {
+            OutlinedButton(onClick = onClearSearch, modifier = Modifier.heightIn(min = 44.dp)) {
+                Text("Clear search")
+            }
+        } else {
+            Button(onClick = onCreateNote, modifier = Modifier.heightIn(min = 44.dp)) {
+                Text("Create a note")
+            }
+        }
     }
 }

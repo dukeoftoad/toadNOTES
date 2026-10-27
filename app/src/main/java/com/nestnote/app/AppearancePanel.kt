@@ -1,13 +1,11 @@
 package com.nestnote.app
 
-import android.app.DatePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
-import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -94,14 +92,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Image
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.LruCache
+import androidx.compose.animation.Crossfade
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.testTag
@@ -124,24 +126,72 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 
 
+// Wallpaper decode target: note cards render at a few hundred device pixels wide. Decoding
+// camera originals (12MP+) at full resolution used to run synchronously inside composition —
+// a multi-hundred-millisecond frozen frame per card, repeated every time LazyVerticalGrid
+// disposed and recreated a card while scrolling.
+private const val WALLPAPER_DECODE_TARGET_PX = 640
+
+/** Shared decode cache so scrolling a dashboard of wallpapered notes does not re-decode. */
+private val wallpaperBitmapCache = object : LruCache<String, ImageBitmap>(24 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: ImageBitmap): Int = value.asAndroidBitmap().byteCount
+}
+
+/** Two-pass decode: read bounds first, then decode with a power-of-two downsample. */
+private fun decodeDownsampledWallpaper(context: Context, uri: Uri): ImageBitmap? = runCatching {
+    val resolver = context.contentResolver
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= WALLPAPER_DECODE_TARGET_PX ||
+        bounds.outHeight / (sample * 2) >= WALLPAPER_DECODE_TARGET_PX) {
+        sample *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+    resolver.openInputStream(uri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, options)?.asImageBitmap()
+    }
+}.getOrNull()
+
 @Composable
 internal fun NoteCustomWallpaper(uri: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val bitmap = remember(uri) {
-        runCatching {
-            context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
-        }.getOrNull()
+    // Decode off the main thread and keep the placeholder until the bitmap is ready; the
+    // shared cache means re-entering the dashboard shows wallpapers instantly.
+    val bitmap by produceState<ImageBitmap?>(initialValue = wallpaperBitmapCache.get(uri), uri) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                val parsed = runCatching { Uri.parse(uri) }.getOrNull()
+                if (parsed == null) {
+                    null
+                } else {
+                    wallpaperBitmapCache.get(parsed.toString())
+                        ?: decodeDownsampledWallpaper(context, parsed)?.also { decoded ->
+                            wallpaperBitmapCache.put(uri, decoded)
+                        }
+                }
+            }
+        }
     }
-    if (bitmap != null) {
-        Image(bitmap = bitmap, contentDescription = "Custom note wallpaper", modifier = modifier, contentScale = ContentScale.Crop)
-    } else {
-        Box(modifier.background(Color(0xFFE7E1D7)))
+    val reducedMotion = rememberSystemReducedMotion()
+    Crossfade(
+        targetState = bitmap,
+        animationSpec = NestMotion.fast(reducedMotion),
+        label = "wallpaper-load"
+    ) { decoded ->
+        if (decoded != null) {
+            Image(bitmap = decoded, contentDescription = "Custom note wallpaper", modifier = modifier, contentScale = ContentScale.Crop)
+        } else {
+            Box(modifier.background(Color(0xFFE7E1D7)))
+        }
     }
 }
 

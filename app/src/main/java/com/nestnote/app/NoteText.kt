@@ -61,8 +61,20 @@ object NoteText {
         }
     }
 
-    fun wordCount(text: String): Int =
-        text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
+    /** Single-pass word count: no regex, no list allocation — safe to call while typing. */
+    fun wordCount(text: String): Int {
+        var count = 0
+        var inWord = false
+        for (ch in text) {
+            if (ch.isWhitespace()) {
+                inWord = false
+            } else if (!inWord) {
+                inWord = true
+                count++
+            }
+        }
+        return count
+    }
 
     /**
      * Time-of-day dashboard greeting. [hourOfDay] is a 24-hour Calendar.HOUR_OF_DAY value;

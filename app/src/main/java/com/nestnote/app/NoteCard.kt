@@ -1,13 +1,11 @@
 package com.nestnote.app
 
-import android.app.DatePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
-import android.app.TimePickerDialog
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -109,8 +107,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -142,6 +142,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 // Dashboard note card.
 
+// Formatter shared by all visible cards; constructing SimpleDateFormat does locale-data
+// lookup and allocation, so doing it inside composition ran dozens of times per frame.
+private val cardDateFormatter = SimpleDateFormat("MMM d", Locale.getDefault())
+
 @Composable
 internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorStyle, showPreview: Boolean, showTimestamp: Boolean, onOpen: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit, onSelect: () -> Unit = {}, isSelected: Boolean = false, onToggleEncryption: () -> Unit = {}, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
@@ -161,13 +165,23 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
         }
     }
     val colors = MaterialTheme.colorScheme
+    // Dark-mode detection from the actual scheme so AMOLED and wallpaper palettes work too.
+    val darkTheme = colors.background.luminance() < 0.5f
     // Wallpaper palettes can produce very bright onSurface/primary colors that
     // disappear on the fixed pastel note backgrounds. Use a stable high-contrast
     // foreground for pastel cards; adaptive cards continue to follow Material 3.
-    val tint = if (colorStyle == NoteColorStyle.PASTEL) noteTints[note.color.coerceIn(0, noteTints.lastIndex)] else colors.surfaceContainerLow
-    val cardText = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF292633) else colors.onSurface
-    val cardSecondary = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF625D6B) else colors.onSurfaceVariant
-    val cardAccent = if (colorStyle == NoteColorStyle.PASTEL) Color(0xFF51466B) else colors.primary
+    val tint = if (colorStyle == NoteColorStyle.PASTEL) noteTint(note.color, darkTheme) else colors.surfaceContainerLow
+    val tintIsDark = tint.luminance() < 0.5f
+    val cardText = if (colorStyle == NoteColorStyle.PASTEL) {
+        if (tintIsDark) Color(0xFFEAE3DA) else Color(0xFF292633)
+    } else colors.onSurface
+    val cardSecondary = if (colorStyle == NoteColorStyle.PASTEL) {
+        if (tintIsDark) Color(0xFFB4AAA0) else Color(0xFF625D6B)
+    } else colors.onSurfaceVariant
+    val cardAccent = if (colorStyle == NoteColorStyle.PASTEL) {
+        if (tintIsDark) colors.primary else Color(0xFF51466B)
+    } else colors.primary
+    val hasWallpaper = note.background > 0 || note.wallpaperUri.isNotBlank()
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -179,7 +193,7 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                 onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }
             ),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (note.background > 0 || note.wallpaperUri.isNotBlank()) Color.Transparent else tint, contentColor = cardText),
+        colors = CardDefaults.cardColors(containerColor = if (hasWallpaper) Color.Transparent else tint, contentColor = cardText),
         border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.primary else colors.outlineVariant)
     ) {
         Box {
@@ -190,14 +204,23 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
             }
             Column(
                 Modifier.fillMaxWidth()
-                    .background(if (note.background > 0 || note.wallpaperUri.isNotBlank()) noteTints[note.color.coerceIn(0, noteTints.lastIndex)].copy(alpha = 0.68f) else Color.Transparent)
+                    .background(
+                        if (hasWallpaper) {
+                            // Gradient scrim keeps the top of the artwork visible while
+                            // guaranteeing text contrast toward the bottom of the card.
+                            Brush.verticalGradient(listOf(tint.copy(alpha = if (tintIsDark) 0.78f else 0.62f), tint.copy(alpha = if (tintIsDark) 0.92f else 0.82f)))
+                        } else {
+                            Color.Transparent
+                        }
+                    )
                     .padding(if (compact) 10.dp else 16.dp)
             ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isSelected) {
                     Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = colors.primary, modifier = Modifier.padding(end = 6.dp).size(20.dp))
                 }
-                Surface(color = tint, shape = RoundedCornerShape(8.dp)) {
+                // Tonal chip keyed to the card ink so it reads on every pastel + wallpaper.
+                Surface(color = cardAccent.copy(alpha = 0.14f), shape = RoundedCornerShape(8.dp)) {
                     Text(note.category, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), color = cardText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.weight(1f))
@@ -266,8 +289,8 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                         )
                         Text("$checklistDone/$checklistTotal", style = MaterialTheme.typography.labelSmall, color = cardAccent, fontWeight = FontWeight.SemiBold)
                     }
-                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(cardAccent.copy(alpha = 0.18f))) {
-                        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(cardAccent))
+                    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(cardAccent.copy(alpha = 0.18f))) {
+                        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(cardAccent))
                     }
                 }
             }
@@ -278,7 +301,7 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                     Icon(Icons.Default.Alarm, contentDescription = null, tint = cardAccent, modifier = Modifier.size(13.dp))
                 }
                 Text(
-                    if (note.reminder.isNotBlank()) note.reminder else SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updated)),
+                    if (note.reminder.isNotBlank()) note.reminder else cardDateFormatter.format(Date(note.updated)),
                     style = MaterialTheme.typography.labelSmall, color = if (note.reminder.isNotBlank()) cardAccent else cardSecondary
                 )
             }

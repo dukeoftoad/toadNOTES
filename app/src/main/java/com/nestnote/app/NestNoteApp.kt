@@ -146,14 +146,15 @@ internal fun NestNoteApp(
     val tabContentAlpha = remember { Animatable(1f) }
     val tabContentOffsetY = remember { Animatable(0f) }
     var hasShownInitialTab by remember { mutableStateOf(false) }
+    val reducedMotion = rememberSystemReducedMotion()
     LaunchedEffect(selectedView) {
         if (hasShownInitialTab) {
             tabContentAlpha.snapTo(0.88f)
             tabContentOffsetY.snapTo(7f)
             launch {
-                tabContentAlpha.animateTo(1f, animationSpec = tween(durationMillis = 190))
+                tabContentAlpha.animateTo(1f, animationSpec = NestMotion.spatial(reducedMotion))
             }
-            tabContentOffsetY.animateTo(0f, animationSpec = tween(durationMillis = 190))
+            tabContentOffsetY.animateTo(0f, animationSpec = NestMotion.spatial(reducedMotion))
         } else {
             hasShownInitialTab = true
         }
@@ -196,7 +197,7 @@ internal fun NestNoteApp(
     var discardVoiceChanges by remember { mutableStateOf<() -> Unit>({}) }
     var commitVoiceChanges by remember { mutableStateOf<() -> Unit>({}) }
     var confirmSystemDiscard by remember { mutableStateOf(false) }
-    val editorNote = notes.firstOrNull { it.id == editorNoteId }
+    val editorNote = remember(notes, editorNoteId) { notes.firstOrNull { it.id == editorNoteId } }
     // Protect private content even when a private note is opened from Home.
     // Track ownership across recompositions so changing between protected routes
     // cannot accidentally leave FLAG_SECURE set or clear a flag owned elsewhere.
@@ -557,10 +558,16 @@ internal fun NestNoteApp(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val scheme = if (dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (dark) nestNoteDarkScheme
-    else nestNoteLightScheme
+    // Building a ColorScheme (dynamic palette extraction, accent blending, AMOLED overlay)
+    // allocates a fresh object; doing it inline made every recomposition — including every
+    // keystroke in the dashboard search — hand MaterialTheme a new scheme and recompose the
+    // whole tree. Key it on the actual inputs so it only rebuilds when the theme changes.
+    val scheme = remember(dynamicColors, dark) {
+        if (dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else if (dark) nestNoteDarkScheme
+        else nestNoteLightScheme
+    }
 
     // Keep query parsing, full-body matching, and sorting off the UI thread. A short debounce
     // prevents rebuilding the result list for every intermediate keystroke while preserving
@@ -581,8 +588,26 @@ internal fun NestNoteApp(
         searchVisible = false
     }
 
-    val expressiveScheme = (if (accentPalette == AccentPalette.DEFAULT) scheme else accentPalette.applyTo(scheme, dark))
-        .let { if (dark && amoled) it.asAmoled() else it }
+    val expressiveScheme = remember(scheme, accentPalette, dark, amoled) {
+        (if (accentPalette == AccentPalette.DEFAULT) scheme else accentPalette.applyTo(scheme, dark))
+            .let { if (dark && amoled) it.asAmoled() else it }
+    }
+
+    // Derived note statistics. Recomputing these inline meant several full-list scans on
+    // every recomposition of the ~900-line root body (selection toggles, keystrokes, menu
+    // state changes); keying them on `notes` keeps that work to actual data changes.
+    val publicNoteCount = remember(notes) { notes.count { !it.privateNote } }
+    val archivedNoteCount = remember(notes) { notes.count { it.archived && !it.privateNote } }
+    val pinnedNoteCount = remember(notes) { notes.count { it.pinned && !it.archived && !it.privateNote } }
+    val privateNoteCount = remember(notes) { notes.count { it.privateNote } }
+    val publicNotes = remember(notes) { notes.filterNot { it.privateNote } }
+    val selectedNotes = remember(notes, selectedNoteIds) { notes.filter { it.id in selectedNoteIds } }
+    // Stable fallback id for an unsaved new note so the editor call sites do not rebuild an
+    // id set over all notes on every recomposition while the editor is open.
+    val fallbackDraftNoteId = remember(notes) { NoteStore.allocateNoteId(notes) }
+    // Editor default format: read once instead of re-reading SharedPreferences on every
+    // recomposition while the editor is visible.
+    val defaultNoteFormat = remember { preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain" }
 
     MaterialTheme(
         colorScheme = expressiveScheme,
@@ -630,7 +655,6 @@ internal fun NestNoteApp(
             },
             bottomBar = {
                 if (selectedNoteIds.isNotEmpty()) {
-                    val selectedNotes = notes.filter { it.id in selectedNoteIds }
                     BulkSelectionBar(
                         selectedCount = selectedNotes.size,
                         categories = categoryOptions,
@@ -662,7 +686,7 @@ internal fun NestNoteApp(
                                 coroutineScope.launch { snackbarHostState.showSnackbar("Notes are still loading. Try again in a moment.") }
                             } else {
                                 editorNoteId = null
-                                editorDraftId = NoteStore.allocateNoteId(notes)
+                                editorDraftId = fallbackDraftNoteId
                                 editorTemplate = null
                                 editorVisible = true
                             }
@@ -682,7 +706,6 @@ internal fun NestNoteApp(
                             alpha = tabContentAlpha.value
                             translationY = tabContentOffsetY.value
                         }
-                        .animateContentSize(animationSpec = tween(durationMillis = 200))
                 ) {
                 if (storageRecoveryRequired) {
                     AppStorageRecoveryNotice(onOpenSettings = { selectedView = "Settings" })
@@ -709,8 +732,8 @@ internal fun NestNoteApp(
                 )
                 if (selectedView == "More") {
                     MoreScreen(
-                        pinnedCount = notes.count { it.pinned && !it.archived && !it.privateNote },
-                        archivedCount = notes.count { it.archived && !it.privateNote },
+                        pinnedCount = pinnedNoteCount,
+                        archivedCount = archivedNoteCount,
                         categoryCount = categoryOptions.size,
                         versionLabel = AboutInfo.versionLabel(appVersion),
                         onOpen = { selectedView = it; selectedNoteIds = emptySet() }
@@ -719,12 +742,12 @@ internal fun NestNoteApp(
                     NoteTemplatesScreen { template ->
                         editorTemplate = template
                         editorNoteId = null
-                        editorDraftId = NoteStore.allocateNoteId(notes)
+                        editorDraftId = fallbackDraftNoteId
                         selectedView = "Home"
                         editorVisible = true
                     }
                 } else if (selectedView == "Insights") {
-                    NoteInsightsScreen(notes.filterNot { it.privateNote }, onOpenCategory = { selectedView = it }) { noteId ->
+                    NoteInsightsScreen(publicNotes, onOpenCategory = { selectedView = it }) { noteId ->
                         editorNoteId = noteId
                         editorDraftId = noteId
                         selectedView = "Home"
@@ -736,9 +759,9 @@ internal fun NestNoteApp(
                     KeyboardShortcutsScreen()
                 } else if (selectedView == "Backup") {
                     BackupRestoreScreen(
-                        totalNotes = notes.count { !it.privateNote },
-                        archivedNotes = notes.count { it.archived && !it.privateNote },
-                        pinnedNotes = notes.count { it.pinned && !it.archived && !it.privateNote },
+                        totalNotes = publicNoteCount,
+                        archivedNotes = archivedNoteCount,
+                        pinnedNotes = pinnedNoteCount,
                         lastBackupAt = lastBackupAt,
                         backupStatus = backupStatus,
                         backupFolderConfigured = backupFolderConfigured,
@@ -796,7 +819,7 @@ internal fun NestNoteApp(
                         passwordConfigured = PrivateVaultSecurity.isConfigured(context),
                         biometricAvailable = privateVaultBiometricAvailable,
                         biometricEnabled = privateVaultBiometricEnabled && PrivateVaultBiometricKey(context).isEnrolled(),
-                        privateNoteCount = notes.count { it.privateNote },
+                        privateNoteCount = privateNoteCount,
                         onBiometricEnabledChange = { enabled ->
                             if (enabled) {
                                 pendingBiometricEnrollment = true
@@ -907,8 +930,8 @@ internal fun NestNoteApp(
                         showEditorCounts = showEditorCounts,
                         onShowEditorCountsChange = { showEditorCounts = it; saveBoolean(PREF_EDITOR_COUNTS, it) },
                         onResetDefaults = { resetPreferences() },
-                        totalNotes = notes.count { !it.privateNote },
-                        archivedNotes = notes.count { it.archived && !it.privateNote },
+                        totalNotes = publicNoteCount,
+                        archivedNotes = archivedNoteCount,
                         onOpenBackupRestore = { selectedView = "Backup" },
                         onOpenPrivateVaultSettings = { selectedView = "PrivateVaultSettings" },
                         onOpenCallRecordings = { selectedView = "CallRecordings" },
@@ -957,7 +980,7 @@ internal fun NestNoteApp(
                         canEncryptAll = notes.any { !it.privateNote && !it.encrypted },
                         onCreateNote = {
                             editorNoteId = null
-                            editorDraftId = NoteStore.allocateNoteId(notes)
+                            editorDraftId = fallbackDraftNoteId
                             editorTemplate = null
                             editorVisible = true
                         },
@@ -990,7 +1013,13 @@ internal fun NestNoteApp(
                             search = search,
                             selectedView = selectedView,
                             categoryOptions = categoryOptions,
-                            onClearSearch = { search = "" }
+                            onClearSearch = { search = "" },
+                            onCreateNote = {
+                                editorNoteId = null
+                                editorDraftId = fallbackDraftNoteId
+                                editorTemplate = null
+                                editorVisible = true
+                            }
                         )
                     } else {
                         AppNoteCollection(
@@ -1311,7 +1340,7 @@ internal fun NestNoteApp(
                         snackbarHostState.showSnackbar("This note changed elsewhere. Reopen it before saving to avoid overwriting newer content.")
                     }
                 } else {
-                    val savedId = existing?.id ?: editorDraftId ?: NoteStore.allocateNoteId(notes)
+                    val savedId = existing?.id ?: editorDraftId ?: fallbackDraftNoteId
                     if (existing == null && NoteStore.hasDraftIdCollision(notes, savedId)) {
                         pendingLinkedNoteAfterSave = null
                         coroutineScope.launch {
@@ -1384,11 +1413,11 @@ internal fun NestNoteApp(
             }) else null
             when (editorMode) {
                 EditorPresentationMode.SHEET -> ModalBottomSheet(onDismissRequest = dismissEditor, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
-                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, categoryOptions = categoryOptions, defaultNoteFormat = preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain", template = editorTemplate, allNotes = notes, onOpenLinkedNote = openLinkedNote, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
+                    NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: fallbackDraftNoteId, defaultNoteCategory = defaultNoteCategory, categoryOptions = categoryOptions, defaultNoteFormat = defaultNoteFormat, template = editorTemplate, allNotes = notes, onOpenLinkedNote = openLinkedNote, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, modifier = Modifier.fillMaxWidth().imePadding())
                 }
                 EditorPresentationMode.FULL_SCREEN -> Dialog(onDismissRequest = dismissEditor, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
                     Surface(Modifier.fillMaxSize().imePadding(), color = colors.surface) {
-                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes), defaultNoteCategory = defaultNoteCategory, categoryOptions = categoryOptions, defaultNoteFormat = preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain", template = editorTemplate, allNotes = notes, onOpenLinkedNote = openLinkedNote, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
+                        NoteEditorContent(editorNote, draftNoteId = editorDraftId ?: fallbackDraftNoteId, defaultNoteCategory = defaultNoteCategory, categoryOptions = categoryOptions, defaultNoteFormat = defaultNoteFormat, template = editorTemplate, allNotes = notes, onOpenLinkedNote = openLinkedNote, textSize = editorTextSize, showCounts = showEditorCounts, onSave = saveNote, onDismiss = discardEditor, onDelete = editorDeleteAction, onDuplicate = duplicateAction, onUnsavedChangesChange = { editorHasUnsavedChanges = it }, onRegisterVoiceDiscard = { discardVoiceChanges = it }, onRegisterVoiceCommit = { commitVoiceChanges = it }, fullScreen = true, modifier = Modifier.fillMaxSize())
                     }
                 }
                 EditorPresentationMode.QUICK_DIALOG -> Dialog(
@@ -1408,10 +1437,10 @@ internal fun NestNoteApp(
                     ) {
                         NoteEditorContent(
                             original = editorNote,
-                            draftNoteId = editorDraftId ?: NoteStore.allocateNoteId(notes),
+                            draftNoteId = editorDraftId ?: fallbackDraftNoteId,
                             defaultNoteCategory = defaultNoteCategory,
                             categoryOptions = categoryOptions,
-                            defaultNoteFormat = preferences.getString(PREF_DEFAULT_NOTE_FORMAT, "plain") ?: "plain",
+                            defaultNoteFormat = defaultNoteFormat,
                             template = editorTemplate,
                             allNotes = notes,
                             onOpenLinkedNote = openLinkedNote,
