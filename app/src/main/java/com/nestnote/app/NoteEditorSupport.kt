@@ -38,8 +38,11 @@ internal class VoiceMarkerVisualTransformation(
 ) : VisualTransformation {
     private companion object {
         val markerRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
+        // Recordings write the dashed canonical UUID; imports historically wrote the
+        // same UUID with dashes stripped. Accept both so imported chips show their
+        // real display name instead of "Voice note unavailable".
         val validAttachmentId =
-            Regex("""(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
+            Regex("""(?i)[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}""")
     }
 
     override fun filter(text: AnnotatedString): TransformedText {

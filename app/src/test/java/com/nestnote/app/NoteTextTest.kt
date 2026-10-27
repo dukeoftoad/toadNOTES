@@ -489,6 +489,41 @@ class NoteTextTest {
     }
 
     @Test
+    fun dashlessImportedVoiceMarkersResolveLikeCanonicalOnes() {
+        // Regression: VoiceNoteImporter used to write the UUID with dashes stripped
+        // (32 hex chars). The dashed-only regex treated those markers as malformed, so
+        // imported notes rendered "Voice note unavailable" chips and the reconciler
+        // would have flagged the attachment file as an orphan.
+        val id = "87f8742b89c34486a8d281e5dbace545"
+        val body = "before\n[[voice:$id]]\nafter"
+
+        assertEquals(listOf(id), NoteText.voiceMarkers(body).map { it.attachmentId })
+        assertTrue(NoteText.hasVoiceMarker(body, id))
+        assertEquals(
+            listOf(
+                NoteText.VoiceSegment("before\n", null),
+                NoteText.VoiceSegment("", id),
+                NoteText.VoiceSegment("\nafter", null)
+            ),
+            NoteText.voiceSegments(body)
+        )
+        assertEquals("before\nafter", NoteText.removeVoiceMarker(body, id))
+        // Migration does not duplicate a marker for an id already anchored dash-less.
+        assertEquals(body, NoteText.migrateOrphanAttachments(body, listOf(id)))
+    }
+
+    @Test
+    fun dashlessIdsKeepMalformedPayloadsHidden() {
+        // Tolerance is limited to hex UUID shapes: arbitrary text, wrong lengths and
+        // non-hex payloads must stay hidden from the rendered preview.
+        val body = "a [[voice:not-a-uuid]] b [[voice:123]] c [[voice:zzzzzzzz89c34486a8d281e5dbace545]] d"
+        assertEquals(emptyList(), NoteText.voiceMarkers(body).map { it.attachmentId })
+        // Three candidate markers, each demoted to a "Voice note" text segment:
+        // 4 surrounding text pieces + 3 demoted payloads, none playable.
+        assertEquals(7, NoteText.voiceSegments(body).count { it.attachmentId == null })
+    }
+
+    @Test
     fun voiceSegmentsPreserveWhitespaceAroundMarkers() {
         val id = "11111111-1111-4111-8111-111111111111"
         val body = "first paragraph\\n\\n[[voice:$id]]\\n\\nlast paragraph"

@@ -4,7 +4,7 @@ Living document. New issues are appended as they're discovered; when fixed,
 either strike through in place or move to the "Resolved" section at the bottom
 with the commit/PR reference.
 
-**Last updated:** following the known-bug fix batch (search boundary, archive restore/pin, JSON-null import).
+**Last updated:** following the imported-voice-marker fix batch (dash-less UUID tolerance, missing-notes noise).
 
 ---
 
@@ -16,6 +16,33 @@ tracked in `docs/WORKLOG.md` and `docs/ROADMAP.md` release gates._
 ---
 
 ## Resolved issues
+
+### Imported voice notes showed "Voice note unavailable" (RESOLVED)
+
+**Severity:** high (imported audio unplayable from the note; latent data-loss path)
+**Files:** `NoteText.kt`, `NoteEditorSupport.kt`, `voicenote/VoiceNoteImporter.kt`
+
+**Symptom:** Every *imported* audio attachment (editor → import, e.g. a dialer
+recording) rendered as a "Voice note unavailable" chip with no inline player,
+and the footer diagnostic printed `Missing notes: voice:87f8742b89c34486a8d281e5dbace545`.
+In-app *recordings* were unaffected.
+
+**Root cause:** Two id formats coexisted. `VoiceRecordingCoordinator` writes the
+canonical dashed UUID; `VoiceNoteImporter` wrote the same UUID with the dashes
+stripped (32 hex chars). Every marker parser required the dashed form, so
+dash-less markers were treated as malformed payloads:
+
+- `NoteText.voiceMarkers`/`voiceSegments` returned nothing playable for them.
+- The editor chip transformation labeled them "Voice note unavailable".
+- `VoiceAttachmentReconciler.findOrphans` would have flagged their files as
+  orphans (data loss) as soon as prune wiring is enabled.
+- `noteLinkTitles` fed the raw `voice:<id>` text into the "Missing notes" list.
+
+**Fix:** Marker parsing now accepts both UUID forms (dashed canonical and
+dash-less 32-hex) in `NoteText`, the editor chip, and the link parser; arbitrary
+or wrong-length payloads stay hidden. New imports generate the canonical dashed
+UUID so both paths converge. Regression tests pin dash-less recognition,
+malformed-payload hiding, and the link-parser exclusion.
 
 ### S3 — Spaced searches matched across field boundaries (RESOLVED)
 

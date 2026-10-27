@@ -20,7 +20,11 @@ class VoiceNoteImporter(
     private val repository: VoiceNoteRepository = VoiceNoteRepository(context),
     private val resolver: ContentResolver = context.contentResolver,
     private val nowMillis: () -> Long = System::currentTimeMillis,
-    private val newAttachmentId: () -> String = { UUID.randomUUID().toString().replace("-", "") }
+    // Canonical dashed UUID form — matches the in-app recording path. (Older
+    // imports stripped the dashes, which made their markers unparseable and
+    // their chips render as "Voice note unavailable"; markers now accept both
+    // forms, but new imports use the canonical one.)
+    private val newAttachmentId: () -> String = { UUID.randomUUID().toString() }
 ) {
     private val appContext = context.applicationContext
 

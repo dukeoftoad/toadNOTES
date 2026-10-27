@@ -513,12 +513,15 @@ object NoteText {
     //   [[voice:<attachmentId>]]
     // Each marker must sit on its own line so the renderer can lay out inline
     // player cards between text blocks without disturbing surrounding markdown.
-    // The id itself is a UUID and never contains ']' or newlines; the regex
-    // excludes both so a malformed marker cannot swallow the rest of the note.
+    // The id is a UUID. In-app recordings write the dashed canonical form;
+    // imported audio (and call-recording probes) historically wrote the same
+    // UUID with the dashes stripped (32 hex chars). Both forms are accepted so
+    // imported attachments keep resolving; anything else (arbitrary text,
+    // wrong length) is treated as a malformed payload and never rendered.
 
     private val VoiceMarkerCandidateRegex = Regex("""\[\[voice:([^\]\n]+)\]\]""")
-    private val VoiceAttachmentIdRegex = Regex("""(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
-    private val VoiceMarkerRegex = Regex("""\[\[voice:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\]\]""")
+    private val VoiceAttachmentIdRegex = Regex("""(?i)[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}""")
+    private val VoiceMarkerRegex = Regex("""\[\[voice:([0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12})\]\]""")
 
     /** Position of a voice marker in the body. [range] is the marker's character span, end-exclusive. */
     data class VoiceMarker(val attachmentId: String, val range: IntRange)

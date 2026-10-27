@@ -1067,3 +1067,11 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 
 - Exact-head Android CI passed on commit `452e560`: lint, unit tests (including the new NoteFilters boundary/trimming tests and the NoteStore JSON-null regression test), API 36 debug APK build, instrumentation-test compilation, and minified release compilation.
 - Device-only release gates unchanged: spaced-search behavior across categories/views, editor restore of an archived note, and card-menu pin suppression on archived notes should be spot-checked on a device before the next tag.
+
+## 2026-10-27 — Imported voice notes: dash-less marker ids broke playback chips and noise in Missing notes
+
+- Device report (Redmi veux, Android 13): an imported audio attachment rendered as "Voice note unavailable" and the editor footer printed `Missing notes: voice:87f8742b89c34486a8d281e5dbace545`. Logcat showed no crash — logic bug.
+- Root cause: two attachment-id formats coexisted. `VoiceRecordingCoordinator` writes the canonical dashed UUID; `VoiceNoteImporter` wrote `UUID.randomUUID().toString().replace("-", "")` (32 hex chars). Every parser required the dashed form: `NoteText.VoiceMarkerRegex`/`VoiceAttachmentIdRegex` (so `voiceMarkers`/`voiceSegments` produced nothing playable and the reconciler's `findOrphans` would have flagged the files as orphans once prune wiring is enabled), `NoteEditorSupport.validAttachmentId` (chip label), and `noteLinkTitles` (raw `voice:<id>` leaked into "Missing notes").
+- Fixes: all three regexes now accept both dashed and dash-less hex UUID forms (arbitrary/wrong-length payloads stay hidden); `VoiceNoteImporter` now generates the canonical dashed UUID; `NoteLinkSupport` excludes voice-marker labels from note-link titles, resolution, and backlink matching (new `isVoiceMarkerLabel`).
+- Tests: `NoteTextTest.dashlessImportedVoiceMarkersResolveLikeCanonicalOnes`, `dashlessIdsKeepMalformedPayloadsHidden`, and a new `NoteLinkSupportTest` (marker exclusion, resolve/backlink guards, wrap bounds).
+- Validation: unit tests + lint via Android CI on exact head; on-device re-import of the affected recording and inline playback remain release gates.

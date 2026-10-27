@@ -2,13 +2,22 @@ package com.nestnote.app
 
 private val noteLinkPattern = Regex("""\[\[([^\]\r\n]{1,160})\]\]""")
 
-internal data class ResolvedNoteLink(val label: String, val note: NestNote)
+// Voice attachments are anchored as [[voice:<uuid>]] and are not note links. Without
+// this guard the marker's inner text leaked into the "Missing notes" diagnostic and
+// (hypothetically) into backlink matching. The id accepts both the dashed canonical
+// UUID and the dash-less 32-hex form written by older imports.
+private val voiceMarkerLabelPattern = Regex("""(?i)voice:[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}""")
+
+internal fun isVoiceMarkerLabel(label: String): Boolean = voiceMarkerLabelPattern.matches(label.trim())
 
 internal fun noteLinkTitles(body: String): List<String> = noteLinkPattern.findAll(body)
     .map { it.groupValues[1].trim() }
     .filter { it.isNotBlank() }
+    .filterNot(::isVoiceMarkerLabel)
     .distinctBy { it.lowercase() }
     .toList()
+
+internal data class ResolvedNoteLink(val label: String, val note: NestNote)
 
 internal fun resolveNoteLinks(body: String, notes: List<NestNote>, excludingId: Long? = null): List<ResolvedNoteLink> =
     resolveNoteLinks(body, notesByTitle(notes, excludingId))
@@ -24,6 +33,7 @@ internal fun notesByTitle(notes: List<NestNote>, excludingId: Long? = null): Map
 internal fun resolveNoteLinks(body: String, byTitle: Map<String, NestNote>): List<ResolvedNoteLink> =
     noteLinkPattern.findAll(body).mapNotNull { match ->
         val label = match.groupValues[1].trim()
+        if (isVoiceMarkerLabel(label)) return@mapNotNull null
         val target = byTitle[label.lowercase()] ?: return@mapNotNull null
         ResolvedNoteLink(label, target)
     }.distinctBy { it.note.id }.toList()
@@ -33,6 +43,7 @@ internal fun notesLinkingTo(title: String, notes: List<NestNote>, excludingId: L
     if (key.isBlank()) return emptyList()
     return notes.filter { note ->
         note.id != excludingId && noteLinkPattern.findAll(note.body)
+            .filterNot { isVoiceMarkerLabel(it.groupValues[1]) }
             .any { it.groupValues[1].trim().lowercase() == key }
     }
 }

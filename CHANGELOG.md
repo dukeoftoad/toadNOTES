@@ -5,13 +5,14 @@ All notable changes to NESTNOTE are documented here. The current release candida
 ## [Unreleased] — Known-bug fixes
 
 ### Fixed
+- **Imported voice notes no longer show "Voice note unavailable".** Audio imported into a note (e.g. a dialer recording) carried a dash-less attachment id, while every marker parser required the dashed UUID form — so imported attachments rendered as unavailable chips with no player, the footer printed `Missing notes: voice:…`, and the (dormant) orphan reconciler would have treated their files as deletable. Marker parsing now accepts both UUID forms, the "Missing notes" diagnostic no longer lists attachment markers as note links, and new imports use the canonical dashed id.
 - **Spaced searches no longer match across field boundaries.** The dashboard query ran against a concatenated `title + body + category` string, so e.g. `plan 1.` matched a note titled "Project Plan" with a body starting "1. Finalize…" even though the phrase exists in no single field. The free-text query is now matched against the title, body, and category separately (multi-word queries match a phrase within one field; `is:`/`has:`/`category:`/`after:`/`before:` operators are unchanged).
 - **Archived notes can be restored from the editor.** The editor's ⋮ menu offered "Archive" even for already-archived notes and provided no way back; it now offers "Restore from archive" (with an unarchive icon) for archived notes, matching the note-card menu.
 - **Pinning is no longer offered on archived notes.** Archiving forces `pinned=false`, so the Pin action on an archived card or editor menu silently did not stick; it is hidden until the note is restored.
 - **Backups with JSON `null` text fields no longer import literal "null" content.** `org.json`'s `optString` returns the string "null" for an explicit JSON `null`, so hand-edited or third-party backups imported notes whose title/body/category/reminder were the four characters `null`. Text fields now treat JSON `null` as missing (empty or default value), with a regression test.
 
 ### Fixed (tests)
-- Regression coverage added: cross-field search boundary (`NoteFiltersTest`), query trimming, and JSON-null import sanitization (`NoteStoreTest`).
+- Regression coverage added: cross-field search boundary (`NoteFiltersTest`), query trimming, JSON-null import sanitization (`NoteStoreTest`), dash-less voice-marker recognition and malformed-payload hiding (`NoteTextTest`), and voice-marker exclusion from note links (`NoteLinkSupportTest`).
 
 ## [1.4.9] — Settings polish, Markdown format fixes, voice-import reliability
 
