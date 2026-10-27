@@ -1008,3 +1008,11 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Updated current-release references in `README.md`, root `CHANGELOG.md` (1.4.7 section added for the performance & interface refresh), `docs/CHANGELOG.md`, `F-DROID_METADATA_PROPOSAL.md`, and `docs/release-notes/v1.4.7.md` (new).
 - CI workflow examples intentionally retain `v1.4.6` as an illustrative tag format example.
 - Status: metadata and docs aligned to 1.4.7; publication still requires a stable `v1.4.7` tag, passing CI, signing verification, and release gates.
+
+## 2026-10-27 — CI repair: Kotlin compile OOM and workflow trigger
+
+- Failure (runs 40447769101 / 40447613204): `:app:compileDebugKotlin` and `:app:compileReleaseKotlin` died with `java.lang.OutOfMemoryError: GC overhead limit exceeded` inside the Kotlin 2 FIR data-flow analyzer (`RealVariable.hashCode` / `PersistentHashMapBuilder.get` under `transformSafeCallExpression`). Two contributing factors: 2 GB default JVM heap (`gradle.properties`) and debug+release Kotlin compilation running concurrently in a single Gradle invocation.
+- Fix 1 — `gradle.properties`: Gradle JVM raised to `-Xmx3g -XX:MaxMetaspaceSize=1g`; Kotlin compile daemons get `-Xmx4g -XX:MaxMetaspaceSize=1g`.
+- Fix 2 — `android-ci.yml`: `assembleRelease` moved to its own Gradle invocation so debug and release compile daemons never share the runner heap at the same time.
+- Fix 3 — `android-ci.yml`: repaired the corrupted push trigger (`branches: ain]` → `branches: [main]`) left by a manual edit.
+- Future-risk audit: (a) GitHub Actions "Node.js 20 deprecated" warnings on checkout/setup-java/upload-artifact/setup-gradle/setup-android — bump action majors when available; (b) the root memory cliff is the ~1,500-line `NestNoteApp` composable, already tracked for decomposition in `docs/refactoring/LARGE_FILE_AUDIT.md` and PR #99 — continue splitting it to permanently remove the FIR DFA pressure; (c) `Unable to strip libsqlcipher.so` packaging warnings are benign.

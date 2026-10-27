@@ -61,8 +61,13 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Lint, test and build Android variants
-        run: ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleRelease assembleDebugAndroidTest
+      - name: Lint, unit tests and debug variants
+        run: ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest
+      # Release is compiled in a separate invocation so the debug and release
+      # Kotlin compile daemons never compete for heap at the same time
+      # (they OOMed with GC overhead limit exceeded when run in parallel).
+      - name: Release compilation
+        run: ./gradlew --no-daemon assembleRelease
       # SQLCipher dependency, R8 mapping, and emulator/JNI checks are intentionally
       # deferred from this refactor PR and should be restored in a dedicated fix PR.
       - uses: actions/upload-artifact@v4
