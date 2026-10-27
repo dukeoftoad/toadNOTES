@@ -1049,3 +1049,8 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
   - Search: the LazyColumn resets to the top while a query is active (previously a search after scrolling left the screen blank), and a caption reports how many sections match (or suggests a shorter keyword).
   - Added a version footer item reading the installed version via the existing `readAppVersion` package-manager path.
 - Validation: unit tests (including the updated AboutInfo fallback pin), lint, debug/release builds via Android CI on exact head; device checks for format toggles and settings search remain release gates.
+
+## 2026-10-27 — CI green on the 1.4.9 release batch (run 40463168486)
+
+- Exact-head Android CI passed on commit `f268a24`: lint, unit tests (including the updated AboutInfo fallback-version pin), API 36 debug APK build, instrumentation-test compilation, and minified release compilation.
+- Device-only release gates unchanged: italic/strikethrough/code toggles on real notes, settings search behavior, fingerprint folder prompts, and 100 MiB playback on a low-RAM device must be verified before publishing the v1.4.9 tag.
