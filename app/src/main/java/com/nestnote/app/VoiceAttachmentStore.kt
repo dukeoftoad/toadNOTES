@@ -4,7 +4,6 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -131,7 +130,7 @@ class VoiceAttachmentStore internal constructor(
                     if (count < 0) break
                     if (count == 0) continue
                     total += count
-                    if (total > MAX_AUDIO_BYTES) throw IOException("Voice attachment exceeds size limit")
+                    if (total > MAX_AUDIO_BYTES) throw IOException("Voice attachment exceeds the 100 MiB size limit")
                     val encrypted = cipher.update(buffer, 0, count)
                     if (encrypted != null && encrypted.isNotEmpty()) output.write(encrypted)
                 }
@@ -155,26 +154,30 @@ class VoiceAttachmentStore internal constructor(
         if (file.length() < HEADER_BYTES + TAG_BYTES || file.length() > MAX_ENCRYPTED_BYTES) {
             throw IOException("Invalid voice attachment size")
         }
-        val payload = FileInputStream(file).use { stream ->
-            val output = ByteArrayOutputStream(file.length().toInt())
-            val buffer = ByteArray(BUFFER_BYTES)
-            while (true) {
-                val count = stream.read(buffer)
-                if (count < 0) break
-                output.write(buffer, 0, count)
-                if (output.size().toLong() > MAX_ENCRYPTED_BYTES) throw IOException("Voice attachment exceeds size limit")
+        // Imported audio can be up to MAX_AUDIO_BYTES (100 MiB). The payload must be read
+        // into an exactly-sized buffer and decrypted without intermediate full-file copies:
+        // the previous ByteArrayOutputStream + copyOfRange path peaked at ~4x the file size
+        // and crashed with OutOfMemoryError when playing large imports on default heaps.
+        val payload = ByteArray(file.length().toInt())
+        FileInputStream(file).use { stream ->
+            var offset = 0
+            while (offset < payload.size) {
+                val count = stream.read(payload, offset, payload.size - offset)
+                if (count < 0) throw IOException("Voice attachment was truncated while reading")
+                if (count == 0) continue
+                offset += count
             }
-            output.toByteArray()
         }
         if (!payload.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)) throw IOException("Unsupported voice attachment format")
         val iv = payload.copyOfRange(MAGIC.size, HEADER_BYTES)
-        val ciphertext = payload.copyOfRange(HEADER_BYTES, payload.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, getExistingKey(), GCMParameterSpec(TAG_BITS, iv))
         cipher.updateAAD(aad(noteId, attachmentId))
         return try {
-            cipher.doFinal(ciphertext).also {
-                if (it.size > MAX_AUDIO_BYTES) throw IOException("Voice attachment exceeds size limit")
+            // Decrypt directly from the payload buffer; the ciphertext is never duplicated.
+            // Peak memory is now ~2x the payload (payload + plaintext) instead of ~4x.
+            cipher.doFinal(payload, HEADER_BYTES, payload.size - HEADER_BYTES).also {
+                if (it.size > MAX_AUDIO_BYTES) throw IOException("Voice attachment exceeds the 100 MiB size limit")
             }
         } catch (error: Exception) {
             throw IOException("Voice attachment authentication failed", error)

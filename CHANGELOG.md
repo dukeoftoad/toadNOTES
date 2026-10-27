@@ -2,6 +2,17 @@
 
 All notable changes to NESTNOTE are documented here. The current release candidate is **1.4.7**.
 
+## [Unreleased] — Security & voice-import reliability
+
+### Added
+- **Fingerprint unlock for call-recording folder management:** the "Confirm Private Vault access" dialog (enable/disable auto-import, change source folder) now offers "Use fingerprint instead" when strong biometrics are enrolled. Both authentication paths converge on one action handler; the folder only changes after the CryptoObject-bound vault key unwraps successfully.
+
+### Fixed
+- **100 MiB voice imports no longer crash on playback.** Reading an imported recording buffered it through a growing `ByteArrayOutputStream` plus two full-file copies before decryption (~4× file size in memory, `OutOfMemoryError` on default heaps). It now reads into an exactly-sized buffer and decrypts in place (~2× peak), and the manifest declares `android:largeHeap` for the encrypted-audio use case.
+- **Imported audio is now selectable in the editor picker.** Dialer recordings reported as `application/ogg` or `application/x-flac` were hidden by the audio-only filter; the picker offers them now while import validation stays strict.
+- **Failed call-recording imports can be dismissed.** Failed or stuck-pending sources previously stayed in the list forever with retry as the only action; they now offer "Dismiss", which stops future scans from re-importing them.
+- **Reminder notification denial is no longer silent (OI-1).** When notifications are denied, the reminder time picker warns that the reminder will save but not pop up, with guidance to enable notifications in system settings.
+
 ## [1.4.7] — Performance & interface refresh
 
 ### Performance (frame skipping eliminated at the source)

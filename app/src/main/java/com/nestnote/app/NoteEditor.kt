@@ -218,9 +218,14 @@ internal fun NoteEditorContent(
         onFinished = { qrPayloadToSave = null }
     )
     // Permission request is a no-op on Android < 13 (permission doesn't exist).
+    // Denial is no longer silent (OI-1): the reminder pickers surface a warning so the
+    // user knows to enable notifications in system settings.
+    var remindersWithoutNotifications by remember { mutableStateOf(false) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* Result ignored — reminders still save, they just won't fire until granted. */ }
+    ) { granted ->
+        remindersWithoutNotifications = !granted
+    }
 
     val editorModeViewModel: EditorModeViewModel =
         viewModel(key = "editor-mode-${original?.id ?: draftNoteId}")
@@ -356,6 +361,8 @@ internal fun NoteEditorContent(
             != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            remindersWithoutNotifications = false
         }
 
         // Seed the picker from the existing reminder when there is one. Users
@@ -707,7 +714,20 @@ internal fun NoteEditorContent(
                 TextButton(onClick = { showReminderTimePicker = false }) { Text("Cancel") }
             },
             title = { Text("Reminder time") },
-            text = { TimePicker(state = timeState) }
+            text = {
+                Column {
+                    TimePicker(state = timeState)
+                    if (remindersWithoutNotifications) {
+                        Text(
+                            "Notifications are off — the reminder will be saved but will not pop up. " +
+                                "Enable NESTNOTE notifications in system settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
         )
     }
 

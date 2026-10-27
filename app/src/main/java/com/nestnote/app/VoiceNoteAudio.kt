@@ -477,8 +477,12 @@ internal fun VoiceNoteControls(
                     enabled = !importingAudio,
                     onClick = {
                         keyboardController?.hide()
+                        // "audio/*" alone hides dialer recordings whose provider reports a
+                        // non-audio MIME (e.g. OGG as application/ogg, FLAC as
+                        // application/x-flac). VoiceAudioImportPolicy still validates every
+                        // selection by extension/MIME before import.
                         audioFileLauncher.launch(
-                            arrayOf("audio/*")
+                            arrayOf("audio/*", "application/ogg", "application/x-flac")
                         )
                     },
                     modifier = Modifier.semantics {

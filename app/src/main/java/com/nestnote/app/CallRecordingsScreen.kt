@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -75,6 +76,17 @@ internal fun CallRecordingsScreen(onBack: () -> Unit) {
     var playbackError by remember { mutableStateOf("") }
     var folderPickerEnables by remember { mutableStateOf(true) }
 
+    // Shared biometric availability: used by the locked screen and by the folder-access
+    // dialog so every gated action can be authenticated with fingerprint, not just unlock.
+    val biometricActivity = remember(context) { context.findCallRecordingsActivity() }
+    val biometricAvailable = remember(biometricActivity) {
+        biometricActivity != null &&
+            BiometricManager.from(biometricActivity).canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG
+            ) == BiometricManager.BIOMETRIC_SUCCESS &&
+            PrivateVaultBiometricKey(context).isEnrolled()
+    }
+
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             val chosenFolder = runCatching { DocumentFile.fromTreeUri(context, uri) }.getOrNull()
@@ -114,6 +126,75 @@ internal fun CallRecordingsScreen(onBack: () -> Unit) {
             runCatching { playbackPlayer?.release() }
             playbackPlayer = null
         }
+    }
+
+    /**
+     * Runs the action the user authenticated for. Password and fingerprint paths converge
+     * here so enable/disable/change-folder always behave identically.
+     */
+    fun runVaultAction(action: String?) {
+        authenticated = true
+        pendingAction = null
+        password = ""
+        when (action) {
+            "open" -> Unit
+            "enable" -> if (sourceUri == null) folderPicker.launch(null) else {
+                prefs.edit().putBoolean(CallRecordingImport.KEY_ENABLED, true).commit()
+                enabled = true
+                CallRecordingImport.schedule(context)
+            }
+            "change_folder" -> folderPicker.launch(sourceUri)
+            "disable" -> {
+                prefs.edit().putBoolean(CallRecordingImport.KEY_ENABLED, false).commit()
+                enabled = false
+                androidx.work.WorkManager.getInstance(context).cancelUniqueWork("call_recording_import_scan")
+                CallRecordingImport.setStatus(context, CallRecordingImport.STATUS_DISABLED)
+                status = CallRecordingImport.status(context)
+            }
+        }
+    }
+
+    /** Strong-biometric prompt whose success must carry the authenticated CryptoObject cipher. */
+    fun launchBiometricAuth(onAuthenticated: () -> Unit) {
+        val activity = biometricActivity ?: run {
+            passwordError = "Biometric authentication is unavailable here. Use your vault password."
+            return
+        }
+        val biometricKey = PrivateVaultBiometricKey(context)
+        val cipher = biometricKey.createUnlockCipher()
+        if (cipher == null) {
+            passwordError = "Biometric key unavailable. Use your vault password."
+            return
+        }
+        val prompt = BiometricPrompt(
+            activity,
+            ContextCompat.getMainExecutor(activity),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    val session = biometricKey.unlock(result.cryptoObject?.cipher)
+                    if (session != null) {
+                        passwordError = ""
+                        onAuthenticated()
+                    } else {
+                        passwordError = "Biometric vault unlock failed safely. Use your password."
+                    }
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
+                        errorCode != BiometricPrompt.ERROR_CANCELED
+                    ) passwordError = errString.toString()
+                }
+            }
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Private Vault")
+            .setSubtitle("Authenticate to manage private call recordings")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            .setNegativeButtonText("Use password")
+            .build()
+        prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
     }
 
     val visibleItems = recordings.filter { item ->
@@ -308,6 +389,24 @@ internal fun CallRecordingsScreen(onBack: () -> Unit) {
                                     Spacer(Modifier.size(6.dp))
                                     Text("Retry import")
                                 }
+                                // Without this, a failed or stuck-pending source can never be
+                                // removed: it reappears on every scan and the error is permanent.
+                                OutlinedButton(onClick = {
+                                    val ignored = prefs
+                                        .getStringSet(CallRecordingImport.KEY_IGNORED_SOURCES, emptySet())
+                                        .orEmpty().toMutableSet()
+                                    ignored += item.sourceUri
+                                    prefs.edit()
+                                        .putStringSet(CallRecordingImport.KEY_IGNORED_SOURCES, ignored)
+                                        .commit()
+                                    CallRecordingImport.saveItems(
+                                        context,
+                                        CallRecordingImport.items(context)
+                                            .filterNot { it.sourceUri == item.sourceUri }
+                                    )
+                                    recordings = CallRecordingImport.items(context)
+                                    status = "Dismissed — this source will not be imported again"
+                                }) { Text("Dismiss") }
                             }
                         } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {
@@ -423,56 +522,10 @@ internal fun CallRecordingsScreen(onBack: () -> Unit) {
                     password = ""
                     passwordError = ""
                 }) { Text("Unlock with password") }
-                val host = remember(context) { context.findCallRecordingsActivity() }
-                val biometricAvailable = remember(host) {
-                    host != null && BiometricManager.from(host).canAuthenticate(
-                        BiometricManager.Authenticators.BIOMETRIC_STRONG
-                    ) == BiometricManager.BIOMETRIC_SUCCESS &&
-                        PrivateVaultBiometricKey(context).isEnrolled()
-                }
                 if (biometricAvailable) {
-                    OutlinedButton(onClick = {
-                        val activity = host ?: return@OutlinedButton
-                        val biometricKey = PrivateVaultBiometricKey(context)
-                        val cipher = biometricKey.createUnlockCipher()
-                        if (cipher == null) {
-                            passwordError = "Biometric key unavailable. Use your vault password."
-                            pendingAction = "open"
-                            return@OutlinedButton
-                        }
-                        val prompt = BiometricPrompt(
-                            activity,
-                            ContextCompat.getMainExecutor(activity),
-                            object : BiometricPrompt.AuthenticationCallback() {
-                                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                    val session = biometricKey.unlock(result.cryptoObject?.cipher)
-                                    if (session != null) {
-                                        authenticated = true
-                                        pendingAction = null
-                                        passwordError = ""
-                                    } else {
-                                        passwordError = "Biometric vault unlock failed safely. Use your password."
-                                        pendingAction = "open"
-                                    }
-                                }
-
-                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
-                                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
-                                        errorCode != BiometricPrompt.ERROR_CANCELED
-                                    ) passwordError = errString.toString()
-                                    pendingAction = "open"
-                                }
-                            }
-                        )
-                        val info = BiometricPrompt.PromptInfo.Builder()
-                            .setTitle("Unlock Private Vault")
-                            .setSubtitle("Authenticate to view private call recordings")
-                            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                            .setNegativeButtonText("Use password")
-                            .build()
-                        prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
-                    }) { Text("Unlock with fingerprint") }
+                    OutlinedButton(onClick = { launchBiometricAuth { authenticated = true } }) {
+                        Text("Unlock with fingerprint")
+                    }
                 }
                 if (passwordError.isNotBlank()) {
                     Text(passwordError, color = MaterialTheme.colorScheme.error)
@@ -495,6 +548,21 @@ internal fun CallRecordingsScreen(onBack: () -> Unit) {
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true
                     )
+                    if (biometricAvailable) {
+                        OutlinedButton(
+                            onClick = {
+                                val action = pendingAction
+                                launchBiometricAuth {
+                                    runVaultAction(action)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Fingerprint, contentDescription = null)
+                            Spacer(Modifier.size(8.dp))
+                            Text("Use fingerprint instead")
+                        }
+                    }
                     if (passwordError.isNotBlank()) Text(passwordError, color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -509,26 +577,7 @@ internal fun CallRecordingsScreen(onBack: () -> Unit) {
                         passwordError = "Password not accepted. No changes were made."
                     } else {
                         PrivateVaultSecurity.clearFailedAttempts(context)
-                        val action = pendingAction
-                        authenticated = true
-                        pendingAction = null
-                        password = ""
-                        when (action) {
-                            "open" -> Unit
-                            "enable" -> if (sourceUri == null) folderPicker.launch(null) else {
-                                prefs.edit().putBoolean(CallRecordingImport.KEY_ENABLED, true).commit()
-                                enabled = true
-                                CallRecordingImport.schedule(context)
-                            }
-                            "change_folder" -> folderPicker.launch(sourceUri)
-                            "disable" -> {
-                                prefs.edit().putBoolean(CallRecordingImport.KEY_ENABLED, false).commit()
-                                enabled = false
-                                androidx.work.WorkManager.getInstance(context).cancelUniqueWork("call_recording_import_scan")
-                                CallRecordingImport.setStatus(context, CallRecordingImport.STATUS_DISABLED)
-                                status = CallRecordingImport.status(context)
-                            }
-                        }
+                        runVaultAction(pendingAction)
                     }
                 }) { Text("Authenticate") }
             },

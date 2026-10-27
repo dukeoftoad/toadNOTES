@@ -27,7 +27,8 @@
         android:label="NESTNOTE"
         android:icon="@drawable/nestnote_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:largeHeap="true">
 
         <activity
             android:name=".MainActivity"
