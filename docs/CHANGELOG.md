@@ -1,5 +1,12 @@
 # NESTNOTE Changelog
 
+## v1.4.9 — Settings polish, Markdown format fixes, voice-import reliability
+
+- App release metadata updated to versionName 1.4.9 / versionCode 10409.
+- Added: fingerprint unlock for call-recording folder management (enable/disable auto-import and source-folder changes) via the Private Vault CryptoObject path; settings search match-count feedback with automatic scroll reset; settings version footer.
+- Fixed: 100 MiB voice-import playback `OutOfMemoryError` (exactly-sized read buffer, in-place decrypt, `largeHeap` manifest flag); italic no longer deletes intraword underscores and uses asterisk markers; strikethrough/inline code/link-to-note on plain notes now switch the note to Markdown through the shared path; editor audio picker accepts `application/ogg` and `application/x-flac`; failed call-recording imports can be dismissed; denied notification permission warns inline in the reminder picker (OI-1).
+- Publishing still requires a stable `v1.4.9` tag and successful release workflow; this entry is not proof of publication.
+
 ## Unreleased — encrypted-only portability
 
 - Removed plaintext JSON backup/export and import controls and their file-handling paths.

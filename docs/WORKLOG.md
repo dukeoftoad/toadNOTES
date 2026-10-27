@@ -1037,3 +1037,15 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 
 - Exact-head Android CI passed on commit `0e97aaf`: lint, unit tests, API 36 debug APK build, instrumentation-test compilation, and minified release compilation.
 - Device-only release gates unchanged: fingerprint enrollment/prompt flows and 100 MiB import playback must still be verified on a physical device or emulator before publishing.
+
+## 2026-10-27 — Version 1.4.9: settings polish, Markdown format fixes
+
+- Bumped versionName 1.4.9 / versionCode 10409 across `app/build.gradle.kts`, `AboutInfo` fallback constants (and its pinned unit test), `README.md`, root `CHANGELOG.md` (new [1.4.9] section), `docs/CHANGELOG.md`, `F-DROID_METADATA_PROPOSAL.md`, the F-Droid metadata description (`fdroid/metadata/com.nestnote.app.yml`), and the new `docs/release-notes/v1.4.9.md`. CI workflow examples intentionally retain older tags as format illustrations.
+- Markdown/text-format fixes:
+  - Italic now uses asterisk markers (`*`), which are intraword-safe; selecting a word inside `snake_case_word` previously triggered the underscore-unwrap path and deleted both underscores (data loss). `toggleInlineFormat` additionally refuses to treat intraword underscore runs as wrappers (CommonMark intraword rule). All existing pinned `_` unit-test cases re-verified against the new logic.
+  - Strikethrough (`~~`) and inline code (backtick) on plain notes now switch the note to Markdown via `switchToMarkdownIfPlain()`, matching Bold/Italic — previously they inserted literal markers that never render.
+  - Link-to-note on a plain note now routes through the same shared conversion (toast + preview reset) instead of silently flipping the format flag.
+- Settings tab UX:
+  - Search: the LazyColumn resets to the top while a query is active (previously a search after scrolling left the screen blank), and a caption reports how many sections match (or suggests a shorter keyword).
+  - Added a version footer item reading the installed version via the existing `readAppVersion` package-manager path.
+- Validation: unit tests (including the updated AboutInfo fallback pin), lint, debug/release builds via Android CI on exact head; device checks for format toggles and settings search remain release gates.

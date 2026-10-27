@@ -1040,13 +1040,21 @@ internal fun NoteEditorContent(
                     NoteText.toggleBlockquote(text, cursor)
                 }
                 FormatAction.Bold -> applyInlineEdit("**", switchToMarkdown = true)
-                FormatAction.Italic -> applyInlineEdit("_", switchToMarkdown = true)
-                FormatAction.Strike -> applyInlineEdit("~~")
-                FormatAction.Code -> applyInlineEdit("`")
+                // Italic uses asterisks: underscores are not emphasis inside words
+                // (snake_case_word), so an underscore marker renders literally or, worse,
+                // invites the destructive adjacent-run unwrap. Asterisks are intraword-safe.
+                FormatAction.Italic -> applyInlineEdit("*", switchToMarkdown = true)
+                // Strikethrough and inline code are Markdown-only too: on a plain note they
+                // would show as literal ~~/backtick characters, same as Bold/Italic before
+                // their switch, so they convert the note to Markdown first.
+                FormatAction.Strike -> applyInlineEdit("~~", switchToMarkdown = true)
+                FormatAction.Code -> applyInlineEdit("`", switchToMarkdown = true)
                 FormatAction.Link -> applyMarkdownLink()
                 FormatAction.NoteLink -> {
+                    // Route through the shared switch so a plain note converts with the same
+                    // toast and preview reset as every other Markdown-only action.
+                    switchToMarkdownIfPlain()
                     val wrapped = wrapAsNoteLink(bodyValue.text, bodyValue.selection.min, bodyValue.selection.max)
-                    noteFormat = "markdown"
                     setBody(TextFieldValue(wrapped.first, TextRange(wrapped.second, wrapped.third)))
                 }
                 FormatAction.Heading1 -> applyLineEdit { text, cursor ->

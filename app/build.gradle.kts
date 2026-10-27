@@ -12,8 +12,8 @@ android {
         applicationId = "com.nestnote.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("versionCode").orElse("10407").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("1.4.7").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("10409").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("1.4.9").get()
     }
 
     buildFeatures { compose = true }

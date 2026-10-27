@@ -7,8 +7,8 @@ package com.nestnote.app
 internal object AboutInfo {
 
     // Matches the build.gradle.kts defaults; used when PackageManager info is unavailable.
-    const val FALLBACK_VERSION_NAME = "1.4.6"
-    const val FALLBACK_VERSION_CODE = 10406L
+    const val FALLBACK_VERSION_NAME = "1.4.9"
+    const val FALLBACK_VERSION_CODE = 10409L
 
     const val REPO_URL = "https://github.com/dukeoftoad/toadNOTES"
     const val RELEASES_URL = "https://github.com/dukeoftoad/toadNOTES/releases"

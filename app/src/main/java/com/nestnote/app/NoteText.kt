@@ -170,10 +170,19 @@ object NoteText {
                 rightRun++
                 index++
             }
+            // Underscore emphasis is not recognized inside words (CommonMark
+            // intraword rule): in snake_case_word the adjacent underscores are
+            // literal characters, not wrappers. Unwrapping them deleted real
+            // characters, so intraword runs are never treated as a wrapper.
+            val intrawordUnderscore = char == '_' && (
+                (start - leftRun - 1 >= 0 && text[start - leftRun - 1].isLetterOrDigit()) ||
+                    (end + rightRun < text.length && text[end + rightRun].isLetterOrDigit())
+                )
             // Unwrap only when both sides have matching marker runs. Different
             // run lengths can be nested or malformed Markdown; basing the toggle
             // on the left run alone can delete an unrelated closing marker.
-            leftRun >= marker.length && rightRun >= marker.length &&
+            !intrawordUnderscore &&
+                leftRun >= marker.length && rightRun >= marker.length &&
                 (leftRun / marker.length) % 2 == 1 &&
                 (leftRun == rightRun ||
                     // Adjacent strong spans can share a closing/opening run:

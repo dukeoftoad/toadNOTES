@@ -13,12 +13,16 @@ Description: |
 
   Organize notes with categories, colours, pinning, archiving, search, sorting,
   checklists, bullet lists, writing statistics, and light or dark themes. Use
-  the focused note editor with Markdown formatting and preview.
+  the focused note editor with Markdown formatting and preview, an inline
+  format rail for bold, italic, strikethrough, code, lists, quotes and
+  headings, and word-count tools.
 
   Record voice notes directly in the Note editor, review recordings before
-  attaching them, preview and rename clips, or discard them without changing
-  existing attachments. Import supported WAV audio files and keep multiple
-  audio attachments in a note as independent inline playback cards with
+  attaching them, preview and rename clips, import audio files up to 100 MiB,
+  or opt in to importing dialer call recordings from a folder you choose.
+  Imported recordings are encrypted on-device and the recordings screen is
+  protected by the Private Vault password with optional fingerprint unlock.
+  Multiple audio attachments appear as independent inline playback cards with
   play/pause, seeking, progress, elapsed time, and duration. Playback stays
   inside the note rather than opening a separate player or dialog.
 

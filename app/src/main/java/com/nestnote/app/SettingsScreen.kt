@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
@@ -170,6 +171,18 @@ internal fun SettingsScreen(
         settingsSearch.isBlank() || SettingsSearchSections.any { matchesSettingsSearch(settingsSearch, it) }
     }
 
+    // Filtering hides whole LazyColumn items; keeping the previous scroll offset made the
+    // screen appear blank when a query was typed after scrolling down. Reset to the top
+    // whenever a search is active so the first match is always visible.
+    LaunchedEffect(settingsSearch) {
+        if (settingsSearch.isNotBlank()) listState.scrollToItem(0)
+    }
+
+    val matchedSectionCount = remember(settingsSearch) {
+        if (settingsSearch.isBlank()) 0
+        else SettingsSearchSections.count { matchesSettingsSearch(settingsSearch, it) }
+    }
+
     val activeSettingsCategory = settingsDestinations
         .lastOrNull { listState.firstVisibleItemIndex >= it.second }
         ?.first ?: "Appearance"
@@ -226,6 +239,19 @@ internal fun SettingsScreen(
                         unfocusedBorderColor = colors.outlineVariant
                     )
                 )
+
+                if (settingsSearch.isNotBlank()) {
+                    Text(
+                        when {
+                            !anySearchMatch -> "No sections match \u201C$settingsSearch\u201D \u2014 try a shorter keyword"
+                            matchedSectionCount == 1 -> "1 section matches \u201C$settingsSearch\u201D"
+                            else -> "$matchedSectionCount sections match \u201C$settingsSearch\u201D"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
 
                 AnimatedVisibility(
                     visible = settingsSearch.isBlank(),
@@ -440,6 +466,18 @@ internal fun SettingsScreen(
             ) {
                 Text("Reset settings to defaults", fontWeight = FontWeight.SemiBold)
             }
+        }
+
+        // ---- 9. Version footer ----
+        item(key = "settings_version_footer") {
+            val version = remember(context) { readAppVersion(context) }
+            Text(
+                "NESTNOTE ${version.name} (${version.code}) \u00B7 local-first encrypted notes",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // ---- No Search Results State ----
