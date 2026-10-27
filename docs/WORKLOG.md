@@ -1016,3 +1016,9 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - Fix 2 — `android-ci.yml`: `assembleRelease` moved to its own Gradle invocation so debug and release compile daemons never share the runner heap at the same time.
 - Fix 3 — `android-ci.yml`: repaired the corrupted push trigger (`branches: ain]` → `branches: [main]`) left by a manual edit.
 - Future-risk audit: (a) GitHub Actions "Node.js 20 deprecated" warnings on checkout/setup-java/upload-artifact/setup-gradle/setup-android — bump action majors when available; (b) the root memory cliff is the ~1,500-line `NestNoteApp` composable, already tracked for decomposition in `docs/refactoring/LARGE_FILE_AUDIT.md` and PR #99 — continue splitting it to permanently remove the FIR DFA pressure; (c) `Unable to strip libsqlcipher.so` packaging warnings are benign.
+
+## 2026-10-27 — CI green: compile fixes verified (run 40451179296)
+
+- First CI compile of the 1.4.7 refresh surfaced two latent Kotlin errors that predated the heap fix (the code had never compiled successfully): NoteCard's wallpaper scrim passed a Brush/Color union to `background()`, and NoteEditor's reminder dialogs used `material3.Text` without importing it plus an invalid `title` slot on `DatePickerDialog`.
+- Fixes pushed in c0bbb21. Static import-coverage audit across all 19 refresh-commit files found no further missing imports or union-type overload mismatches.
+- Android CI run 40451179296: lint, unit tests, debug build, androidTest compile, and release compilation all pass. Push trigger verified working on main.
