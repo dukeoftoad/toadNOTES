@@ -231,7 +231,11 @@ internal fun NoteCard(note: NestNote, compact: Boolean, colorStyle: NoteColorSty
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "Actions for " + note.title, tint = cardText) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onPin() }, leadingIcon = { Icon(if (note.pinned) Icons.Outlined.PushPin else Icons.Default.PushPin, null) })
+                        // Pinning an archived note silently did not stick (archive forces
+                        // pinned=false on the next save), so hide the action until restored.
+                        if (!note.archived) {
+                            DropdownMenuItem(text = { Text(if (note.pinned) "Unpin note" else "Pin note") }, onClick = { menu = false; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onPin() }, leadingIcon = { Icon(if (note.pinned) Icons.Outlined.PushPin else Icons.Default.PushPin, null) })
+                        }
                         DropdownMenuItem(
                             text = { Text("Download as Markdown") },
                             onClick = {

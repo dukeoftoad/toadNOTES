@@ -349,6 +349,27 @@ class NoteStoreTest {
     }
 
     @Test
+    fun decodeTreatsExplicitJsonNullTextFieldsAsMissingNotLiteralNull() {
+        // Regression: org.json's optString returns the literal string "null" for
+        // JSONObject.NULL, so a hand-edited or third-party backup with
+        // {"title": null, "body": null, ...} imported notes whose content was the
+        // four characters 'n','u','l','l' in every text field.
+        val decoded = NoteStore.decode(
+            """[{"id":7,"title":null,"body":null,"category":null,"reminder":null,"wallpaperUri":null,"format":null,"encryptedPayload":null}]""",
+            requireFields = true
+        )
+        assertEquals(1, decoded?.size)
+        val note = decoded!!.single()
+        assertEquals("", note.title)
+        assertEquals("", note.body)
+        assertEquals("Ideas", note.category)
+        assertEquals("", note.reminder)
+        assertEquals("", note.wallpaperUri)
+        assertEquals("plain", note.format)
+        assertEquals("", note.encryptedPayload)
+    }
+
+    @Test
     fun mergeAddsNewNotesUpdatesOnlyNewerCopiesAndNeverDeletesAbsentNotes() {
         val original = NestNote(id = 1, title = "Original", body = "Keep", updated = 10)
         val unchanged = NestNote(id = 2, title = "Unchanged", body = "Keep me", updated = 20)

@@ -2,6 +2,17 @@
 
 All notable changes to NESTNOTE are documented here. The current release candidate is **1.4.9**.
 
+## [Unreleased] — Known-bug fixes
+
+### Fixed
+- **Spaced searches no longer match across field boundaries.** The dashboard query ran against a concatenated `title + body + category` string, so e.g. `plan 1.` matched a note titled "Project Plan" with a body starting "1. Finalize…" even though the phrase exists in no single field. The free-text query is now matched against the title, body, and category separately (multi-word queries match a phrase within one field; `is:`/`has:`/`category:`/`after:`/`before:` operators are unchanged).
+- **Archived notes can be restored from the editor.** The editor's ⋮ menu offered "Archive" even for already-archived notes and provided no way back; it now offers "Restore from archive" (with an unarchive icon) for archived notes, matching the note-card menu.
+- **Pinning is no longer offered on archived notes.** Archiving forces `pinned=false`, so the Pin action on an archived card or editor menu silently did not stick; it is hidden until the note is restored.
+- **Backups with JSON `null` text fields no longer import literal "null" content.** `org.json`'s `optString` returns the string "null" for an explicit JSON `null`, so hand-edited or third-party backups imported notes whose title/body/category/reminder were the four characters `null`. Text fields now treat JSON `null` as missing (empty or default value), with a regression test.
+
+### Fixed (tests)
+- Regression coverage added: cross-field search boundary (`NoteFiltersTest`), query trimming, and JSON-null import sanitization (`NoteStoreTest`).
+
 ## [1.4.9] — Settings polish, Markdown format fixes, voice-import reliability
 
 ### Added

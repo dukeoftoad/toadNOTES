@@ -7,7 +7,8 @@ import java.util.Locale
 /** Dashboard filtering, including a small local-only query language for power users. */
 internal object NoteFilters {
     private data class Query(
-        val terms: List<String>,
+        /** Trimmed free-text portion of the query (operator tokens removed). */
+        val text: String,
         val category: String? = null,
         val pinned: Boolean? = null,
         val archived: Boolean = false,
@@ -22,7 +23,6 @@ internal object NoteFilters {
     fun visibleNotes(notes: List<NestNote>, selectedView: String, search: String, sortByTitle: Boolean, sortByCreated: Boolean): List<NestNote> {
         val query = parseQuery(search)
         val showArchived = selectedView == "Archived" || query.archived
-        val terms = query.terms.map { it.lowercase(Locale.ROOT) }
         val visible = notes.filter { note ->
             val inView = if (selectedView == "Private") note.privateNote && !note.archived
             else if (showArchived) note.archived && !note.privateNote else !note.archived && !note.privateNote && when (selectedView) {
@@ -39,9 +39,16 @@ internal object NoteFilters {
             if (query.after != null && note.updated < query.after) return@filter false
             if (query.before != null && note.updated >= query.before) return@filter false
             if (query.voice && NoteText.voiceMarkers(note.body).isEmpty()) return@filter false
-            if (terms.isEmpty()) return@filter true
-            val searchable = "${note.title} ${note.body} ${note.category}".lowercase(Locale.ROOT)
-            terms.all(searchable::contains)
+            if (query.text.isEmpty()) return@filter true
+            // The free-text query must appear inside ONE field (title, body, or
+            // category). Concatenating the fields into a single searchable string
+            // let a spaced query straddle the boundary — e.g. "plan 1." matched
+            // title "Project Plan" + body "1. Finalize…" — so the phrase check
+            // runs per field instead.
+            val needle = query.text.lowercase(Locale.ROOT)
+            note.title.lowercase(Locale.ROOT).contains(needle) ||
+                note.body.lowercase(Locale.ROOT).contains(needle) ||
+                note.category.lowercase(Locale.ROOT).contains(needle)
         }
         return when {
             sortByTitle -> visible.sortedWith(compareByDescending<NestNote> { it.pinned }.thenBy { it.title.lowercase(Locale.getDefault()) })
@@ -89,7 +96,7 @@ internal object NoteFilters {
             }
             append(raw.substring(cursor))
         }
-        return Query(remaining.trim().split(Regex("\\s+")).filter { it.isNotBlank() }, category, pinned, archived, reminder, voice, after, before)
+        return Query(remaining.trim(), category, pinned, archived, reminder, voice, after, before)
     }
 
     private fun parseDate(value: String): Long? {

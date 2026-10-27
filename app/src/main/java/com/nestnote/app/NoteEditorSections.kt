@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -106,6 +107,7 @@ internal fun EditorTopBar(
     noteFormat: String,
     hasContent: Boolean,
     isExisting: Boolean,
+    noteArchived: Boolean,
     canDelete: Boolean,
     canDuplicate: Boolean,
     accent: Color,
@@ -200,17 +202,22 @@ internal fun EditorTopBar(
                             onClick = { moreMenu = false; onTogglePrivate() },
                             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
                         )
-                        DropdownMenuItem(
-                            text = { Text(if (pinned) "Unpin note" else "Pin note") },
-                            onClick = { moreMenu = false; onTogglePinned() },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.PushPin,
-                                    null,
-                                    tint = if (pinned) accent else colors.onSurfaceVariant
-                                )
-                            }
-                        )
+                        // Pinning is hidden while a note is archived: buildNote forces
+                        // pinned=false for archived notes, so the toggle would silently
+                        // not stick. Pin becomes available again after restoring.
+                        if (!noteArchived) {
+                            DropdownMenuItem(
+                                text = { Text(if (pinned) "Unpin note" else "Pin note") },
+                                onClick = { moreMenu = false; onTogglePinned() },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.PushPin,
+                                        null,
+                                        tint = if (pinned) accent else colors.onSurfaceVariant
+                                    )
+                                }
+                            )
+                        }
                         DropdownMenuItem(
                             text = {
                                 Text(
@@ -254,13 +261,20 @@ internal fun EditorTopBar(
                         }
                     )
                     if (editorMode == EditorMode.Editing && isExisting) {
+                        // An already-archived note previously still offered "Archive"
+                        // (a no-op re-archive) with no way back; offer Restore instead.
                         DropdownMenuItem(
-                            text = { Text("Archive") },
+                            text = { Text(if (noteArchived) "Restore from archive" else "Archive") },
                             onClick = {
                                 moreMenu = false
                                 onArchive()
                             },
-                            leadingIcon = { Icon(Icons.Default.Archive, null) }
+                            leadingIcon = {
+                                Icon(
+                                    if (noteArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                                    null
+                                )
+                            }
                         )
                         // Duplicate — captures the current editor state,
                         // including unsaved edits, as a new note.

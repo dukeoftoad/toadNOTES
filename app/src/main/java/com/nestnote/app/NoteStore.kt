@@ -291,7 +291,7 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                 decode(raw, requireFields = true)?.also { require(it.none { note -> note.privateNote || note.encrypted }) { "Private Vault and device-encrypted ordinary notes are not allowed in portable archives" } }
             } else {
                 val envelope = JSONObject(raw)
-                require(envelope.optString("format") in setOf("com.nestnote.archive-payload", "com.nestnote.backup")) { "unsupported or missing archive payload format" }
+                require(optText(envelope, "format") in setOf("com.nestnote.archive-payload", "com.nestnote.backup")) { "unsupported or missing archive payload format" }
                 require(envelope.optInt("schemaVersion", -1) == CURRENT_ARCHIVE_PAYLOAD_SCHEMA_VERSION) {
                     "unsupported archive payload schema"
                 }
@@ -301,6 +301,15 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                     ?: error("invalid archive records")
             }
         }.getOrNull()
+
+        /**
+         * Reads a JSON text field, treating an explicit JSON `null` as missing.
+         * `org.json`'s `optString` returns the literal string "null" for
+         * `JSONObject.NULL` (with or without a fallback), which previously imported
+         * hand-edited or third-party backups with title/body "null" text.
+         */
+        private fun optText(o: JSONObject, key: String, fallback: String = ""): String =
+            if (o.isNull(key)) fallback else o.optString(key, fallback)
 
         /**
          * Parses a JSON array of notes. Returns null if the text is not valid.
@@ -316,21 +325,21 @@ class NoteStore internal constructor(context: Context, private val testKeyProvid
                 if (requireFields && !(o.has("id") && o.has("title"))) error("not a NESTNOTE record")
                 NestNote(
                     id = o.optLong("id"),
-                    title = o.optString("title"),
-                    body = o.optString("body"),
-                    category = o.optString("category", "Ideas"),
+                    title = optText(o, "title"),
+                    body = optText(o, "body"),
+                    category = optText(o, "category", "Ideas"),
                     color = o.optInt("color"),
                     pinned = o.optBoolean("pinned"),
-                    reminder = o.optString("reminder"),
+                    reminder = optText(o, "reminder"),
                     updated = o.optLong("updated"),
                     created = o.optLong("created", o.optLong("id", System.currentTimeMillis())),
                     archived = o.optBoolean("archived", false),
                     background = o.optInt("background", 0).coerceIn(0, 9),
-                    wallpaperUri = o.optString("wallpaperUri", ""),
-                    format = if (o.optString("format", "plain") == "markdown") "markdown" else "plain",
+                    wallpaperUri = optText(o, "wallpaperUri"),
+                    format = if (optText(o, "format", "plain") == "markdown") "markdown" else "plain",
                     privateNote = o.optBoolean("privateNote", false),
                     encrypted = o.optBoolean("encrypted", false),
-                    encryptedPayload = o.optString("encryptedPayload", "")
+                    encryptedPayload = optText(o, "encryptedPayload")
                 )
             }
             require(isValidNoteCollection(decoded)) { "invalid note records" }

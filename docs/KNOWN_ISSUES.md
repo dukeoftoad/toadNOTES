@@ -4,7 +4,7 @@ Living document. New issues are appended as they're discovered; when fixed,
 either strike through in place or move to the "Resolved" section at the bottom
 with the commit/PR reference.
 
-**Last updated:** following the fingerprint folder-access and 100 MiB voice-import fix batch.
+**Last updated:** following the known-bug fix batch (search boundary, archive restore/pin, JSON-null import).
 
 ---
 
@@ -16,6 +16,53 @@ tracked in `docs/WORKLOG.md` and `docs/ROADMAP.md` release gates._
 ---
 
 ## Resolved issues
+
+### S3 — Spaced searches matched across field boundaries (RESOLVED)
+
+**Severity:** low
+**File:** `NoteFilters.kt` (also tracked as S3 in `docs/P1_QUALITY_AUDIT.md`)
+
+**Symptom:** The free-text query ran against a single concatenated
+`title + " " + body + " " + category` string, so a query with a space could match
+across the boundary — "plan 1." matched a note titled "Project Plan" whose body
+started "1. Finalize…" even though the phrase existed in no single field.
+
+**Fix:** The query text is now matched against title, body, and category
+separately; a multi-word query must appear as a phrase inside one field. The
+query-language operators (`is:`, `has:`, `category:`, `in:`, `after:`,
+`before:`) are unchanged. Regression tests pin the boundary behavior and query
+trimming.
+
+### S6 — Editor could not restore archived notes; Pin offered on archived notes (RESOLVED)
+
+**Severity:** low/medium
+**Files:** `NoteEditorSections.kt`, `NoteEditor.kt`, `NoteCard.kt`
+(also tracked as S6 in `docs/P1_QUALITY_AUDIT.md`)
+
+**Symptom:** The editor's overflow menu offered "Archive" even when the note was
+already archived (a no-op) and provided no restore path from the editor. Both the
+editor menu and the note-card menu offered "Pin note" on archived notes, but
+archiving forces `pinned=false`, so the toggle silently did not stick.
+
+**Fix:** The editor menu now offers "Restore from archive" (unarchive icon) for
+archived notes and "Archive" otherwise; the Pin action is hidden while a note is
+archived in both menus and returns after restore.
+
+### Backup import turned JSON `null` fields into literal "null" text (RESOLVED)
+
+**Severity:** low
+**File:** `NoteStore.kt`
+
+**Symptom:** `org.json`'s `optString` returns the literal string "null" for an
+explicit JSON `null` (with or without a fallback), so a hand-edited or
+third-party backup with `{"title": null, "body": null, …}` imported notes whose
+title, body, category, reminder, wallpaper URI, format, and encrypted payload
+were the four characters `null`.
+
+**Fix:** All text fields in `NoteStore.decode` (and the archive-envelope format
+check) go through an `optText` helper that treats `JSONObject.NULL` as missing,
+returning the default value instead. Regression test
+`decodeTreatsExplicitJsonNullTextFieldsAsMissingNotLiteralNull` pins the behavior.
 
 ### OI-1 — Notification permission denial is silent (RESOLVED)
 

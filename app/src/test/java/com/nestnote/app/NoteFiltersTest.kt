@@ -87,6 +87,26 @@ class NoteFiltersTest {
     }
 
     @Test
+    fun spacedQueryCannotMatchAcrossFieldBoundaries() {
+        // Regression: the query used to run against "title + ' ' + body + ' ' + category",
+        // so "plan 1." matched title "Project Plan" + body "1. Finalize…" even though the
+        // phrase exists in no single field. Each field is now matched separately.
+        val plan = work.copy(id = 20L, title = "Project Plan", body = "1. Finalize the draft")
+        val notes = listOf(plan) + all
+        assertTrue(NoteFilters.visibleNotes(notes, "Home", "plan 1.", false, false).isEmpty())
+        assertTrue(NoteFilters.visibleNotes(notes, "Home", "plan 1", false, false).isEmpty())
+        // The phrase still matches when it genuinely lives inside one field.
+        assertEquals(listOf(plan), NoteFilters.visibleNotes(notes, "Home", "project plan", false, false))
+        assertEquals(listOf(plan), NoteFilters.visibleNotes(notes, "Home", "1. finalize", false, false))
+    }
+
+    @Test
+    fun queryIsTrimmedBeforeMatching() {
+        // Leading/trailing whitespace is not part of the phrase.
+        assertEquals(listOf(work), NoteFilters.visibleNotes(all, "Home", "  launch checklist  ", false, false))
+    }
+
+    @Test
     fun privateNotesNeverLeakThroughOrdinarySearchOrQueryOperators() {
         val secret = NestNote(
             id = 990L, title = "Vault launch checklist", body = "confidential widget token",
