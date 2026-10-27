@@ -1062,3 +1062,8 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - JSON-null import fixed: `org.json` `optString` returns the literal string "null" for an explicit JSON `null`, so backups/hand-edited files imported title/body/category/reminder/wallpaperUri/format/encryptedPayload as the text "null". All text fields in `NoteStore.decode` and the archive-envelope format check now go through an `optText` helper that treats `JSONObject.NULL` as missing. Robolectric regression test `decodeTreatsExplicitJsonNullTextFieldsAsMissingNotLiteralNull` added.
 - Remaining P1-audit items (S1, S2, S4, S5, S7) were verified as already fixed on current main; `docs/KNOWN_ISSUES.md` gained resolved entries for S3, S6, and the JSON-null import; root `CHANGELOG.md` gained an [Unreleased] section.
 - Validation: unit tests (NoteFiltersTest, NoteStoreTest) and lint via Android CI on exact head; on-device checks (search behavior across categories, editor restore on an archived note) remain release gates.
+
+## 2026-10-27 — CI green on the known-bug batch (run 40468028925)
+
+- Exact-head Android CI passed on commit `452e560`: lint, unit tests (including the new NoteFilters boundary/trimming tests and the NoteStore JSON-null regression test), API 36 debug APK build, instrumentation-test compilation, and minified release compilation.
+- Device-only release gates unchanged: spaced-search behavior across categories/views, editor restore of an archived note, and card-menu pin suppression on archived notes should be spot-checked on a device before the next tag.
