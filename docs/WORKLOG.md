@@ -1032,3 +1032,8 @@ Tracking issue: [#28](https://github.com/dukeoftoad/toadNOTES/issues/28).
 - OI-1 resolved: denied POST_NOTIFICATIONS no longer silently disables reminders — the reminder time picker warns inline, and the warning clears once permission is granted.
 - Docs: `docs/KNOWN_ISSUES.md` was truncated mid-sentence; rebuilt with resolved sections (OI-1, OI-2, 100 MiB OOM, picker MIME, dismissable failures, fingerprint folder access). Root `CHANGELOG.md` gains an [Unreleased] section for this batch.
 - Validation: Kotlin compile, unit tests, debug/release builds via Android CI on exact head; physical-device checks (fingerprint prompt flows, 100 MiB playback on low-RAM device) remain release gates.
+
+## 2026-10-27 — CI green on fingerprint/voice-import batch (run 40459542030)
+
+- Exact-head Android CI passed on commit `0e97aaf`: lint, unit tests, API 36 debug APK build, instrumentation-test compilation, and minified release compilation.
+- Device-only release gates unchanged: fingerprint enrollment/prompt flows and 100 MiB import playback must still be verified on a physical device or emulator before publishing.
