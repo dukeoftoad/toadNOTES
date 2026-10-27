@@ -1,25 +1,25 @@
 name: Android CI
 on:
-  # CI is deliberately manual-only. The approval workflow dispatches it only after
-  # the repository owner approves the exact current PR head SHA.
-  # Inputs are optional so the main repo can run CI without a PR number; when
-  # pr_number/expected_sha are omitted, the approval check is skipped and the
-  # currently selected ref is built.
+  # Automatic CI for the main repo's default branch — no PR number is asked for.
+  push:
+    branches: [main]
+  # CI is deliberately manual-only for PRs. The approval workflow dispatches it
+  # only after the repository owner approves the exact current PR head SHA.
   workflow_dispatch:
     inputs:
       pr_number:
-        description: Pull request number whose latest commit was approved (optional; omit for main repo)
-        required: false
+        description: Pull request number whose latest commit was approved
+        required: true
         type: string
       expected_sha:
-        description: Full 40-character PR head SHA approved by the repository owner (optional; omit for main repo)
-        required: false
+        description: Full 40-character PR head SHA approved by the repository owner
+        required: true
         type: string
 permissions:
   contents: read
   pull-requests: read
 concurrency:
-  group: android-ci-${{ inputs.pr_number || github.ref }}
+  group: android-ci-pr-${{ inputs.pr_number || github.ref }}
   cancel-in-progress: true
 jobs:
   unit-tests:
@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Verify approval still matches the latest PR commit
-        if: ${{ inputs.pr_number != '' }}
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
