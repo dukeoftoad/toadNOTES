@@ -216,7 +216,7 @@ class MarkdownPreviewTest {
 
         val tasks = result.getSpans(0, result.length, TaskListSpan::class.java)
         assertTrue("checkbox glyph lines must render as checked task list items",
-            tasks.any { it.isChecked })
+            tasks.any { it.isDone })
         val lines = result.toString().split('\n')
         assertTrue("restarted numbered list content must stay visible",
             lines.any { it.contains("Sdfhfghjkyfg") })
