@@ -52,7 +52,11 @@ internal object MarkdownPreview {
         // Keep table blocks in Markwon's native rendering pipeline. Table cell content is
         // held by drawing spans, so tests should assert the table spans rather than rely on
         // Spanned.toString() to expose cell text.
-        val rendered = SpannableStringBuilder(renderer(context).toMarkdown(markdown))
+        //
+        // The editor stores list state as literal glyphs (•, ☑, ☐) and relies on visible
+        // line breaks; align the body with the CommonMark dialect the renderer expects (the
+        // same conversion Markdown export performs) before handing it over.
+        val rendered = SpannableStringBuilder(renderer(context).toMarkdown(MarkdownCompat.adapt(markdown)))
 
         if (foregroundColor != Color.BLACK) {
             // Normalize every explicit foreground span to the active note color. Markdown

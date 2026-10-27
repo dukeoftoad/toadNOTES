@@ -4,7 +4,7 @@ Living document. New issues are appended as they're discovered; when fixed,
 either strike through in place or move to the "Resolved" section at the bottom
 with the commit/PR reference.
 
-**Last updated:** following the imported-voice-marker fix batch (dash-less UUID tolerance, missing-notes noise).
+**Last updated:** following the markdown-preview list rendering fix batch (editor glyph lists, hard line breaks, restarted numbering).
 
 ---
 
@@ -177,3 +177,26 @@ vault password every time.
 instead" when strong biometrics are enrolled. Password and fingerprint paths
 converge in one `runVaultAction` handler so both authenticate identically
 (CryptoObject-bound key unwrap before any setting changes).
+
+### Markdown preview merged editor list lines, dropped checkbox state, and renumbered restarted lists (RESOLVED)
+
+**Severity:** high
+**File:** `MarkdownPreview.kt` (new `MarkdownCompat.kt`)
+
+**Symptom:** A note written with the editor's own list tools (device report + screenshots,
+Redmi veux, 2026-10-27, note "w22") previewed garbled: the two `•` bullet lines rendered
+merged onto one line, the `☑ EF` line lost its checkbox and was absorbed into ordered
+item 3 ("3. Xff ☑ EF • Efgyidesfg"), and the second numbered list (`1.` `2.`) rendered
+renumbered as `4.` `5.`. Markdown export produced correct .md files — only the preview
+was wrong, because export (`NoteText.toMarkdown`) converts the editor's list glyphs to
+CommonMark while the preview fed the raw body to the renderer.
+
+**Fix:** `MarkdownPreview.toSpanned` now runs the body through `MarkdownCompat.adapt`
+before rendering: the editor's list glyphs (`• `, `☑ `, `☐ `) convert to the same
+CommonMark syntax export uses (`- `, `- [x] `, `- [ ] `), single newlines become hard
+line breaks so each editor line stays visible, and a top-level numbered item that neither
+continues nor repeats the previous number opens a new list, preserving the note's own
+numbering. Fenced code blocks (``` and ~~~) are left byte-identical. The stored note body
+is never rewritten. Regression tests pin the exact reported body (`MarkdownCompatTest`,
+including a commonmark-java structural proof of the merge/renumber bug, and
+`MarkdownPreviewTest` end-to-end through Markwon).

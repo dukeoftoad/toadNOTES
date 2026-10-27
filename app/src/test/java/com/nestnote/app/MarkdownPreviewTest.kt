@@ -9,6 +9,7 @@ import io.noties.markwon.core.spans.EmphasisSpan
 import io.noties.markwon.core.spans.StrongEmphasisSpan
 import io.noties.markwon.ext.tables.TableRowSpan
 import io.noties.markwon.ext.tables.TableSpan
+import io.noties.markwon.ext.tasklist.TaskListSpan
 import android.text.style.URLSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -203,5 +204,35 @@ class MarkdownPreviewTest {
         assertEquals("the table block should have Markwon's table span", 1,
             rendered.getSpans(0, rendered.length, TableSpan::class.java).size)
         assertFalse("pipe delimiters should not be shown literally", rendered.toString().contains("|"))
+    }
+
+    @Test
+    fun editorGlyphChecklistsAndBulletsRenderAsNativeListBlocks() {
+        // Exact body from the device bug report (note "w22"): the editor's own list glyphs
+        // used to render as merged paragraph text with the restarted list renumbered 1.→4.
+        val body = "• Ikkmmihjkkkkkihbmlp\n• gjk\n1. K\n2. lokh\n3. Xff\n☑ EF\n" +
+            "• **Efgyidesfg**\n1. *Sdfhfghjkyfg*\n2. Efgedg~~~~"
+        val result = MarkdownPreview.toSpanned(RuntimeEnvironment.getApplication(), body)
+
+        val tasks = result.getSpans(0, result.length, TaskListSpan::class.java)
+        assertTrue("checkbox glyph lines must render as checked task list items",
+            tasks.any { it.isChecked })
+        val lines = result.toString().split('\n')
+        assertTrue("restarted numbered list content must stay visible",
+            lines.any { it.contains("Sdfhfghjkyfg") })
+        assertTrue("final numbered list content must stay visible", lines.any { it.contains("Efgedg") })
+        assertFalse("the two bullet lines must not render merged onto one line (the reported bug)",
+            lines.any { it.contains("Ikkmmihjkkkkkihbmlp") && it.contains("gjk") })
+        assertTrue("both bullet lines must stay visible",
+            lines.any { it.contains("Ikkmmihjkkkkkihbmlp") } && lines.any { it.contains("gjk") })
+        assertFalse("editor glyphs must not be shown literally",
+            result.toString().contains("•") || result.toString().contains("☑"))
+    }
+
+    @Test
+    fun singleNewlinesStayVisibleLineBreaksInsteadOfCollapsingIntoSpaces() {
+        val result = MarkdownPreview.toSpanned(RuntimeEnvironment.getApplication(), "first line\nsecond line")
+        assertTrue("each editor line must remain a separate visible line",
+            result.toString().contains("first line\nsecond line"))
     }
 }
