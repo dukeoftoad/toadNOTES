@@ -6,6 +6,7 @@ import android.media.MediaDataSource
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
+import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -14,6 +15,10 @@ import java.nio.ByteOrder
  * Plays an encrypted PCM attachment with the platform [MediaPlayer] (built-in seek, pause and
  * completion). The store authenticates and decrypts the payload; a WAV header is added in memory,
  * so plaintext never touches disk. Callbacks run on the main thread.
+ *
+ * Large plain (unencrypted) attachments pass [playbackFile] instead: MediaPlayer streams the
+ * file straight from disk with no in-memory buffering, like a normal music player. Decrypting
+ * a 30 MB+ import in memory peaked at ~2x its size on the Java heap and stalled low-RAM devices.
  *
  * [onFinished] fires only on natural completion (null) or error (message), never after [stop].
  *
@@ -27,6 +32,7 @@ internal class PcmVoicePlayback(
     private val startAtMs: Long = 0L,
     private val playbackSpeed: Float = 1f,
     private val encodedAudio: Boolean = false,
+    private val playbackFile: File? = null,
     private val onProgress: (Long, Long) -> Unit = { _, _ -> },
     private val onFinished: (String?) -> Unit
 ) {
@@ -58,6 +64,14 @@ internal class PcmVoicePlayback(
     fun start() {
         // Allow a fresh start on a reused instance; stop() set this to true previously.
         stopped = false
+        if (playbackFile != null) {
+            // Plain large attachment: stream straight from disk, nothing buffered in memory.
+            main.post {
+                if (stopped) return@post
+                beginFile()
+            }
+            return
+        }
         Thread({
             val result = runCatching {
                 val pcm = readAttachment(attachment.noteId, attachment.attachmentId)
@@ -72,6 +86,27 @@ internal class PcmVoicePlayback(
                     .onFailure { fail(it.message) }
             }
         }, "nestnote-voice-decrypt").start()
+    }
+
+    /** File-backed playback for plain (unencrypted) attachments — normal music-player path. */
+    private fun beginFile() {
+        val file = playbackFile ?: return
+        val mp = MediaPlayer()
+        player = mp
+
+        try {
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            mp.setDataSource(file.absolutePath)
+            attachPlaybackListeners(mp, errorMessage = "Couldn't play this audio file.")
+            mp.prepareAsync()
+        } catch (e: Exception) {
+            fail(e.message)
+        }
     }
 
     private fun begin(pcm: ByteArray) {
@@ -153,47 +188,50 @@ internal class PcmVoicePlayback(
                 override fun close() = Unit
             })
 
-            mp.setOnPreparedListener { preparedPlayer ->
-                if (stopped) return@setOnPreparedListener
-
-                val safeSpeed = (playbackSpeed.takeIf { it.isFinite() } ?: 1f).coerceIn(0.5f, 2f)
-                if (safeSpeed != 1f) {
-                    preparedPlayer.playbackParams = preparedPlayer.playbackParams.setSpeed(safeSpeed)
-                }
-
-                if (startAtMs > 0L) {
-                    preparedPlayer.seekTo(
-                        startAtMs.coerceAtMost(Int.MAX_VALUE.toLong()),
-                        MediaPlayer.SEEK_CLOSEST
-                    )
-                }
-
-                if (!paused) {
-                    preparedPlayer.start()
-                }
-
-                runCatching {
-                    onProgress(
-                        preparedPlayer.currentPosition.toLong(),
-                        preparedPlayer.duration.coerceAtLeast(0).toLong()
-                    )
-                }
-
-                main.post(ticker)
-            }
-
-            mp.setOnCompletionListener {
-                finish(null)
-            }
-
-            mp.setOnErrorListener { _, _, _ ->
-                fail("Couldn't play this recording.")
-                true
-            }
-
-            mp.prepareAsync()
+            attachPlaybackListeners(mp, errorMessage = "Couldn't play this recording.")
         } catch (e: Exception) {
             fail(e.message)
+        }
+    }
+
+    /** Shared prepared/completion/error wiring for both the in-memory and file playback paths. */
+    private fun attachPlaybackListeners(mp: MediaPlayer, errorMessage: String) {
+        mp.setOnPreparedListener { preparedPlayer ->
+            if (stopped) return@setOnPreparedListener
+
+            val safeSpeed = (playbackSpeed.takeIf { it.isFinite() } ?: 1f).coerceIn(0.5f, 2f)
+            if (safeSpeed != 1f) {
+                preparedPlayer.playbackParams = preparedPlayer.playbackParams.setSpeed(safeSpeed)
+            }
+
+            if (startAtMs > 0L) {
+                preparedPlayer.seekTo(
+                    startAtMs.coerceAtMost(Int.MAX_VALUE.toLong()),
+                    MediaPlayer.SEEK_CLOSEST
+                )
+            }
+
+            if (!paused) {
+                preparedPlayer.start()
+            }
+
+            runCatching {
+                onProgress(
+                    preparedPlayer.currentPosition.toLong(),
+                    preparedPlayer.duration.coerceAtLeast(0).toLong()
+                )
+            }
+
+            main.post(ticker)
+        }
+
+        mp.setOnCompletionListener {
+            finish(null)
+        }
+
+        mp.setOnErrorListener { _, _, _ ->
+            fail(errorMessage)
+            true
         }
     }
 

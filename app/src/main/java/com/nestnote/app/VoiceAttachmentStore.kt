@@ -15,17 +15,31 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-data class VoiceAttachment(val noteId: Long, val attachmentId: String, val encryptedSizeBytes: Long)
+/**
+ * A stored voice attachment. [plain] is true for large imports stored without encryption so
+ * playback can stream straight from disk instead of decrypting the whole file into memory.
+ */
+data class VoiceAttachment(
+    val noteId: Long,
+    val attachmentId: String,
+    val encryptedSizeBytes: Long,
+    val plain: Boolean = false
+)
 
 /**
  * App-private voice attachment storage. Input is encrypted as it is streamed, so this layer never
  * stages plaintext audio on disk. Reads return bytes only after GCM authentication succeeds.
  *
+ * Large audio (≥ 30 MB) is stored unencrypted via [savePlain]: decrypting-and-buffering a file
+ * that size spikes the Java heap by ~2x its size and stalled low-RAM devices (the player then
+ * streams the file from disk like a normal music player instead).
+ *
  * Envelope: 4-byte magic/version, 12-byte random IV, ciphertext and 16-byte GCM tag.
  *
- * The note ID and attachment ID are bound into the GCM additional authenticated data. A file
- * therefore cannot be moved to another note's directory and still decrypt, which is why
- * [copyAll] re-encrypts rather than copying bytes.
+ * The note ID and attachment ID are bound into the GCM additional authenticated data. An
+ * encrypted file therefore cannot be moved to another note's directory and still decrypt,
+ * which is why [copyAll] re-encrypts encrypted attachments; plain attachments stream
+ * file-to-file instead.
  *
  * All instances share one lock. Callers create a new store per use, so a per-instance lock
  * would not stop a save from racing a delete.
@@ -46,7 +60,24 @@ class VoiceAttachmentStore internal constructor(
     fun save(noteId: Long, attachmentId: String = UUID.randomUUID().toString(), input: InputStream): VoiceAttachment =
         synchronized(LOCK) { saveLocked(noteId, attachmentId, input) }
 
+    /**
+     * Stores an attachment unencrypted (.nvap). The input is still streamed and never fully
+     * buffered, and the write is atomic. Used for large imports where in-memory decryption
+     * would exhaust the heap; playback reads the file directly.
+     */
+    fun savePlain(noteId: Long, attachmentId: String, input: InputStream): VoiceAttachment =
+        synchronized(LOCK) { savePlainLocked(noteId, attachmentId, input) }
+
     fun read(noteId: Long, attachmentId: String): ByteArray = synchronized(LOCK) { readLocked(noteId, attachmentId) }
+
+    /**
+     * On-disk file for a plain (unencrypted) attachment, or null when the attachment is not
+     * stored plainly. Callers play this file directly; no bytes are ever buffered in memory.
+     */
+    fun plainFile(noteId: Long, attachmentId: String): File? = synchronized(LOCK) {
+        validateIdentity(noteId, attachmentId)
+        File(noteDirectory(noteId), "$attachmentId$PLAIN_EXTENSION").takeIf { it.isFile }
+    }
 
     fun delete(noteId: Long, attachmentId: String): Boolean = synchronized(LOCK) {
         validateIdentity(noteId, attachmentId)
@@ -64,8 +95,14 @@ class VoiceAttachmentStore internal constructor(
         val copied = mutableListOf<String>()
         try {
             for (attachment in listLocked(fromNoteId)) {
-                val plaintext = readLocked(fromNoteId, attachment.attachmentId)
-                saveLocked(toNoteId, attachment.attachmentId, ByteArrayInputStream(plaintext))
+                if (attachment.plain) {
+                    // Plain attachments stream file-to-file; never buffered in memory.
+                    val source = File(noteDirectory(fromNoteId), "${attachment.attachmentId}$PLAIN_EXTENSION")
+                    source.inputStream().use { savePlainLocked(toNoteId, attachment.attachmentId, it) }
+                } else {
+                    val plaintext = readLocked(fromNoteId, attachment.attachmentId)
+                    saveLocked(toNoteId, attachment.attachmentId, ByteArrayInputStream(plaintext))
+                }
                 copied += attachment.attachmentId
             }
         } catch (error: Exception) {
@@ -147,9 +184,43 @@ class VoiceAttachmentStore internal constructor(
         }
     }
 
+    private fun savePlainLocked(noteId: Long, attachmentId: String, input: InputStream): VoiceAttachment {
+        validateIdentity(noteId, attachmentId)
+        val dir = noteDirectory(noteId)
+        if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Unable to create note attachment directory")
+        val destination = File(dir, "$attachmentId$PLAIN_EXTENSION")
+        if (destination.exists()) throw IOException("Voice attachment already exists")
+        val temp = File(root, "$TEMP_PREFIX${noteId}_$attachmentId.${UUID.randomUUID()}$TEMP_SUFFIX")
+        try {
+            FileOutputStreamCompat(temp).use { output ->
+                val buffer = ByteArray(BUFFER_BYTES)
+                var total = 0L
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count == 0) continue
+                    total += count
+                    if (total > MAX_AUDIO_BYTES) throw IOException("Voice attachment exceeds the 100 MiB size limit")
+                    output.write(buffer, 0, count)
+                }
+                if (total == 0L) throw IOException("This audio file is empty.")
+                output.flushAndSync()
+            }
+            if (destination.exists()) throw IOException("Voice attachment already exists")
+            if (!temp.renameTo(destination)) throw IOException("Unable to commit voice attachment")
+            return VoiceAttachment(noteId, attachmentId, destination.length(), plain = true)
+        } catch (error: Exception) {
+            temp.delete()
+            throw error
+        }
+    }
+
     private fun readLocked(noteId: Long, attachmentId: String): ByteArray {
         validateIdentity(noteId, attachmentId)
         val file = File(noteDirectory(noteId), "$attachmentId$EXTENSION")
+        if (File(noteDirectory(noteId), "$attachmentId$PLAIN_EXTENSION").isFile) {
+            throw IOException("This attachment is stored without encryption; play it from its file")
+        }
         if (!file.isFile) throw IOException("Voice attachment not found")
         if (file.length() < HEADER_BYTES + TAG_BYTES || file.length() > MAX_ENCRYPTED_BYTES) {
             throw IOException("Invalid voice attachment size")
@@ -185,17 +256,24 @@ class VoiceAttachmentStore internal constructor(
     }
 
     private fun deleteLocked(noteId: Long, attachmentId: String): Boolean {
-        val file = File(noteDirectory(noteId), "$attachmentId$EXTENSION")
-        return !file.exists() || file.delete()
+        val dir = noteDirectory(noteId)
+        val encrypted = File(dir, "$attachmentId$EXTENSION")
+        val plain = File(dir, "$attachmentId$PLAIN_EXTENSION")
+        val removedEncrypted = !encrypted.exists() || encrypted.delete()
+        val removedPlain = !plain.exists() || plain.delete()
+        return removedEncrypted && removedPlain
     }
 
     private fun listLocked(noteId: Long): List<VoiceAttachment> {
         require(noteId > 0) { "Invalid note ID" }
         val dir = noteDirectory(noteId)
-        return (dir.listFiles() ?: emptyArray()).filter { it.isFile && it.name.endsWith(EXTENSION) }
+        return (dir.listFiles() ?: emptyArray())
+            .filter { it.isFile && (it.name.endsWith(EXTENSION) || it.name.endsWith(PLAIN_EXTENSION)) }
             .mapNotNull { file ->
-                val id = file.name.removeSuffix(EXTENSION)
-                if (!ID_PATTERN.matches(id)) null else VoiceAttachment(noteId, id, file.length())
+                val plain = file.name.endsWith(PLAIN_EXTENSION)
+                val id = file.name.removeSuffix(if (plain) PLAIN_EXTENSION else EXTENSION)
+                if (!ID_PATTERN.matches(id)) null
+                else VoiceAttachment(noteId, id, file.length(), plain)
             }.sortedBy { it.attachmentId }
     }
 
@@ -251,8 +329,10 @@ class VoiceAttachmentStore internal constructor(
         private const val TAG_BYTES = 16
         private const val TAG_BITS = TAG_BYTES * 8
         private const val HEADER_BYTES = 4 + IV_BYTES
-        private const val BUFFER_BYTES = 16 * 1024
+        // 64 KiB keeps cipher.update/syscall counts low while importing large files.
+        private const val BUFFER_BYTES = 64 * 1024
         const val MAX_AUDIO_BYTES = 100 * 1024 * 1024
+        private const val PLAIN_EXTENSION = ".nvap"
         private const val MAX_ENCRYPTED_BYTES = MAX_AUDIO_BYTES + HEADER_BYTES + TAG_BYTES
         private const val EXTENSION = ".nva"
         private const val TEMP_PREFIX = "."

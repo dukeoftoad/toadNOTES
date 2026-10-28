@@ -247,4 +247,38 @@ class VoiceNoteRepositoryTest {
         assertTrue(repository.list(62L).isEmpty())
     }
 
+    @Test
+    fun savePlainCommitsMetadataAndExposesPlaybackFileWithoutEncryption() {
+        val root = Files.createTempDirectory("nestnote-voice-repository-plain").toFile()
+        val repository = repository(root)
+        val bytes = "unencrypted large music file".toByteArray()
+
+        val metadata = repository.savePlain(
+            noteId = 63L,
+            attachmentId = "music_63",
+            input = ByteArrayInputStream(bytes),
+            createdAtMillis = 5L,
+            durationMillis = 9_000L,
+            displayName = "Big song.mp3"
+        )
+
+        assertEquals(listOf(metadata), repository.list(63L))
+        assertEquals("Big song.mp3", metadata.displayName)
+        assertTrue(File(File(root, "63"), "music_63.nvap").isFile)
+        assertArrayEquals(bytes, File(File(root, "63"), "music_63.nvap").readBytes())
+        val playback = repository.plainPlaybackFile(63L, "music_63")
+        assertTrue(playback != null && playback.isFile)
+        // The byte API must refuse plain attachments so playback always streams from disk.
+        try {
+            repository.read(63L, "music_63")
+            throw AssertionError("Plain attachments must not be returned through the byte API")
+        } catch (expected: IOException) {
+            assertTrue(expected.message!!.contains("without encryption"))
+        }
+        repository.delete(63L, "music_63")
+        assertTrue(repository.listPayloads(63L).isEmpty())
+        assertTrue(repository.list(63L).isEmpty())
+        assertEquals(null, repository.plainPlaybackFile(63L, "music_63"))
+    }
+
 }

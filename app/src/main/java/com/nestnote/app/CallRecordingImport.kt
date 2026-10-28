@@ -248,7 +248,15 @@ internal class CallRecordingImportWorker(
                 try {
                     val input = resolver.openInputStream(uri)
                         ?: throw IOException("Source recording is no longer accessible")
-                    input.use { store.save(CallRecordingImport.RECORDINGS_NOTE_ID, id, it) }
+                    input.use {
+                        // Large recordings skip encryption and stream like a normal music player;
+                        // decrypting them in memory peaks at ~2x their size on the Java heap.
+                        if (declared >= com.nestnote.app.voicenote.VoiceNoteRepository.PLAIN_STORAGE_MIN_BYTES) {
+                            store.savePlain(CallRecordingImport.RECORDINGS_NOTE_ID, id, it)
+                        } else {
+                            store.save(CallRecordingImport.RECORDINGS_NOTE_ID, id, it)
+                        }
+                    }
                     val importedItem = pendingItem.copy(
                         attachmentId = id,
                         importedAtMillis = System.currentTimeMillis(),

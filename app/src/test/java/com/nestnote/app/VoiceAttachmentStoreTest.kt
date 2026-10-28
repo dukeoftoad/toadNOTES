@@ -143,4 +143,66 @@ class VoiceAttachmentStoreTest {
         catch (expected: IOException) { assertTrue(expected.message!!.contains("size limit")) }
         assertTrue(store.list(15L).isEmpty())
     }
+
+    @Test fun plainAttachmentStreamsToDiskUnencryptedAndListsAsPlain() {
+        val root = Files.createTempDirectory("nestnote-voice-plain").toFile()
+        val store = store(root)
+        val bytes = ByteArray(4096) { (it % 251).toByte() }
+
+        val result = store.savePlain(71L, "big_clip", ByteArrayInputStream(bytes))
+
+        assertTrue(result.plain)
+        assertEquals(bytes.size.toLong(), result.encryptedSizeBytes)
+        val file = File(File(root, "71"), "big_clip.nvap")
+        assertTrue(file.isFile)
+        assertArrayEquals(bytes, file.readBytes())
+        val listed = store.list(71L).single()
+        assertEquals("big_clip", listed.attachmentId)
+        assertTrue(listed.plain)
+        assertEquals(bytes.size.toLong(), listed.encryptedSizeBytes)
+        val playback = store.plainFile(71L, "big_clip")
+        assertTrue(playback != null && playback.isFile)
+    }
+
+    @Test fun plainAttachmentIsNotReadableThroughAuthenticatedByteApi() {
+        val store = store()
+        store.savePlain(72L, "plain_clip", ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)))
+        try {
+            store.read(72L, "plain_clip")
+            throw AssertionError("Plain attachments must be read from their file, not the byte API")
+        } catch (expected: IOException) {
+            assertTrue(expected.message!!.contains("without encryption"))
+        }
+    }
+
+    @Test fun deleteRemovesPlainAttachmentAndIsIdempotent() {
+        val store = store()
+        store.savePlain(73L, "plain_clip", ByteArrayInputStream(byteArrayOf(1, 2, 3)))
+        assertTrue(store.delete(73L, "plain_clip"))
+        assertTrue(store.delete(73L, "plain_clip"))
+        assertTrue(store.list(73L).isEmpty())
+        assertEquals(null, store.plainFile(73L, "plain_clip"))
+    }
+
+    @Test fun copyAllStreamsPlainAttachmentFileToFileAndReencryptsEncryptedOnes() {
+        val root = Files.createTempDirectory("nestnote-voice-copy-plain").toFile()
+        val store = store(root)
+        val plainBytes = ByteArray(2048) { (it % 97).toByte() }
+        val secretBytes = "streamed copy keeps secrets".toByteArray()
+        store.savePlain(81L, "music_file", ByteArrayInputStream(plainBytes))
+        store.save(81L, "voice_clip", ByteArrayInputStream(secretBytes))
+
+        val copied = store.copyAll(81L, 82L)
+
+        assertEquals(listOf("music_file", "voice_clip"), copied)
+        val copiedPlain = store.list(82L).first { it.attachmentId == "music_file" }
+        assertTrue(copiedPlain.plain)
+        assertArrayEquals(plainBytes, File(File(root, "82"), "music_file.nvap").readBytes())
+        assertArrayEquals(secretBytes, store.read(82L, "voice_clip"))
+        // The plain copy must not expose plaintext through the byte API either.
+        try {
+            store.read(82L, "music_file")
+            throw AssertionError("Copied plain attachment must stay plain")
+        } catch (expected: IOException) { assertTrue(expected.message!!.contains("without encryption")) }
+    }
 }

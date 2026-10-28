@@ -128,8 +128,18 @@ internal fun InlineVoicePlayer(
             .getOrNull()
     }
 
+    // Plain (unencrypted, ≥30 MB) attachments play straight from disk like a normal music
+    // player — no in-memory buffering, which exhausted the heap on large imports.
+    val playbackFile = remember(noteId, attachmentId) {
+        attachment?.takeIf { it.plain }?.let {
+            runCatching { voiceNotes.plainPlaybackFile(it.noteId, it.attachmentId) }.getOrNull()
+        }
+    }
+
+    // PCM duration estimation only makes sense for recorded PCM; plain media files rely on
+    // the metadata duration captured at import time.
     val estimatedDurationMs = remember(attachment) {
-        attachment?.let {
+        attachment?.takeIf { !it.plain }?.let {
             (((it.encryptedSizeBytes - VOICE_ENVELOPE_OVERHEAD).coerceAtLeast(0L) * 1000L) /
                 VOICE_PCM_BYTES_PER_SECOND)
                 .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
@@ -184,6 +194,7 @@ internal fun InlineVoicePlayer(
                 attachment = attachment,
                 playbackSpeed = playbackSpeed,
                 encodedAudio = metadata?.displayName?.substringAfterLast('.', "")?.lowercase(java.util.Locale.ROOT) in setOf("aac", "aif", "aiff", "amr", "ape", "flac", "m4a", "m4b", "mka", "mp3", "mpc", "oga", "ogg", "opus", "wav", "weba", "webm", "wma", "3ga", "3gp", "audio"),
+                playbackFile = playbackFile,
                 onProgress = { pos, dur ->
                     positionMs = pos.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                     durationMs = dur.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()

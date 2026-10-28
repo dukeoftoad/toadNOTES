@@ -45,4 +45,28 @@ class VoiceAudioImportPolicyTest {
     fun preservesExistingFilenameAndExtension() {
         assertEquals("call-recording.opus", VoiceAudioImportPolicy.ensureAudioExtension("call-recording.opus", "audio/ogg"))
     }
+
+    @Test
+    fun filesAtOrAbove30MiBAreStoredPlainWithoutEncryption() {
+        assertTrue(VoiceAudioImportPolicy.storesPlain(30L * 1024 * 1024))
+        assertTrue(VoiceAudioImportPolicy.storesPlain(40L * 1024 * 1024))
+        assertTrue(VoiceAudioImportPolicy.storesPlain(Long.MAX_VALUE))
+    }
+
+    @Test
+    fun filesBelow30MiBKeepEndToEndEncryption() {
+        assertFalse(VoiceAudioImportPolicy.storesPlain(0L))
+        assertFalse(VoiceAudioImportPolicy.storesPlain(29L * 1024 * 1024))
+        assertFalse(VoiceAudioImportPolicy.storesPlain(30L * 1024 * 1024 - 1))
+    }
+
+    @Test
+    fun unknownDeclaredSizeStaysEncrypted() {
+        assertFalse(VoiceAudioImportPolicy.storesPlain(null))
+    }
+
+    @Test
+    fun plainStorageThresholdIs30MiB() {
+        assertEquals(30 * 1024 * 1024, VoiceNoteRepository.PLAIN_STORAGE_MIN_BYTES)
+    }
 }
