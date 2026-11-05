@@ -11,9 +11,14 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Imports a user-selected audio document into encrypted voice-note storage.
+ * Imports a user-selected audio document into voice-note storage.
  * Source bytes are streamed directly to the repository; plaintext is never staged on disk
  * and the complete file is never buffered in memory. Playback support remains codec/device-dependent.
+ *
+ * Files at or above [VoiceNoteRepository.PLAIN_STORAGE_MIN_BYTES] (30 MB) are stored WITHOUT
+ * encryption ([VoiceNoteRepository.savePlain]) and played straight from disk like a normal
+ * music player — decrypting-and-buffering a file that large peaked at ~2x its size on the
+ * Java heap and stalled low-RAM devices. Smaller imports keep end-to-end AES-GCM encryption.
  */
 class VoiceNoteImporter(
     context: Context,
@@ -50,14 +55,27 @@ class VoiceNoteImporter(
         val input = resolver.openInputStream(uri)
             ?: throw IOException("Selected audio file could not be opened")
         input.use {
-            return repository.save(
-                noteId = noteId,
-                attachmentId = newAttachmentId(),
-                input = it,
-                createdAtMillis = nowMillis(),
-                durationMillis = duration,
-                displayName = name
-            )
+            val attachmentId = newAttachmentId()
+            val createdAt = nowMillis()
+            return if (VoiceAudioImportPolicy.storesPlain(declaredSize)) {
+                repository.savePlain(
+                    noteId = noteId,
+                    attachmentId = attachmentId,
+                    input = it,
+                    createdAtMillis = createdAt,
+                    durationMillis = duration,
+                    displayName = name
+                )
+            } else {
+                repository.save(
+                    noteId = noteId,
+                    attachmentId = attachmentId,
+                    input = it,
+                    createdAtMillis = createdAt,
+                    durationMillis = duration,
+                    displayName = name
+                )
+            }
         }
     }
 
@@ -106,6 +124,13 @@ internal object VoiceAudioImportPolicy {
         "aac", "aif", "aiff", "amr", "ape", "flac", "m4a", "m4b", "mka", "mp3",
         "mpc", "oga", "ogg", "opus", "wav", "weba", "webm", "wma", "3ga", "3gp"
     )
+
+    /**
+     * Files at or above 30 MB bypass encryption and play like a normal music player; unknown
+     * sizes stay encrypted (providers that declare no size are rare and bounded by the limit).
+     */
+    fun storesPlain(declaredSizeBytes: Long?): Boolean =
+        declaredSizeBytes != null && declaredSizeBytes >= VoiceNoteRepository.PLAIN_STORAGE_MIN_BYTES
 
     fun isAudioDocument(name: String, mimeType: String?): Boolean {
         if (mimeType?.startsWith("audio/") == true) return true

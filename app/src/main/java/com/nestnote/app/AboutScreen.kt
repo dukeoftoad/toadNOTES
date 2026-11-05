@@ -237,8 +237,8 @@ internal fun AboutScreen(version: AboutInfo.Version) {
             AboutInfoRow(
                 Icons.Default.Description,
                 "Third-party components",
-                "Markdown preview uses Markwon (Apache-2.0). Mermaid diagrams render " +
-                    "locally with mermaid.js (MIT) — no network access. " +
+                "Markdown preview uses Markwon (Apache-2.0); QR codes use ZXing (Apache-2.0). Mermaid " +
+                    "diagrams render locally with mermaid.js (MIT) — no network access. " +
                     "The Fraunces display font is used under the SIL Open Font License.",
                 true
             )
