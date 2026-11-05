@@ -905,4 +905,28 @@ class NoteTextTest {
         assertEquals("before ****after", result.first)
         assertEquals(9 to 9, result.second to result.third)
     }
+
+    @Test
+    fun insertMermaidFencePadsNewlinesAndPlacesCursorInside() {
+        val (text, cursor) = NoteText.insertMermaidFence("before", 6)
+        assertEquals("before\n```mermaid\n\n```", text)
+        assertEquals("before\n```mermaid\n".length, cursor)
+        // The cursor sits on the empty line inside the fence, ready for the source.
+        assertEquals('\n', text[cursor - 1])
+        assertEquals('\n', text[cursor])
+    }
+
+    @Test
+    fun insertMermaidFenceIntoEmptyBodyStartsAtTop() {
+        val (text, cursor) = NoteText.insertMermaidFence("", 0)
+        assertEquals("```mermaid\n\n```", text)
+        assertEquals("```mermaid\n".length, cursor)
+    }
+
+    @Test
+    fun insertMermaidFenceMidLineAddsSeparatingNewlines() {
+        val (text, cursor) = NoteText.insertMermaidFence("hello", 2)
+        assertEquals("he\n```mermaid\n\n```\nllo", text)
+        assertEquals("he\n```mermaid\n".length, cursor)
+    }
 }

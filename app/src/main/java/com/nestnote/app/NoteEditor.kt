@@ -168,10 +168,14 @@ internal fun NoteEditorContent(
     var privateNote by rememberSaveable(original?.id) { mutableStateOf(original?.privateNote ?: false) }
     var toolRailVisible by remember { mutableStateOf(false) }
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
-    var previewVisible by rememberSaveable(original?.id) { mutableStateOf(false) }
+    // Unified editor: the live preview split is enabled by default for Markdown notes
+    // (the old Edit/Preview flip is gone); plain-text notes never show it.
+    val initialFormat = original?.format ?: template?.format
+        ?: if (defaultNoteFormat == "markdown") "markdown" else "plain"
+    var previewVisible by rememberSaveable(original?.id) { mutableStateOf(initialFormat == "markdown") }
     var editVoiceText by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
     var noteFormat by rememberSaveable(original?.id, draftNoteId) {
-        mutableStateOf(original?.format ?: template?.format ?: if (defaultNoteFormat == "markdown") "markdown" else "plain")
+        mutableStateOf(initialFormat)
     }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
     var appearanceStartBackground by remember { mutableIntStateOf(backgroundIndex) }
@@ -373,17 +377,21 @@ internal fun NoteEditorContent(
     }
 
     fun onBodyChange(next: TextFieldValue) {
-        // A multi-character insertion containing a Markdown table is treated as a paste.
-        // Normalize only valid table blocks; normal character-by-character typing is untouched.
+        // A multi-character insertion is treated as a paste. When the pasted raw Markdown
+        // contains a table it is normalized and the note switches to Markdown so the live
+        // preview renders it immediately — even when the table is already perfectly
+        // aligned and there is nothing to reformat.
         val insertedLength = next.text.length - bodyValue.text.length
         if (insertedLength >= 8) {
             val (formatted, cursor) = MarkdownTableFormatter.formatPasted(next.text, next.selection.start)
-            if (formatted != next.text) {
+            val pastedTable = MarkdownTableFormatter.containsTable(next.text)
+            if (formatted != next.text || pastedTable) {
                 noteFormat = "markdown"
-                previewVisible = false
                 setBody(TextFieldValue(formatted, TextRange(cursor)))
                 android.widget.Toast.makeText(
-                    context, "Markdown table aligned", android.widget.Toast.LENGTH_SHORT
+                    context,
+                    if (formatted != next.text) "Markdown table aligned" else "Markdown table detected",
+                    android.widget.Toast.LENGTH_SHORT
                 ).show()
                 return
             }
@@ -415,7 +423,6 @@ internal fun NoteEditorContent(
     fun switchToMarkdownIfPlain() {
         if (noteFormat == "markdown") return
         noteFormat = "markdown"
-        previewVisible = false
         android.widget.Toast.makeText(
             context, "Note switched to Markdown", android.widget.Toast.LENGTH_SHORT
         ).show()
@@ -640,6 +647,15 @@ internal fun NoteEditorContent(
             .collect { text ->
                 markerIdsState.value = NoteText.voiceMarkers(text).map { it.attachmentId }.distinct()
             }
+    }
+
+    // Unified live preview: the rendered pane trails typing by a short debounce instead of
+    // re-rendering Markwon on every keystroke, which keeps long notes smooth.
+    var livePreviewText by remember(original?.id, draftNoteId) { mutableStateOf(bodyValue.text) }
+    LaunchedEffect(original?.id, draftNoteId) {
+        snapshotFlow { bodyValue.text }
+            .debounce(300)
+            .collect { text -> livePreviewText = text }
     }
     LaunchedEffect(voiceNoteId, markerIds) {
         if (markerIds.isNotEmpty()) {
@@ -961,6 +977,7 @@ internal fun NoteEditorContent(
                         onEditVoiceTextChange = { editVoiceText = it },
                         voiceNoteId = voiceNoteId,
                         textSize = textSize,
+                        livePreviewBody = livePreviewText,
                         bodyTextSp = effectiveBodyTextSp,
                         fontFamily = editorFontFamily,
                         typeface = editorTypeface,
@@ -1066,6 +1083,15 @@ internal fun NoteEditorContent(
                 }
                 FormatAction.Heading3 -> applyLineEdit { text, cursor ->
                     NoteText.toggleHeadingLevel(text, cursor, 3)
+                }
+                FormatAction.Mermaid -> {
+                    // A mermaid fence only means something in Markdown; a plain note
+                    // converts first, exactly like Bold/Code do.
+                    switchToMarkdownIfPlain()
+                    val (text, cursor) = NoteText.insertMermaidFence(
+                        bodyValue.text, bodyValue.selection.start
+                    )
+                    setBody(TextFieldValue(text, TextRange(cursor)))
                 }
             }
         }

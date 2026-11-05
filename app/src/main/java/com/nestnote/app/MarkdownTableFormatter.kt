@@ -3,9 +3,12 @@ package com.nestnote.app
 /**
  * Aligns Markdown pipe tables after a multi-character paste.
  *
- * Only blocks with a valid Markdown separator row are touched. Fenced code and ordinary
- * pipe-containing prose are left unchanged. This formatter changes whitespace only; it
- * never changes cell contents or the stored table's Markdown semantics.
+ * Only blocks with a valid GFM delimiter row are touched. Fenced code and ordinary
+ * pipe-containing prose are left unchanged. Delimiters accept the full GFM form
+ * (`:-:`, `:-`, `-:`, `-`), escaped pipes (`\|`) never split cells, and rows written
+ * without outer pipes (`A | B`) are recognized just like piped rows. This formatter
+ * changes whitespace only; it never changes cell contents or the stored table's
+ * Markdown semantics.
  */
 internal object MarkdownTableFormatter {
     fun format(text: String): String {
@@ -29,7 +32,11 @@ internal object MarkdownTableFormatter {
                 continue
             }
             if (inFence || index + 1 >= lines.size || !isPipeRow(lines[index]) ||
-                !isSeparatorRow(lines[index + 1])) {
+                !isSeparatorRow(lines[index + 1]) ||
+                // GFM requires the delimiter row to match the header's cell count; without
+                // this check prose like "A | B" above a lone "---" would be rewritten into
+                // a table CommonMark itself would never have rendered.
+                cells(lines[index]).size != cells(lines[index + 1]).size) {
                 index++
                 continue
             }
@@ -44,6 +51,9 @@ internal object MarkdownTableFormatter {
                 index++
             }
 
+            // Column count from the widest row so no pasted cell is ever dropped from the
+            // stored text (the renderer truncates extra cells visually; the formatter must
+            // not edit content).
             val columnCount = table.maxOfOrNull { it.size } ?: 0
             if (columnCount == 0) continue
             val normalized = table.map { row ->
@@ -85,6 +95,39 @@ internal object MarkdownTableFormatter {
         return lines.joinToString("\n")
     }
 
+    /**
+     * True when [text] contains at least one valid Markdown table outside fenced code.
+     * Used to switch a plain-text note to Markdown when pasted content carries a table,
+     * even when the table is already perfectly aligned (nothing to reformat).
+     */
+    fun containsTable(text: String): Boolean {
+        if (!text.contains('|')) return false
+        val lines = text.split("\n")
+        var inFence = false
+        var fenceMarker = ""
+        for (i in 0 until lines.size - 1) {
+            val trimmed = lines[i].trimStart()
+            if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+                val marker = trimmed.take(3)
+                inFence = if (!inFence) {
+                    fenceMarker = marker
+                    true
+                } else {
+                    if (marker == fenceMarker) {
+                        fenceMarker = ""
+                        false
+                    } else {
+                        true
+                    }
+                }
+                continue
+            }
+            if (!inFence && isPipeRow(lines[i]) && isSeparatorRow(lines[i + 1]) &&
+                cells(lines[i]).size == cells(lines[i + 1]).size) return true
+        }
+        return false
+    }
+
     fun formatPasted(text: String, cursor: Int): Pair<String, Int> {
         val formatted = format(text)
         if (formatted == text) return text to cursor.coerceIn(0, text.length)
@@ -102,18 +145,65 @@ internal object MarkdownTableFormatter {
         return formatted to (before + mappedColumn).coerceIn(0, formatted.length)
     }
 
-    private fun isPipeRow(line: String): Boolean =
-        line.contains('|') && line.count { it == '|' } >= 2 && line.trim().isNotEmpty()
+    /**
+     * True when [line] holds at least one unescaped pipe and some content. GFM tables do
+     * not require outer pipes, so a single `A | B` row is a potential table row.
+     */
+    private fun isPipeRow(line: String): Boolean {
+        if (line.trim().isEmpty()) return false
+        var pipes = 0
+        var i = 0
+        while (i < line.length) {
+            if (line[i] == '\\') {
+                i += 2
+                continue
+            }
+            if (line[i] == '|') pipes++
+            i++
+        }
+        return pipes >= 1
+    }
 
+    /**
+     * Splits a row into trimmed cells on unescaped pipes. `\|` is a literal pipe inside a
+     * cell (GFM), so it never splits and is preserved verbatim; a trailing unescaped pipe
+     * is an outer delimiter, a trailing `\|` is cell content.
+     */
     private fun cells(line: String): List<String> {
         var value = line.trim()
         if (value.startsWith("|")) value = value.drop(1)
-        if (value.endsWith("|")) value = value.dropLast(1)
-        return value.split('|').map(String::trim)
+        if (value.endsWith("|") && !value.endsWith("\\|")) value = value.dropLast(1)
+        val out = mutableListOf<String>()
+        val current = StringBuilder()
+        var i = 0
+        while (i < value.length) {
+            when {
+                value[i] == '\\' && i + 1 < value.length && value[i + 1] == '|' -> {
+                    current.append("\\|")
+                    i += 2
+                }
+                value[i] == '|' -> {
+                    out += current.toString().trim()
+                    current.setLength(0)
+                    i++
+                }
+                else -> {
+                    current.append(value[i])
+                    i++
+                }
+            }
+        }
+        out += current.toString().trim()
+        return out
     }
 
+    /**
+     * GFM delimiter cells: only dashes with optional leading/trailing colons. One dash is
+     * enough (`:-:`), matching what CommonMark actually accepts — the old `-{3,}` rule
+     * silently skipped perfectly valid pasted tables.
+     */
     private fun isSeparatorRow(line: String): Boolean {
         val parts = cells(line)
-        return parts.isNotEmpty() && parts.all { it.matches(Regex(":?-{3,}:?")) }
+        return parts.isNotEmpty() && parts.all { it.matches(Regex(":?-{1,}:?")) }
     }
 }

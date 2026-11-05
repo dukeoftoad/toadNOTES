@@ -135,6 +135,47 @@ class MarkdownCompatTest {
         assertEquals("para one  \n\npara two", MarkdownCompat.adapt("para one\n\npara two"))
     }
 
+    @Test
+    fun markdownTablesPassThroughByteIdenticalWithoutHardBreaksOrGlyphEdits() {
+        val table = listOf(
+            "| Name | Qty |",
+            "|------|----:|",
+            "| Apple | 2 |",
+            "| ☑ Box | ☐ |"
+        ).joinToString("\n")
+        val adapted = MarkdownCompat.adapt("$table\n\nnext paragraph")
+        // Rows keep their exact bytes: no trailing hard-break marker, no glyph conversion
+        // inside cells, delimiter row untouched — otherwise Markwon would not parse or
+        // would corrupt the table.
+        assertTrue(adapted.contains(table + "\n"))
+        assertFalse(adapted.contains("| Apple | 2 |  "))
+        assertFalse(adapted.contains("- [x] Box"))
+    }
+
+    @Test
+    fun tablesWithoutOuterPipesAndShortSeparatorsPassThroughUntouched() {
+        val table = "A | B\n- | -\n1 | 2"
+        assertEquals("$table\n\nafter  ", MarkdownCompat.adapt("$table\n\nafter"))
+    }
+
+    @Test
+    fun proseWithSinglePipeAndNoSeparatorStillGetsHardBreaks() {
+        // One pipe but no valid delimiter row below: ordinary paragraph text.
+        assertEquals("cost | benefit  \nplain", MarkdownCompat.adapt("cost | benefit\nplain"))
+    }
+
+    @Test
+    fun orderedListAfterTableStartsFreshWithoutRenumbering() {
+        // A table is a block boundary in CommonMark: the ordered item after it opens a new
+        // list on its own, so the restart blank line must NOT be inserted (the table lines
+        // deliberately skip the ordered bookkeeping).
+        val adapted = MarkdownCompat.adapt("A | B\n- | -\n1 | 2\n1. restarted")
+        assertEquals(
+            listOf("A | B", "- | -", "1 | 2", "1. restarted  ").joinToString("\n"),
+            adapted
+        )
+    }
+
     private fun topBlocks(document: Node): List<Node> {
         val blocks = mutableListOf<Node>()
         var child = document.firstChild

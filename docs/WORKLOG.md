@@ -1,3 +1,14 @@
+## 2026-10-29 — Mermaid diagrams, .mmd support, table fixes, unified live editor
+
+- Mermaid support: fenced \`\`\`mermaid blocks render as real diagrams in the note preview and the external Markdown viewer. MermaidBlocks.kt splits the body (CommonMark fence rules; ordinary code fences never split), MermaidDiagramView renders each diagram in a sandboxed WebView with the bundled offline mermaid 9.4.3 runtime (assets/mermaid/mermaid.min.js, MIT, license added), parse failures fall back to the raw source. No network access anywhere in the pipeline; securityLevel strict; height reported through a one-method bridge.
+- .mmd/.mermaid files: ACTION_VIEW opens them like .md (MainActivity), imports wrap bare diagram source in a mermaid fence so the note renders as a diagram, fallback titles strip file extensions.
+- Table fixes (MarkdownTableFormatter): GFM delimiter forms with 1+ dashes (:--:, :-, -:, -) accepted; escaped pipes (\\|) never split cells and survive byte-for-byte; rows without outer pipes recognized; header/delimiter cell-count equality enforced so prose above a lone --- is never rewritten into a table; containsTable() added for paste detection.
+- Table preview fix (MarkdownCompat): table blocks now pass through byte-identical — no hard-break markers or glyph conversion inside tables (the source of corrupted cells/delimiter rows).
+- Paste auto-render: pasting raw Markdown containing a table switches the note to Markdown and the live preview renders it immediately, even when the table is already aligned (toast "Markdown table detected").
+- Unified editor: the Edit/Preview tab flip is gone. Markdown notes open in a live split view — editor and rendered preview side by side on wide screens, editor-above-preview on phones — toggled by one "Live preview" chip, with a 300 ms debounced preview so typing stays smooth. Reading mode unchanged. New "Mermaid diagram" action in the format rail inserts a fenced template.
+- Dead code removal: opensource/GsSimpleMarkdownParser.java (248 lines, unused at runtime; the About screen credited it as the preview engine, which has been Markwon for a long time) and its test. About screen now credits Markwon (Apache-2.0) + mermaid.js (MIT); THIRD_PARTY_NOTICES.md gained the mermaid section.
+- Tests: new MermaidBlocksTest (splitting, wrapping, HTML escaping); MarkdownTableFormatterTest +6 cases; MarkdownCompatTest +4 cases (table passthrough, block boundaries); NoteTextTest +3 cases (fence insertion).
+
 ## 2026-10-24 — Remove plaintext JSON backup/import
 
 - Removed plaintext JSON export/import controls and file handling from the Backup & restore screen.
