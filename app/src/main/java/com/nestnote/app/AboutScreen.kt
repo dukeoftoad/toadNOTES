@@ -237,7 +237,7 @@ internal fun AboutScreen(version: AboutInfo.Version) {
             AboutInfoRow(
                 Icons.Default.Description,
                 "Third-party components",
-                "Markdown preview uses Markor's GsSimpleMarkdownParser (CC0). " +
+                "Markdown preview uses Markwon (Apache-2.0); QR codes use ZXing (Apache-2.0). " +
                     "The Fraunces display font is used under the SIL Open Font License.",
                 true
             )

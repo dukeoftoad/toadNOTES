@@ -5,6 +5,7 @@ import com.nestnote.app.VoiceAttachment
 import com.nestnote.app.VoiceAttachmentManifest
 import com.nestnote.app.VoiceAttachmentMetadata
 import com.nestnote.app.VoiceAttachmentStore
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 
@@ -120,6 +121,45 @@ class VoiceNoteRepository private constructor(
     fun read(noteId: Long, attachmentId: String): ByteArray = store.read(noteId, attachmentId)
 
     /**
+     * Persists a large import as a plain (unencrypted) attachment, then publishes metadata with the
+     * same all-or-nothing guarantee as [save]. Files at or above [PLAIN_STORAGE_MIN_BYTES] skip
+     * AES-GCM so playback streams from disk like a normal music player instead of buffering the
+     * whole file (plus an equal-size plaintext copy) in memory.
+     */
+    @Throws(IOException::class)
+    fun savePlain(
+        noteId: Long,
+        attachmentId: String,
+        input: InputStream,
+        createdAtMillis: Long,
+        durationMillis: Long,
+        displayName: String
+    ): VoiceAttachmentMetadata {
+        val saved: VoiceAttachment = store.savePlain(noteId, attachmentId, input)
+        val metadata = VoiceAttachmentMetadata(
+            noteId = noteId,
+            attachmentId = saved.attachmentId,
+            createdAtMillis = createdAtMillis,
+            durationMillis = durationMillis,
+            encryptedSizeBytes = saved.encryptedSizeBytes,
+            displayName = displayName
+        )
+        try {
+            manifest.put(metadata, store)
+            return metadata
+        } catch (error: Exception) {
+            runCatching { store.delete(noteId, saved.attachmentId) }
+            throw IOException("Voice recording could not be committed", error)
+        }
+    }
+
+    /**
+     * On-disk file for a plain (unencrypted) attachment, for direct streaming playback via
+     * MediaPlayer.setDataSource. Null when the attachment is encrypted or missing.
+     */
+    fun plainPlaybackFile(noteId: Long, attachmentId: String): File? = store.plainFile(noteId, attachmentId)
+
+    /**
      * Delete ciphertext first; a failed payload deletion must not hide the recording from the
      * metadata index. A stale metadata entry is safe and can be reconciled on the next list.
      */
@@ -145,5 +185,12 @@ class VoiceNoteRepository private constructor(
     companion object {
         const val MAX_RECORDING_BYTES: Int = 25 * 1024 * 1024
         const val MAX_IMPORT_BYTES: Int = 100 * 1024 * 1024
+
+        /**
+         * Imports at or above this size are stored without encryption and played straight from
+         * disk. Decrypting a 30 MB file in memory peaks at ~2x its size on the Java heap, which
+         * stalled low-RAM devices (OOM-driven playback failures and editor ANRs).
+         */
+        const val PLAIN_STORAGE_MIN_BYTES: Int = 30 * 1024 * 1024
     }
 }
