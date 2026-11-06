@@ -103,6 +103,12 @@ jobs:
                 ;;
             esac
           done < /tmp/cp.txt
+          ./gradlew --no-daemon --no-configuration-cache :app:processDebugResources > /tmp/pdr.log 2>&1 || { tail -20 /tmp/pdr.log; exit 1; }
+          RJAR=$(find app/build/intermediates -name 'R.jar' | head -1)
+          [[ -n "$RJAR" ]] || { echo 'NO R.jar'; exit 1; }
+          CPBUILD="$CPBUILD:$RJAR"
+          BCDIR=app/build/generated/source/buildConfig/debug
+          [[ -d "$BCDIR" ]] || { echo 'NO BuildConfig dir'; exit 1; }
           TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar$CPBUILD"
           echo "target classpath entries: $(tr ':' '\n' <<< "$TARGETCP" | wc -l)"
 
@@ -133,7 +139,7 @@ jobs:
               org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
               -no-stdlib -nowarn -Xplugin="$CPLUGIN" \
               -d "/tmp/out-$outdir" -cp "$TARGETCP" \
-              "$outdir"/*.kt > "$log" 2>&1 || rc=$?
+              "$outdir"/*.kt "$BCDIR" > "$log" 2>&1 || rc=$?
             if [[ $rc -eq 124 ]]; then
               echo "VERDICT $outdir: TIMEOUT(>900s)"
             elif grep -q 'OutOfMemoryError' "$log"; then
@@ -149,18 +155,17 @@ jobs:
 
           MISC="AboutScreen.kt EditorToolRail.kt MainActivity.kt NestNoteApp.kt"
           PREVIEW="NoteEditorPreview.kt ExternalMarkdownPreviewDialog.kt"
+          LOGIC="NoteText.kt MarkdownTableFormatter.kt"
 
           make_variant v_pure_main
-          make_variant v_new_files
           make_variant v_misc $MISC
           make_variant v_preview $MISC $PREVIEW
           make_variant v_sections "AboutScreen.kt EditorToolRail.kt MainActivity.kt NestNoteApp.kt NoteEditorSections.kt"
-          make_variant v_noteeditor "AboutScreen.kt EditorToolRail.kt MainActivity.kt NestNoteApp.kt NoteEditor.kt"
-          make_variant v_full_pr AboutScreen.kt EditorToolRail.kt ExternalMarkdownPreviewDialog.kt MainActivity.kt NestNoteApp.kt NoteEditor.kt NoteEditorPreview.kt NoteEditorSections.kt
+          make_variant v_noteeditor $MISC $LOGIC "NoteEditor.kt"
+          make_variant v_full_pr AboutScreen.kt EditorToolRail.kt ExternalMarkdownPreviewDialog.kt MainActivity.kt NestNoteApp.kt NoteEditor.kt NoteEditorPreview.kt NoteEditorSections.kt NoteText.kt MarkdownTableFormatter.kt
 
           echo "===== BISECT MATRIX START $(date -u +%H:%M:%S) ====="
           run_compile v_pure_main
-          run_compile v_new_files
           run_compile v_misc
           run_compile v_preview
           run_compile v_sections
