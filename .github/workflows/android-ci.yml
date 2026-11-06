@@ -112,12 +112,12 @@ jobs:
             local outdir="$1"
             local log="/tmp/log-${outdir}.txt"
             rm -rf "/tmp/out-$outdir"
+            local rc=0
             timeout 900 java -Xmx13000m -XX:MaxMetaspaceSize=1g -cp "$JAVACP" \
               org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
               -no-stdlib -nowarn -Xplugin="$CPLUGIN" \
               -d "/tmp/out-$outdir" -cp "$TARGETCP" \
-              "$outdir"/*.kt > "$log" 2>&1
-            local rc=$?
+              "$outdir"/*.kt > "$log" 2>&1 || rc=$?
             if [[ $rc -eq 124 ]]; then
               echo "VERDICT $outdir: TIMEOUT(>900s)"
             elif grep -q 'OutOfMemoryError' "$log"; then
