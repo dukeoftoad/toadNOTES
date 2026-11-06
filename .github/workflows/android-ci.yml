@@ -90,7 +90,7 @@ jobs:
           JAVACP="$KCP:$KSTDLIB:$KCORO:$TROVE:$ANN"
           TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar:$(paste -sd: /tmp/cp.txt)"
 
-          ALLFILES=$(git ls-tree -r --name-only "$HEAD_SHA" -- "$APP/" | xargs -n1 basename)
+          ALLFILES=$(git ls-tree -r --name-only "$HEAD_SHA" -- "$APP/" | grep '\.kt$' | xargs -n1 basename)
 
           make_variant() {
             local outdir="$1"; shift
