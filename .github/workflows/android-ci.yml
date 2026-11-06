@@ -64,7 +64,7 @@ jobs:
             }
           }
           GRADLE
-          ./gradlew --no-daemon -I /tmp/dumpcp.gradle :app:dumpCp > /tmp/cp-raw.txt 2>&1 || { tail -30 /tmp/cp-raw.txt; exit 1; }
+          ./gradlew --no-daemon --no-configuration-cache -I /tmp/dumpcp.gradle :app:dumpCp > /tmp/cp-raw.txt 2>&1 || { tail -30 /tmp/cp-raw.txt; exit 1; }
           grep '^CPJAR:' /tmp/cp-raw.txt | sed 's/^CPJAR://' > /tmp/cp.txt
           echo "classpath jars: $(wc -l < /tmp/cp.txt)"
 
@@ -76,14 +76,16 @@ jobs:
           MAIN_SHA=$(git merge-base origin/main HEAD)
           echo "head=$HEAD_SHA main=$MAIN_SHA"
 
-          KCP=$(find ~/.gradle/caches -name 'kotlin-compiler-embeddable-2.1.20.jar' | head -1)
-          KSTDLIB=$(find ~/.gradle/caches -name 'kotlin-stdlib-2.1.20.jar' | head -1)
-          KCORO=$(find ~/.gradle/caches -name 'kotlinx-coroutines-core-jvm-1.8*.jar' | head -1)
-          TROVE=$(find ~/.gradle/caches -name 'trove4j*.jar' | head -1)
-          ANN=$(find ~/.gradle/caches -path '*org.jetbrains/annotations/13.0*' -name 'annotations-13.0.jar' | head -1)
-          CPLUGIN=$(find ~/.gradle/caches -name 'kotlin-compose-compiler-plugin-embeddable-2.1.20.jar' | head -1)
+          MC=https://repo1.maven.org/maven2
+          curl -sfL -o /tmp/KCP.jar      $MC/org/jetbrains/kotlin/kotlin-compiler-embeddable/2.1.20/kotlin-compiler-embeddable-2.1.20.jar
+          curl -sfL -o /tmp/KSTDLIB.jar  $MC/org/jetbrains/kotlin/kotlin-stdlib/2.1.20/kotlin-stdlib-2.1.20.jar
+          curl -sfL -o /tmp/KCORO.jar    $MC/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.8.1/kotlinx-coroutines-core-jvm-1.8.1.jar
+          curl -sfL -o /tmp/TROVE.jar    $MC/org/jetbrains/intellij/deps/trove4j/1.0.20200330/trove4j-1.0.20200330.jar
+          curl -sfL -o /tmp/ANN.jar      $MC/org/jetbrains/annotations/13.0/annotations-13.0.jar
+          curl -sfL -o /tmp/CPLUGIN.jar  $MC/org/jetbrains/kotlin/kotlin-compose-compiler-plugin-embeddable/2.1.20/kotlin-compose-compiler-plugin-embeddable-2.1.20.jar
+          KCP=/tmp/KCP.jar; KSTDLIB=/tmp/KSTDLIB.jar; KCORO=/tmp/KCORO.jar; TROVE=/tmp/TROVE.jar; ANN=/tmp/ANN.jar; CPLUGIN=/tmp/CPLUGIN.jar
           for v in "$KCP" "$KSTDLIB" "$KCORO" "$TROVE" "$ANN" "$CPLUGIN"; do
-            [[ -n "$v" ]] || { echo "MISSING JAR"; exit 1; }
+            [[ -s "$v" ]] || { echo "MISSING JAR: $v"; exit 1; }
           done
           JAVACP="$KCP:$KSTDLIB:$KCORO:$TROVE:$ANN"
           TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar:$(paste -sd: /tmp/cp.txt)"
