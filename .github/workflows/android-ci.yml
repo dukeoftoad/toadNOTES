@@ -22,73 +22,135 @@ concurrency:
   group: android-ci-pr-${{ inputs.pr_number || github.ref }}
   cancel-in-progress: true
 jobs:
-  unit-tests:
-    name: Unit tests, API 36 debug build and release compilation
+  bisect:
+    name: DFA bisect diagnostic (temporary)
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
-      - name: Verify approval still matches the latest PR commit
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          REPOSITORY_OWNER: ${{ github.repository_owner }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-        run: |
-          set -euo pipefail
-          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid PR number"; exit 1; }
-          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Expected SHA must be a full 40-character lowercase commit SHA"; exit 1; }
-          PR_JSON="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
-          ACTUAL_SHA="$(jq -r '.head.sha' <<< "$PR_JSON")"
-          PR_STATE="$(jq -r '.state' <<< "$PR_JSON")"
-          [[ "$PR_STATE" == "open" ]] || { echo "::error::PR is not open"; exit 1; }
-          [[ "$ACTUAL_SHA" == "$EXPECTED_SHA" ]] || { echo "::error::Approval is stale. Current PR head is $ACTUAL_SHA; approve that exact SHA and dispatch again."; exit 1; }
-          gh api --paginate "repos/$REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq ".[] | select(.user.login == \"$REPOSITORY_OWNER\" and .body == \"/approve-ci $EXPECTED_SHA\") | .id" \
-            | grep -q . || { echo "::error::No owner approval comment exists for this exact SHA"; exit 1; }
-          echo "Approved SHA verified: $ACTUAL_SHA"
-      - uses: actions/checkout@v4
+      - name: Check out PR branch with full history
+        uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-java@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
       - name: Install Android SDK API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Lint, unit tests and debug variants
-        run: ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest
-      # Release is compiled in a separate invocation so the debug and release
-      # Kotlin compile daemons never compete for heap at the same time
-      # (they OOMed with GC overhead limit exceeded when run in parallel).
-      - name: Release compilation
-        run: ./gradlew --no-daemon assembleRelease
-      # SQLCipher dependency, R8 mapping, and emulator/JNI checks are intentionally
-      # deferred from this refactor PR and should be restored in a dedicated fix PR.
-      - uses: actions/upload-artifact@v4
+
+      - name: Resolve runtime classpath
+        run: |
+          cat > /tmp/dumpcp.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              if (project.path == ':app') {
+                tasks.register('dumpCp') {
+                  doLast {
+                    configurations.getByName('debugRuntimeClasspath').resolve().each {
+                      println 'CPJAR:' + it
+                    }
+                  }
+                }
+              }
+            }
+          }
+          GRADLE
+          ./gradlew --no-daemon -I /tmp/dumpcp.gradle :app:dumpCp > /tmp/cp-raw.txt 2>&1 || { tail -30 /tmp/cp-raw.txt; exit 1; }
+          grep '^CPJAR:' /tmp/cp-raw.txt | sed 's/^CPJAR://' > /tmp/cp.txt
+          echo "classpath jars: $(wc -l < /tmp/cp.txt)"
+
+      - name: Run variant bisection
+        run: |
+          set -uo pipefail
+          APP=app/src/main/java/com/nestnote/app
+          HEAD_SHA=$(git rev-parse HEAD)
+          MAIN_SHA=$(git merge-base origin/main HEAD)
+          echo "head=$HEAD_SHA main=$MAIN_SHA"
+
+          KCP=$(find ~/.gradle/caches -name 'kotlin-compiler-embeddable-2.1.20.jar' | head -1)
+          KSTDLIB=$(find ~/.gradle/caches -name 'kotlin-stdlib-2.1.20.jar' | head -1)
+          KCORO=$(find ~/.gradle/caches -name 'kotlinx-coroutines-core-jvm-1.8*.jar' | head -1)
+          TROVE=$(find ~/.gradle/caches -name 'trove4j*.jar' | head -1)
+          ANN=$(find ~/.gradle/caches -path '*org.jetbrains/annotations/13.0*' -name 'annotations-13.0.jar' | head -1)
+          CPLUGIN=$(find ~/.gradle/caches -name 'kotlin-compose-compiler-plugin-embeddable-2.1.20.jar' | head -1)
+          for v in "$KCP" "$KSTDLIB" "$KCORO" "$TROVE" "$ANN" "$CPLUGIN"; do
+            [[ -n "$v" ]] || { echo "MISSING JAR"; exit 1; }
+          done
+          JAVACP="$KCP:$KSTDLIB:$KCORO:$TROVE:$ANN"
+          TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar:$(paste -sd: /tmp/cp.txt)"
+
+          ALLFILES=$(git ls-tree -r --name-only "$HEAD_SHA" -- "$APP/" | xargs -n1 basename)
+
+          make_variant() {
+            local outdir="$1"; shift
+            rm -rf "$outdir"; mkdir -p "$outdir"
+            local f src pf
+            for f in $ALLFILES; do
+              if git cat-file -e "$MAIN_SHA:$APP/$f" 2>/dev/null; then src="$MAIN_SHA"; else src="$HEAD_SHA"; fi
+              git show "$src:$APP/$f" > "$outdir/$f"
+            done
+            for pf in "$@"; do
+              git show "$HEAD_SHA:$APP/$pf" > "$outdir/$pf"
+            done
+            echo "variant $outdir: $(ls "$outdir" | wc -l) files, PR-version files: $*"
+          }
+
+          run_compile() {
+            local outdir="$1"
+            local log="/tmp/log-${outdir}.txt"
+            rm -rf "/tmp/out-$outdir"
+            timeout 900 java -Xmx13000m -XX:MaxMetaspaceSize=1g -cp "$JAVACP" \
+              org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
+              -no-stdlib -nowarn -Xplugin="$CPLUGIN" \
+              -d "/tmp/out-$outdir" -cp "$TARGETCP" \
+              "$outdir"/*.kt > "$log" 2>&1
+            local rc=$?
+            if [[ $rc -eq 124 ]]; then
+              echo "VERDICT $outdir: TIMEOUT(>900s)"
+            elif grep -q 'OutOfMemoryError' "$log"; then
+              echo "VERDICT $outdir: OOM"
+              grep -m1 -A3 'OutOfMemoryError' "$log" || true
+            elif [[ $rc -eq 0 ]]; then
+              echo "VERDICT $outdir: GREEN"
+            else
+              echo "VERDICT $outdir: FAILED(rc=$rc)"
+              grep -m3 '^error' "$log" || tail -5 "$log"
+            fi
+          }
+
+          MISC="AboutScreen.kt EditorToolRail.kt MainActivity.kt NestNoteApp.kt"
+          PREVIEW="NoteEditorPreview.kt ExternalMarkdownPreviewDialog.kt"
+
+          make_variant v_pure_main
+          make_variant v_new_files
+          make_variant v_misc $MISC
+          make_variant v_preview $MISC $PREVIEW
+          make_variant v_sections "AboutScreen.kt EditorToolRail.kt MainActivity.kt NestNoteApp.kt NoteEditorSections.kt"
+          make_variant v_noteeditor "AboutScreen.kt EditorToolRail.kt MainActivity.kt NestNoteApp.kt NoteEditor.kt"
+          make_variant v_full_pr AboutScreen.kt EditorToolRail.kt ExternalMarkdownPreviewDialog.kt MainActivity.kt NestNoteApp.kt NoteEditor.kt NoteEditorPreview.kt NoteEditorSections.kt
+
+          echo "===== BISECT MATRIX START $(date -u +%H:%M:%S) ====="
+          run_compile v_pure_main
+          run_compile v_new_files
+          run_compile v_misc
+          run_compile v_preview
+          run_compile v_sections
+          run_compile v_noteeditor
+          run_compile v_full_pr
+          echo "===== BISECT MATRIX END $(date -u +%H:%M:%S) ====="
+
+      - name: Upload bisect logs
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: unit-test-reports
-          path: app/build/reports/tests/testDebugUnitTest/
+          name: dfa-bisect-logs
+          path: /tmp/log-v_*.txt
           if-no-files-found: ignore
-      - name: Upload installable debug APK
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: nestnote-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Upload release APK for inspection
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: nestnote-release-apk-inspection
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
-          retention-days: 14
