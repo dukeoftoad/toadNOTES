@@ -48,7 +48,10 @@ class MainActivity : FragmentActivity() {
         val isMarkdown = mimeType == "text/markdown" ||
             mimeType == "text/x-markdown" ||
             fileName.endsWith(".md", ignoreCase = true) ||
-            fileName.endsWith(".markdown", ignoreCase = true)
+            fileName.endsWith(".markdown", ignoreCase = true) ||
+            // Mermaid diagram sources open through the same Markdown viewer path.
+            fileName.endsWith(".mmd", ignoreCase = true) ||
+            fileName.endsWith(".mermaid", ignoreCase = true)
         return uri.takeIf { isMarkdown }
     }
 }

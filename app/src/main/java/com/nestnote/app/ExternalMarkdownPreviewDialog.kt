@@ -12,9 +12,11 @@ import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.toArgb
@@ -103,22 +105,38 @@ internal fun ExternalMarkdownPreviewDialog(
                 Column(
                     modifier = Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
                 ) {
-                    AndroidView(
-                        factory = { viewContext ->
-                            TextView(viewContext).apply {
-                                movementMethod = LinkMovementMethod.getInstance()
-                                setTextColor(colors.onSurface.toArgb())
-                                textSize = 16f * zoomPercent / 100f
-                                setPadding(4, 4, 4, 4)
-                            }
-                        },
-                        update = { textView ->
-                            textView.text = MarkdownPreview.toSpanned(context, markdown, colors.onSurface.toArgb())
-                            textView.textSize = 16f * zoomPercent / 100f
-                            textView.movementMethod = LinkMovementMethod.getInstance()
-                        },
-                        modifier = Modifier.fillMaxWidth().wrapContentHeight()
-                    )
+                    // The external viewer renders the same blocks the note preview does:
+                    // ordinary Markdown through Markwon, ```mermaid fences through the
+                    // bundled offline diagram runtime.
+                    val blocks = remember(markdown) { MermaidBlocks.split(markdown) }
+                    blocks.forEachIndexed { blockIndex, block ->
+                        if (block.isMermaid) {
+                            MermaidDiagramView(
+                                source = block.text,
+                                dark = colors.onSurface.luminance() < 0.5f,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                            )
+                        } else {
+                            AndroidView(
+                                factory = { viewContext ->
+                                    TextView(viewContext).apply {
+                                        movementMethod = LinkMovementMethod.getInstance()
+                                        setTextColor(colors.onSurface.toArgb())
+                                        textSize = 16f * zoomPercent / 100f
+                                        setPadding(4, 4, 4, 4)
+                                    }
+                                },
+                                update = { textView ->
+                                    textView.text = MarkdownPreview.toSpanned(
+                                        context, block.text, colors.onSurface.toArgb()
+                                    )
+                                    textView.textSize = 16f * zoomPercent / 100f
+                                    textView.movementMethod = LinkMovementMethod.getInstance()
+                                },
+                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                            )
+                        }
+                    }
                 }
             }
         },

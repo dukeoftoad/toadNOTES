@@ -13,20 +13,26 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.horizontalScroll
+import androidx.compose.foundation.layout.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,6 +62,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -79,6 +86,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -631,6 +639,7 @@ internal fun ColumnScope.EditorBodySection(
     onEditVoiceTextChange: (Boolean) -> Unit,
     voiceNoteId: Long,
     textSize: EditorTextSize,
+    livePreviewBody: String,
     bodyTextSp: Int = textSize.bodySp,
     fontFamily: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
     typeface: android.graphics.Typeface = android.graphics.Typeface.DEFAULT,
@@ -652,6 +661,8 @@ internal fun ColumnScope.EditorBodySection(
         // case of notes without inline voice markers.
         body.contains("[[voice:") && NoteText.voiceSegments(body).any { it.attachmentId != null }
     }
+    // Mermaid theme follows the note ink: dark text implies a light surface and vice versa.
+    val darkPreview = ink.luminance() < 0.5f
     if (editable && (noteFormat == "markdown" || hasInlineVoiceNotes)) {
         val reducedMotion = rememberSystemReducedMotion()
         Row(
@@ -690,7 +701,7 @@ internal fun ColumnScope.EditorBodySection(
                     onClick = { onPreviewVisibleChange(!previewVisible) },
                     leadingIcon = {
                         Icon(
-                            if (previewVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            if (previewVisible) Icons.Default.VisibilityOff else Icons.Default.VerticalSplit,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -704,7 +715,9 @@ internal fun ColumnScope.EditorBodySection(
                             },
                             label = "markdown-preview-mode"
                         ) { showingPreview ->
-                            Text(if (showingPreview) "Edit Markdown" else "Preview")
+                            // One unified editing surface: the editor and the live preview
+                            // render together instead of the old Edit/Preview tab flip.
+                            Text(if (showingPreview) "Editor only" else "Live preview")
                         }
                     }
                 )
@@ -714,83 +727,231 @@ internal fun ColumnScope.EditorBodySection(
 
     val showInlineVoicePreview = hasInlineVoiceNotes &&
         (!editable || !editVoiceText)
-    if (showInlineVoicePreview ||
-        (noteFormat == "markdown" && (previewVisible || !editable)) ||
-        (!editable && noteFormat != "markdown")) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            color = colors.surface.copy(alpha = 0.82f),
-            border = if (editable) {
-                BorderStroke(1.dp, colors.outlineVariant)
-            } else null
-        ) {
-            PreviewWithInlineVoice(
-                body = body,
-                noteId = voiceNoteId,
-                textSize = textSize,
-                bodyTextSp = bodyTextSp,
-                typeface = typeface,
-                ink = ink,
-                activePlayerId = activePlayerId,
-                onPlayRequested = onPlayRequested,
-                onStopRequested = onStopRequested,
-                onDeleteRequested = onDeleteRequested,
-                modifier = Modifier.fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                renderMarkdown = noteFormat == "markdown"
-            )
+    // Unified live preview: editor and rendered preview stay visible together while typing.
+    val liveSplit = editable && noteFormat == "markdown" && previewVisible && !showInlineVoicePreview
+    val previewOnly = showInlineVoicePreview ||
+        (!editable && noteFormat == "markdown") ||
+        (!editable && noteFormat != "markdown")
+
+    if (liveSplit) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
+            if (maxWidth >= 600.dp) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1.1f).fillMaxHeight()) {
+                        EditorBodyField(
+                            bodyValue = bodyValue,
+                            onBodyChange = onBodyChange,
+                            editable = editable,
+                            bodyTextSp = bodyTextSp,
+                            textSize = textSize,
+                            fontFamily = fontFamily,
+                            ink = ink,
+                            muted = muted,
+                            visualTransformation = visualTransformation,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxHeight().width(1.dp)
+                            .background(colors.outlineVariant)
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        EditorPreviewPane(
+                            body = livePreviewBody,
+                            voiceNoteId = voiceNoteId,
+                            textSize = textSize,
+                            bodyTextSp = bodyTextSp,
+                            typeface = typeface,
+                            ink = ink,
+                            darkPreview = darkPreview,
+                            activePlayerId = activePlayerId,
+                            onPlayRequested = onPlayRequested,
+                            onStopRequested = onStopRequested,
+                            onDeleteRequested = onDeleteRequested,
+                            renderMarkdown = noteFormat == "markdown",
+                            editable = editable,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(0.55f)) {
+                        EditorBodyField(
+                            bodyValue = bodyValue,
+                            onBodyChange = onBodyChange,
+                            editable = editable,
+                            bodyTextSp = bodyTextSp,
+                            textSize = textSize,
+                            fontFamily = fontFamily,
+                            ink = ink,
+                            muted = muted,
+                            visualTransformation = visualTransformation,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(1.dp)
+                            .background(colors.outlineVariant)
+                    )
+                    Box(modifier = Modifier.fillMaxWidth().weight(0.45f)) {
+                        EditorPreviewPane(
+                            body = livePreviewBody,
+                            voiceNoteId = voiceNoteId,
+                            textSize = textSize,
+                            bodyTextSp = bodyTextSp,
+                            typeface = typeface,
+                            ink = ink,
+                            darkPreview = darkPreview,
+                            activePlayerId = activePlayerId,
+                            onPlayRequested = onPlayRequested,
+                            onStopRequested = onStopRequested,
+                            onDeleteRequested = onDeleteRequested,
+                            renderMarkdown = noteFormat == "markdown",
+                            editable = editable,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
         }
+    } else if (previewOnly) {
+        EditorPreviewPane(
+            body = body,
+            voiceNoteId = voiceNoteId,
+            textSize = textSize,
+            bodyTextSp = bodyTextSp,
+            typeface = typeface,
+            ink = ink,
+            darkPreview = darkPreview,
+            activePlayerId = activePlayerId,
+            onPlayRequested = onPlayRequested,
+            onStopRequested = onStopRequested,
+            onDeleteRequested = onDeleteRequested,
+            renderMarkdown = noteFormat == "markdown",
+            editable = editable,
+            modifier = Modifier.fillMaxWidth().padding(top = 3.dp).weight(1f)
+        )
         if (editable && noteFormat == "markdown") {
             Text(
-                "Preview supports basic headings, emphasis, inline code, links, " +
-                    "simple lists, and inline voice notes.",
+                "Preview supports headings, emphasis, code, links, tables, mermaid " +
+                    "diagrams, checklists, and inline voice notes.",
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = muted
             )
         }
     } else {
-        BasicTextField(
-            value = bodyValue,
-            onValueChange = {
-                if (editable) onBodyChange(it)
-            },
-            readOnly = !editable,
-            // Keep attachment IDs out of both editable and read-only
-            // views. The stored body remains the canonical marker text.
+        EditorBodyField(
+            bodyValue = bodyValue,
+            onBodyChange = onBodyChange,
+            editable = editable,
+            bodyTextSp = bodyTextSp,
+            textSize = textSize,
+            fontFamily = fontFamily,
+            ink = ink,
+            muted = muted,
             visualTransformation = visualTransformation,
-            modifier = Modifier.fillMaxWidth()
-                .weight(1f)
-                .padding(top = 3.dp)
-                .testTag("editor_body_field"),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = bodyTextSp.sp,
-                lineHeight = (bodyTextSp * 1.45f).sp,
-                fontFamily = fontFamily,
-                color = ink
-            ),
-            minLines = 1,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Sentences
-            ),
-            decorationBox = { innerTextField ->
-                Box(Modifier.fillMaxWidth()) {
-                    if (bodyValue.text.isEmpty()) {
-                        Text(
-                            "Note",
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontSize = textSize.bodySp.sp,
-                                lineHeight = (textSize.bodySp * 1.45f).sp
-                            ),
-                            color = muted
-                        )
-                    }
-                    innerTextField()
-                }
-            }
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)
         )
     }
+}
+
+@Composable
+private fun EditorPreviewPane(
+    body: String,
+    voiceNoteId: Long,
+    textSize: EditorTextSize,
+    bodyTextSp: Int,
+    typeface: android.graphics.Typeface,
+    ink: Color,
+    darkPreview: Boolean,
+    activePlayerId: String?,
+    onPlayRequested: (String) -> Unit,
+    onStopRequested: () -> Unit,
+    onDeleteRequested: (String) -> Unit,
+    renderMarkdown: Boolean,
+    editable: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = colors.surface.copy(alpha = 0.82f),
+        border = if (editable) {
+            BorderStroke(1.dp, colors.outlineVariant)
+        } else null
+    ) {
+        PreviewWithInlineVoice(
+            body = body,
+            noteId = voiceNoteId,
+            textSize = textSize,
+            bodyTextSp = bodyTextSp,
+            typeface = typeface,
+            ink = ink,
+            dark = darkPreview,
+            activePlayerId = activePlayerId,
+            onPlayRequested = onPlayRequested,
+            onStopRequested = onStopRequested,
+            onDeleteRequested = onDeleteRequested,
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            renderMarkdown = renderMarkdown
+        )
+    }
+}
+
+@Composable
+private fun EditorBodyField(
+    bodyValue: TextFieldValue,
+    onBodyChange: (TextFieldValue) -> Unit,
+    editable: Boolean,
+    bodyTextSp: Int,
+    textSize: EditorTextSize,
+    fontFamily: androidx.compose.ui.text.font.FontFamily,
+    ink: Color,
+    muted: Color,
+    visualTransformation: VisualTransformation,
+    modifier: Modifier = Modifier
+) {
+    BasicTextField(
+        value = bodyValue,
+        onValueChange = {
+            if (editable) onBodyChange(it)
+        },
+        readOnly = !editable,
+        // Keep attachment IDs out of both editable and read-only
+        // views. The stored body remains the canonical marker text.
+        visualTransformation = visualTransformation,
+        modifier = modifier
+            .testTag("editor_body_field"),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = bodyTextSp.sp,
+            lineHeight = (bodyTextSp * 1.45f).sp,
+            fontFamily = fontFamily,
+            color = ink
+        ),
+        minLines = 1,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Sentences
+        ),
+        decorationBox = { innerTextField ->
+            Box(Modifier.fillMaxWidth()) {
+                if (bodyValue.text.isEmpty()) {
+                    Text(
+                        "Note",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = textSize.bodySp.sp,
+                            lineHeight = (textSize.bodySp * 1.45f).sp
+                        ),
+                        color = muted
+                    )
+                }
+                innerTextField()
+            }
+        }
+    )
 }
 
 @Composable
