@@ -95,13 +95,14 @@ jobs:
           make_variant() {
             local outdir="$1"; shift
             rm -rf "$outdir"; mkdir -p "$outdir"
+            local pf_list="$*"
             local rel src pf base
             for rel in $ALLREL; do
               base=$(basename "$rel")
               if git cat-file -e "$MAIN_SHA:$APP/$rel" 2>/dev/null; then src="$MAIN_SHA"; else src="$HEAD_SHA"; fi
               git show "$src:$APP/$rel" > "$outdir/$base"
             done
-            for pf in "$@"; do
+            for pf in $pf_list; do
               git show "$HEAD_SHA:$APP/$pf" > "$outdir/$pf"
             done
             echo "variant $outdir: $(ls "$outdir" | wc -l) files, PR-version files: $*"
