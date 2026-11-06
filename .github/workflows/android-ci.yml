@@ -107,8 +107,6 @@ jobs:
           RJAR=$(find app/build/intermediates -name 'R.jar' | head -1)
           [[ -n "$RJAR" ]] || { echo 'NO R.jar'; exit 1; }
           CPBUILD="$CPBUILD:$RJAR"
-          BCDIR=app/build/generated/source/buildConfig/debug
-          [[ -d "$BCDIR" ]] || { echo 'NO BuildConfig dir'; exit 1; }
           TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar$CPBUILD"
           echo "target classpath entries: $(tr ':' '\n' <<< "$TARGETCP" | wc -l)"
 
@@ -139,7 +137,7 @@ jobs:
               org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
               -no-stdlib -nowarn -Xplugin="$CPLUGIN" \
               -d "/tmp/out-$outdir" -cp "$TARGETCP" \
-              "$outdir"/*.kt "$BCDIR" > "$log" 2>&1 || rc=$?
+              "$outdir"/*.kt > "$log" 2>&1 || rc=$?
             if [[ $rc -eq 124 ]]; then
               echo "VERDICT $outdir: TIMEOUT(>900s)"
             elif grep -q 'OutOfMemoryError' "$log"; then
