@@ -88,7 +88,23 @@ jobs:
             [[ -s "$v" ]] || { echo "MISSING JAR: $v"; exit 1; }
           done
           JAVACP="$KCP:$KSTDLIB:$KCORO:$TROVE:$ANN"
-          TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar:$(paste -sd: /tmp/cp.txt)"
+          AARDIR=/tmp/aars; mkdir -p "$AARDIR"
+          CPBUILD=""
+          while read -r f; do
+            case "$f" in
+              *.jar) CPBUILD="$CPBUILD:$f" ;;
+              *.aar)
+                n=$(basename "$f" .aar)
+                if [[ ! -f "$AARDIR/$n/classes.jar" ]]; then
+                  mkdir -p "$AARDIR/$n"
+                  unzip -o -q "$f" classes.jar -d "$AARDIR/$n" 2>/dev/null || true
+                fi
+                [[ -f "$AARDIR/$n/classes.jar" ]] && CPBUILD="$CPBUILD:$AARDIR/$n/classes.jar"
+                ;;
+            esac
+          done < /tmp/cp.txt
+          TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar$CPBUILD"
+          echo "target classpath entries: $(tr ':' '\n' <<< "$TARGETCP" | wc -l)"
 
           ALLREL=$(git ls-tree -r --name-only "$HEAD_SHA" -- "$APP/" | grep '\.kt$' | sed "s|^$APP/||")
 
