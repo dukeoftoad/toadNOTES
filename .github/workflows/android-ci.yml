@@ -90,15 +90,16 @@ jobs:
           JAVACP="$KCP:$KSTDLIB:$KCORO:$TROVE:$ANN"
           TARGETCP="$ANDROID_HOME/platforms/android-36/android.jar:$(paste -sd: /tmp/cp.txt)"
 
-          ALLFILES=$(git ls-tree -r --name-only "$HEAD_SHA" -- "$APP/" | grep '\.kt$' | xargs -n1 basename)
+          ALLREL=$(git ls-tree -r --name-only "$HEAD_SHA" -- "$APP/" | grep '\.kt$' | sed "s|^$APP/||")
 
           make_variant() {
             local outdir="$1"; shift
             rm -rf "$outdir"; mkdir -p "$outdir"
-            local f src pf
-            for f in $ALLFILES; do
-              if git cat-file -e "$MAIN_SHA:$APP/$f" 2>/dev/null; then src="$MAIN_SHA"; else src="$HEAD_SHA"; fi
-              git show "$src:$APP/$f" > "$outdir/$f"
+            local rel src pf base
+            for rel in $ALLREL; do
+              base=$(basename "$rel")
+              if git cat-file -e "$MAIN_SHA:$APP/$rel" 2>/dev/null; then src="$MAIN_SHA"; else src="$HEAD_SHA"; fi
+              git show "$src:$APP/$rel" > "$outdir/$base"
             done
             for pf in "$@"; do
               git show "$HEAD_SHA:$APP/$pf" > "$outdir/$pf"
