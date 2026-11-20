@@ -212,10 +212,10 @@ internal val nestNoteDarkScheme = darkColorScheme(
 /** Pure-black surfaces for OLED screens. Applied on top of any dark scheme. */
 internal fun ColorScheme.asAmoled(): ColorScheme = copy(
     background = Color.Black, surface = Color.Black,
-    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF0B0B0B),
-    surfaceContainer = Color(0xFF121212), surfaceContainerHigh = Color(0xFF1A1A1A),
-    surfaceContainerHighest = Color(0xFF242424),
-    outlineVariant = Color(0xFF2A2A2A)
+    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF0B100F),
+    surfaceContainer = Color(0xFF131A18), surfaceContainerHigh = Color(0xFF1A2320),
+    surfaceContainerHighest = Color(0xFF212D29),
+    outlineVariant = Color(0xFF334139)
 )
 
 /** Shared motion tokens so every screen animates with the same feel. */
