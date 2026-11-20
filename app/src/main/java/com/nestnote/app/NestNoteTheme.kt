@@ -131,7 +131,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 // Theme tokens: shapes, typography and note colour swatches.
 
-internal val fallbackAccent = Color(0xFF625B71)
+internal val fallbackAccent = Color(0xFF446E17)
 
 // Stable Material 3 expressive styling: generous, varied corner geometry and a
 // typography hierarchy, without opting into the experimental M3 Expressive APIs.
@@ -174,37 +174,39 @@ internal val nestNoteTypography = baseTypography.copy(
 // Warm "paper and terracotta" palette used when wallpaper colours are off or unavailable.
 // Every M3 container role is filled in so screens never fall back to the framework's
 // default lavender/mauve, which clashed with the warm identity.
+// Toadmark paper palette: warm paper, moss green and pond-teal accents.
 internal val nestNoteLightScheme = lightColorScheme(
-    primary = Color(0xFFC4552D), onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFDBD0), onPrimaryContainer = Color(0xFF3A0B00),
-    secondary = Color(0xFF77574E), onSecondary = Color.White,
-    secondaryContainer = Color(0xFFFFDBD0), onSecondaryContainer = Color(0xFF2C150F),
-    tertiary = Color(0xFF7A5900), onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFDEA6), onTertiaryContainer = Color(0xFF261A00),
-    background = Color(0xFFF6F1EA), onBackground = Color(0xFF26221F),
-    surface = Color(0xFFFFFBF7), onSurface = Color(0xFF26221F),
-    surfaceVariant = Color(0xFFEFE5DD), onSurfaceVariant = Color(0xFF6B625B),
-    surfaceDim = Color(0xFFDFD8CF), surfaceBright = Color(0xFFFFFBF7),
-    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFFBF5EF),
-    surfaceContainer = Color(0xFFF6EFE8), surfaceContainerHigh = Color(0xFFF0E8E0),
-    surfaceContainerHighest = Color(0xFFEAE1D8),
-    outline = Color(0xFFA89E94), outlineVariant = Color(0xFFE7DFD5)
+    primary = Color(0xFF446E17), onPrimary = Color.White,
+    primaryContainer = Color(0xFFD3EFB4), onPrimaryContainer = Color(0xFF102000),
+    secondary = Color(0xFF0F766E), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFC9F2E7), onSecondaryContainer = Color(0xFF003B35),
+    tertiary = Color(0xFF8F5C00), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFE8B0), onTertiaryContainer = Color(0xFF2D1800),
+    background = Color(0xFFF6F1E0), onBackground = Color(0xFF2B2B20),
+    surface = Color(0xFFFEFAEC), onSurface = Color(0xFF2B2B20),
+    surfaceVariant = Color(0xFFE9E2C0), onSurfaceVariant = Color(0xFF615E4F),
+    surfaceDim = Color(0xFFE4DDC8), surfaceBright = Color(0xFFFEFAEC),
+    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFFBF5E5),
+    surfaceContainer = Color(0xFFF6F1E0), surfaceContainerHigh = Color(0xFFECE5CC),
+    surfaceContainerHighest = Color(0xFFE3DCC2),
+    outline = Color(0xFFA9A38B), outlineVariant = Color(0xFFD8D1B8)
 )
+// Deep ink surfaces, frog-lime primary, emerald and pond-teal support.
 internal val nestNoteDarkScheme = darkColorScheme(
-    primary = Color(0xFFFF8A5C), onPrimary = Color(0xFF2A140B),
-    primaryContainer = Color(0xFF5A2A18), onPrimaryContainer = Color(0xFFFFDBD0),
-    secondary = Color(0xFFE7BDB1), onSecondary = Color(0xFF442A22),
-    secondaryContainer = Color(0xFF5D4037), onSecondaryContainer = Color(0xFFFFDBD0),
-    tertiary = Color(0xFFEBBE5C), onTertiary = Color(0xFF3F2E00),
-    tertiaryContainer = Color(0xFF5B4300), onTertiaryContainer = Color(0xFFFFDEA6),
-    background = Color(0xFF171412), onBackground = Color(0xFFF2EBE3),
-    surface = Color(0xFF1B1714), onSurface = Color(0xFFF2EBE3),
-    surfaceVariant = Color(0xFF342E29), onSurfaceVariant = Color(0xFFC3B8AD),
-    surfaceDim = Color(0xFF171412), surfaceBright = Color(0xFF3C3733),
-    surfaceContainerLowest = Color(0xFF110E0C), surfaceContainerLow = Color(0xFF221E1B),
-    surfaceContainer = Color(0xFF27221F), surfaceContainerHigh = Color(0xFF302A26),
-    surfaceContainerHighest = Color(0xFF3B342F),
-    outline = Color(0xFF8F857B), outlineVariant = Color(0xFF3F3832)
+    primary = Color(0xFFA3E635), onPrimary = Color(0xFF14210A),
+    primaryContainer = Color(0xFF2E5312), onPrimaryContainer = Color(0xFFD9F99D),
+    secondary = Color(0xFF34D399), onSecondary = Color(0xFF062A20),
+    secondaryContainer = Color(0xFF18362A), onSecondaryContainer = Color(0xFFD1FAE5),
+    tertiary = Color(0xFFFBBF24), onTertiary = Color(0xFF3F2E00),
+    tertiaryContainer = Color(0xFF5C3C08), onTertiaryContainer = Color(0xFFFEF3C7),
+    background = Color(0xFF0B100F), onBackground = Color(0xFFF3F4F6),
+    surface = Color(0xFF131A18), onSurface = Color(0xFFF3F4F6),
+    surfaceVariant = Color(0xFF1A2320), onSurfaceVariant = Color(0xFFB8C7C0),
+    surfaceDim = Color(0xFF0B100F), surfaceBright = Color(0xFF212D29),
+    surfaceContainerLowest = Color(0xFF070B0A), surfaceContainerLow = Color(0xFF0F1614),
+    surfaceContainer = Color(0xFF131A18), surfaceContainerHigh = Color(0xFF1A2320),
+    surfaceContainerHighest = Color(0xFF212D29),
+    outline = Color(0xFF53645B), outlineVariant = Color(0xFF334139)
 )
 
 /** Pure-black surfaces for OLED screens. Applied on top of any dark scheme. */
