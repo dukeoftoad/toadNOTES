@@ -123,7 +123,7 @@ internal fun NestNoteApp(
     }
     var pendingRestore by remember { mutableStateOf<List<NestNote>?>(null) }
     var themeMode by remember { mutableStateOf(ThemeMode.values().firstOrNull { it.name == preferences.getString(PREF_THEME, "SYSTEM") } ?: ThemeMode.SYSTEM) }
-    var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, true)) }
+    var dynamicColors by remember { mutableStateOf(preferences.getBoolean(PREF_DYNAMIC, false)) }
     var amoled by remember { mutableStateOf(preferences.getBoolean(PREF_AMOLED, false)) }
     var accentPalette by remember { mutableStateOf(AccentPalette.values().firstOrNull { it.name == preferences.getString("PREF_ACCENT_PALETTE", "DEFAULT") } ?: AccentPalette.DEFAULT) }
     var dashboardLayout by remember { mutableStateOf(DashboardLayout.values().firstOrNull { it.name == preferences.getString(PREF_LAYOUT, "GRID") } ?: DashboardLayout.GRID) }
