@@ -413,8 +413,8 @@ class NestNoteE2ETest {
         composeRule.onNodeWithContentDescription("More editor actions").performClick()
         composeRule.onNodeWithText("Note format · Plain text").performClick()
 
-        composeRule.onNodeWithText("Preview Markdown").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Edit Markdown").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Live preview").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Editor only").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("editor_body_field")
             .assertTextEquals("# Heading\n\n**bold**")
     }

@@ -479,10 +479,22 @@ internal fun NestNoteApp(
                             if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
                         }
                     }.getOrNull().orEmpty()
-                    val fileName = displayName.ifBlank {
-                        uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: ""
+                    val rawName = displayName.ifBlank {
+                        uri.lastPathSegment?.substringAfterLast('/') ?: ""
                     }
-                    MarkdownNoteParser.parse(markdown, fileName)
+                    // The note title should not carry the file extension; the fallback title
+                    // strips it for both .md documents and .mmd diagram sources.
+                    val fileName = rawName.substringBeforeLast('.')
+                    // A bare .mmd/.mermaid file holds raw diagram source: wrap it in a
+                    // ```mermaid fence so the imported note renders as a diagram immediately.
+                    val prepared = if (rawName.endsWith(".mmd", ignoreCase = true) ||
+                        rawName.endsWith(".mermaid", ignoreCase = true)
+                    ) {
+                        MermaidBlocks.wrapSource(markdown)
+                    } else {
+                        markdown
+                    }
+                    MarkdownNoteParser.parse(prepared, fileName)
                 }.getOrNull()
             }
         }
@@ -532,7 +544,15 @@ internal fun NestNoteApp(
             }
             openedDocument.onSuccess { (title, markdown) ->
                 openedExternalMarkdownTitle = title
-                openedExternalMarkdownContent = markdown
+                // .mmd files carry bare mermaid source: fence it so the viewer renders the
+                // diagram instead of showing raw flowchart text.
+                openedExternalMarkdownContent = if (title.endsWith(".mmd", ignoreCase = true) ||
+                    title.endsWith(".mermaid", ignoreCase = true)
+                ) {
+                    MermaidBlocks.wrapSource(markdown)
+                } else {
+                    markdown
+                }
                 externalMarkdownZoomPercent = defaultMarkdownZoomPercent
                 showExternalMarkdownZoomControls = false
                 externalMarkdownMoreMenuExpanded = false

@@ -583,6 +583,27 @@ object NoteText {
     }
 
     /**
+     * Inserts an empty ```mermaid fence at [cursor], padded with single newlines so the
+     * fence always sits on its own lines. Returns the updated body and the cursor position
+     * on the empty line inside the fence, ready for the diagram source.
+     */
+    fun insertMermaidFence(body: String, cursor: Int): Pair<String, Int> {
+        val c = cursor.coerceIn(0, body.length)
+        val needsLeadingNewline = c > 0 && body[c - 1] != '\n'
+        val needsTrailingNewline = c < body.length && body[c] != '\n'
+        val builder = StringBuilder(body.length + 20)
+        builder.append(body, 0, c)
+        if (needsLeadingNewline) builder.append('\n')
+        builder.append("```mermaid\n")
+        val sourceCursor = builder.length
+        builder.append("\n```")
+        if (needsTrailingNewline) builder.append('\n')
+        builder.append(body, c, body.length)
+        return builder.toString() to sourceCursor
+    }
+
+
+    /**
      * Removes every marker for [attachmentId]. When a marker is sandwiched between
      * newlines on both sides, one of those newlines is also removed so the result
      * does not contain a dangling blank line.

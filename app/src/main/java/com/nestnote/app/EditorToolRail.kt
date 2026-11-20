@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -71,7 +72,7 @@ internal enum class ToolRailTab(val label: String, val icon: ImageVector) {
 internal enum class FormatAction(val label: String) {
     Checklist("Checklist"), Bullet("Bullet list"), Numbered("Numbered list"), Quote("Blockquote"),
     Bold("Bold"), Italic("Italic"), Strike("Strikethrough"), Code("Inline code"), Link("Insert web link"), NoteLink("Link to note"),
-    Heading1("Heading 1"), Heading2("Heading 2"), Heading3("Heading 3")
+    Heading1("Heading 1"), Heading2("Heading 2"), Heading3("Heading 3"), Mermaid("Mermaid diagram")
 }
 
 private val backgroundNames = listOf("Plain colour", "Botanical", "Sunset", "Waves", "Soft shapes", "Night sky", "Geometric", "Cherry blossom", "Forest", "Paper")
@@ -232,6 +233,7 @@ internal fun EditorToolRail(
                                         FormatAction.Heading1 -> Text("H1", fontWeight = FontWeight.Bold, color = tint)
                                         FormatAction.Heading2 -> Text("H2", fontWeight = FontWeight.Bold, color = tint)
                                         FormatAction.Heading3 -> Text("H3", fontWeight = FontWeight.Bold, color = tint)
+                                        FormatAction.Mermaid -> Icon(Icons.Default.AccountTree, null, tint = tint)
                                     }
                                 }
                             }
