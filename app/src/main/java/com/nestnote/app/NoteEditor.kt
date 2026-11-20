@@ -135,10 +135,16 @@ internal fun NoteEditorContent(
     modifier: Modifier = Modifier
 ) {
     // ---- Core editor state ----
-    var title by rememberSaveable(original?.id, draftNoteId) {
+    // `original?.id` is hoisted once on purpose: it used to appear in three dozen
+    // remember/rememberSaveable/LaunchedEffect argument lists, and the K2 data-flow
+    // analyzer re-splits the whole function's flow graph for every safe-call
+    // argument. Those splits accumulated quadratically and blew up the compiler
+    // heap on this file. One local val keeps the flow graph flat.
+    val editingId = original?.id
+    var title by rememberSaveable(editingId, draftNoteId) {
         mutableStateOf(original?.title ?: template?.title.orEmpty())
     }
-    var bodyValue by rememberSaveable(original?.id, draftNoteId, stateSaver = TextFieldValue.Saver) {
+    var bodyValue by rememberSaveable(editingId, draftNoteId, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(original?.body ?: template?.body.orEmpty()))
     }
     val body = bodyValue.text
@@ -150,31 +156,31 @@ internal fun NoteEditorContent(
     var pendingReminderDate by remember { mutableStateOf<Calendar?>(null) }
 
     // ---- Undo/redo ----
-    val undoManager = remember(original?.id, draftNoteId) { TextUndoManager() }
-    var canUndo by remember(original?.id, draftNoteId) { mutableStateOf(false) }
-    var canRedo by remember(original?.id, draftNoteId) { mutableStateOf(false) }
+    val undoManager = remember(editingId, draftNoteId) { TextUndoManager() }
+    var canUndo by remember(editingId, draftNoteId) { mutableStateOf(false) }
+    var canRedo by remember(editingId, draftNoteId) { mutableStateOf(false) }
 
-    var category by rememberSaveable(original?.id, draftNoteId) {
+    var category by rememberSaveable(editingId, draftNoteId) {
         mutableStateOf(original?.category ?: defaultNoteCategory)
     }
-    var colorIndex by rememberSaveable(original?.id) {
+    var colorIndex by rememberSaveable(editingId) {
         mutableIntStateOf(original?.color?.coerceIn(0, noteAccents.lastIndex) ?: 0)
     }
-    var backgroundIndex by rememberSaveable(original?.id) {
+    var backgroundIndex by rememberSaveable(editingId) {
         mutableIntStateOf(original?.background?.coerceIn(0, 9) ?: 0)
     }
-    var reminder by rememberSaveable(original?.id) { mutableStateOf(original?.reminder.orEmpty()) }
-    var pinned by rememberSaveable(original?.id) { mutableStateOf(original?.pinned ?: false) }
-    var privateNote by rememberSaveable(original?.id) { mutableStateOf(original?.privateNote ?: false) }
+    var reminder by rememberSaveable(editingId) { mutableStateOf(original?.reminder.orEmpty()) }
+    var pinned by rememberSaveable(editingId) { mutableStateOf(original?.pinned ?: false) }
+    var privateNote by rememberSaveable(editingId) { mutableStateOf(original?.privateNote ?: false) }
     var toolRailVisible by remember { mutableStateOf(false) }
     var toolRailTab by remember { mutableStateOf(ToolRailTab.Colour) }
     // Unified editor: the live preview split is enabled by default for Markdown notes
     // (the old Edit/Preview flip is gone); plain-text notes never show it.
     val initialFormat = original?.format ?: template?.format
         ?: if (defaultNoteFormat == "markdown") "markdown" else "plain"
-    var previewVisible by rememberSaveable(original?.id) { mutableStateOf(initialFormat == "markdown") }
-    var editVoiceText by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
-    var noteFormat by rememberSaveable(original?.id, draftNoteId) {
+    var previewVisible by rememberSaveable(editingId) { mutableStateOf(initialFormat == "markdown") }
+    var editVoiceText by rememberSaveable(editingId, draftNoteId) { mutableStateOf(false) }
+    var noteFormat by rememberSaveable(editingId, draftNoteId) {
         mutableStateOf(initialFormat)
     }
     var appearanceStartColor by remember { mutableIntStateOf(colorIndex) }
@@ -182,23 +188,23 @@ internal fun NoteEditorContent(
     var appearanceStartWallpaperUri by remember { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     var discardConfirmation by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf(false) }
-    var voiceNoteDialog by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
+    var voiceNoteDialog by rememberSaveable(editingId, draftNoteId) { mutableStateOf(false) }
     var qrCodeDialog by remember { mutableStateOf(false) }
     var qrPayloadToSave by remember { mutableStateOf<String?>(null) }
     val titleFocus = remember { FocusRequester() }
     val context = LocalContext.current
     val editorPreferences = remember(context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
-    val customTextSizeSp = remember(original?.id) {
+    val customTextSizeSp = remember(editingId) {
         editorPreferences.getInt(PREF_TEXT_SIZE_SP, textSize.bodySp).coerceIn(12, 32)
     }
-    var editorZoomPercent by rememberSaveable(original?.id, draftNoteId) { mutableIntStateOf(100) }
-    var showEditorZoomControls by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(false) }
+    var editorZoomPercent by rememberSaveable(editingId, draftNoteId) { mutableIntStateOf(100) }
+    var showEditorZoomControls by rememberSaveable(editingId, draftNoteId) { mutableStateOf(false) }
     val effectiveBodyTextSp = (customTextSizeSp * editorZoomPercent / 100).coerceIn(10, 48)
-    val editorFontStyle = remember(original?.id) {
+    val editorFontStyle = remember(editingId) {
         runCatching { EditorFontFamily.valueOf(editorPreferences.getString(PREF_EDITOR_FONT, "SANS") ?: "SANS") }
             .getOrDefault(EditorFontFamily.SANS)
     }
-    val customFontPath = remember(original?.id) { editorPreferences.getString(PREF_EDITOR_FONT_FILE, null) }
+    val customFontPath = remember(editingId) { editorPreferences.getString(PREF_EDITOR_FONT_FILE, null) }
     val editorTypeface = remember(editorFontStyle, customFontPath) {
         when (editorFontStyle) {
             EditorFontFamily.SERIF -> AndroidTypeface.SERIF
@@ -211,7 +217,7 @@ internal fun NoteEditorContent(
         }
     }
     val editorFontFamily = remember(editorTypeface) { FontFamily(editorTypeface) }
-    var customWallpaperUri by rememberSaveable(original?.id, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
+    var customWallpaperUri by rememberSaveable(editingId, draftNoteId) { mutableStateOf(original?.wallpaperUri.orEmpty()) }
     val wallpaperImportLauncher = rememberWallpaperImportLauncher { imported ->
         customWallpaperUri = imported
         backgroundIndex = 0
@@ -232,12 +238,12 @@ internal fun NoteEditorContent(
     }
 
     val editorModeViewModel: EditorModeViewModel =
-        viewModel(key = "editor-mode-${original?.id ?: draftNoteId}")
+        viewModel(key = "editor-mode-${editingId ?: draftNoteId}")
     val editorMode = editorModeViewModel.mode
-    var voiceChangesPending by rememberSaveable(original?.id, draftNoteId) {
+    var voiceChangesPending by rememberSaveable(editingId, draftNoteId) {
         mutableStateOf(false)
     }
-    val voiceNoteId = original?.id ?: draftNoteId
+    val voiceNoteId = editingId ?: draftNoteId
     val colors = MaterialTheme.colorScheme
     // Use perceived surface brightness, not only the red channel, to classify dark themes.
     // This keeps editor ink and secondary text readable with tinted/dynamic color schemes.
@@ -259,11 +265,11 @@ internal fun NoteEditorContent(
     var activeVoicePlayerId by remember { mutableStateOf<String?>(null) }
     var pendingVoiceDeletion by remember { mutableStateOf<String?>(null) }
     var pendingVoiceDeletions by rememberSaveable(
-        original?.id, draftNoteId,
+        editingId, draftNoteId,
         stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })
     ) { mutableStateOf<Set<String>>(emptySet()) }
     var sessionVoiceIds by rememberSaveable(
-        original?.id, draftNoteId,
+        editingId, draftNoteId,
         stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })
     ) { mutableStateOf<Set<String>>(emptySet()) }
     val sessionIdSet = remember(sessionVoiceIds) {
@@ -339,7 +345,7 @@ internal fun NoteEditorContent(
     ): NestNote {
         val now = System.currentTimeMillis()
         return NestNote(
-            id = original?.id ?: draftNoteId,
+            id = editingId ?: draftNoteId,
             title = title.trim(),
             body = body.trim(),
             category = category,
@@ -637,11 +643,11 @@ internal fun NoteEditorContent(
     // Voice marker ids feed the attachment-name lookup and the chip transformation. Scanning
     // the whole body on every keystroke janks typing on long notes, so the opening body seeds
     // the state and a short debounce refreshes it while typing.
-    val markerIdsState = remember(original?.id, draftNoteId) {
+    val markerIdsState = remember(editingId, draftNoteId) {
         mutableStateOf(NoteText.voiceMarkers(bodyValue.text).map { it.attachmentId }.distinct())
     }
     val markerIds = markerIdsState.value
-    LaunchedEffect(original?.id, draftNoteId) {
+    LaunchedEffect(editingId, draftNoteId) {
         snapshotFlow { bodyValue.text }
             .debounce(250)
             .collect { text ->
@@ -651,8 +657,8 @@ internal fun NoteEditorContent(
 
     // Unified live preview: the rendered pane trails typing by a short debounce instead of
     // re-rendering Markwon on every keystroke, which keeps long notes smooth.
-    var livePreviewText by remember(original?.id, draftNoteId) { mutableStateOf(bodyValue.text) }
-    LaunchedEffect(original?.id, draftNoteId) {
+    var livePreviewText by remember(editingId, draftNoteId) { mutableStateOf(bodyValue.text) }
+    LaunchedEffect(editingId, draftNoteId) {
         snapshotFlow { bodyValue.text }
             .debounce(300)
             .collect { text -> livePreviewText = text }
@@ -747,7 +753,7 @@ internal fun NoteEditorContent(
         )
     }
 
-    LaunchedEffect(original?.id, draftNoteId, lifecycleOwner) {
+    LaunchedEffect(editingId, draftNoteId, lifecycleOwner) {
         if (original != null) return@LaunchedEffect
         // Opening a new editor during a route/sheet transition can race the window's
         // InputConnection becoming active. Defer focus until the transition settles,
@@ -940,8 +946,8 @@ internal fun NoteEditorContent(
                         }
                     }
 
-                    val checklistItemsState = remember(original?.id, draftNoteId) { mutableStateOf(NoteText.checklistItems(bodyValue.text)) }
-                    LaunchedEffect(original?.id, draftNoteId) {
+                    val checklistItemsState = remember(editingId, draftNoteId) { mutableStateOf(NoteText.checklistItems(bodyValue.text)) }
+                    LaunchedEffect(editingId, draftNoteId) {
                         snapshotFlow { bodyValue.text }
                             .debounce(250)
                             .collect { text -> checklistItemsState.value = NoteText.checklistItems(text) }
