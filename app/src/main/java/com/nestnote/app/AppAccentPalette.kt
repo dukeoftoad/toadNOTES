@@ -4,7 +4,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 
 internal enum class AccentPalette(val label: String, val primaryLight: Color, val primaryDark: Color, val secondaryLight: Color, val secondaryDark: Color) {
-    DEFAULT("Default", Color(0xFF526B55), Color(0xFFB4D0B0), Color(0xFF526477), Color(0xFFB8C8E2)),
+    DEFAULT("Default", Color(0xFF446E17), Color(0xFFA3E635), Color(0xFF0F766E), Color(0xFF34D399)),
     OCEAN("Ocean", Color(0xFF006A9C), Color(0xFF8CCFFF), Color(0xFF41617D), Color(0xFFB5D2F0)),
     LAVENDER("Lavender", Color(0xFF6750A4), Color(0xFFD0BCFF), Color(0xFF625B71), Color(0xFFCCC2DC)),
     ROSE("Rose", Color(0xFFB3265E), Color(0xFFFFB1C8), Color(0xFF76565F), Color(0xFFE8BFC9)),
