@@ -155,7 +155,9 @@ class MarkdownCompatTest {
     @Test
     fun tablesWithoutOuterPipesAndShortSeparatorsPassThroughUntouched() {
         val table = "A | B\n- | -\n1 | 2"
-        assertEquals("$table\n\nafter  ", MarkdownCompat.adapt("$table\n\nafter"))
+        // No hard-break marker after "after": it is the final line, and a CommonMark
+        // hard break only exists between lines (the same rule the prose tests rely on).
+        assertEquals("$table\n\nafter", MarkdownCompat.adapt("$table\n\nafter"))
     }
 
     @Test
@@ -168,10 +170,11 @@ class MarkdownCompatTest {
     fun orderedListAfterTableStartsFreshWithoutRenumbering() {
         // A table is a block boundary in CommonMark: the ordered item after it opens a new
         // list on its own, so the restart blank line must NOT be inserted (the table lines
-        // deliberately skip the ordered bookkeeping).
+        // deliberately skip the ordered bookkeeping). No hard-break marker either — the
+        // item is the final line.
         val adapted = MarkdownCompat.adapt("A | B\n- | -\n1 | 2\n1. restarted")
         assertEquals(
-            listOf("A | B", "- | -", "1 | 2", "1. restarted  ").joinToString("\n"),
+            listOf("A | B", "- | -", "1 | 2", "1. restarted").joinToString("\n"),
             adapted
         )
     }
