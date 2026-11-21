@@ -52,9 +52,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * Reads the installed version at runtime (BuildConfig is not enabled in this project,
- * so PackageManager is the single honest source), falling back to [AboutInfo]'s
- * packaged defaults when the lookup fails.
+ * Reads the installed version at runtime (PackageManager stays this screen's honest
+ * source — BuildConfig.VERSION_NAME exists since the update flow landed, but the
+ * About screen keeps showing what the system actually installed), falling back to
+ * [AboutInfo]'s packaged defaults when the lookup fails.
  */
 internal fun readAppVersion(context: Context): AboutInfo.Version {
     return try {

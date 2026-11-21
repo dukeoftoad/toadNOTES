@@ -12,11 +12,17 @@ android {
         applicationId = "com.nestnote.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("versionCode").orElse("10409").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("1.4.9").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("10410").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("1.4.10").get()
     }
 
-    buildFeatures { compose = true }
+    // buildConfig: the in-app update flow compares the installed version against
+    // GitHub release tags via BuildConfig.VERSION_NAME (same source of truth as the
+    // release build's -PversionName override).
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     buildTypes {
         release {

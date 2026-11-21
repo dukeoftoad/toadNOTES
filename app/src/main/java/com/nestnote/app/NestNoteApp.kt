@@ -27,6 +27,7 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -247,6 +248,15 @@ internal fun NestNoteApp(
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    // In-app update (ported from toadFILES): one silent GitHub Releases check per
+    // app process, fired on open — never periodic, never a download. Failures
+    // (airplane mode, GitHub down) stay invisible; only a newer release WITH an
+    // APK populates the banner state shown on the notes screen below.
+    val startupUpdate = remember { StartupUpdateCheck.instance }
+    LaunchedEffect(Unit) { startupUpdate.checkOnce(coroutineScope) }
+    val updateBanner by startupUpdate.banner.collectAsStateWithLifecycle()
+    val bannerDismissed by startupUpdate.bannerDismissed.collectAsStateWithLifecycle()
 
     fun saveString(key: String, value: String) = preferences.edit().putString(key, value).apply()
     fun saveBoolean(key: String, value: Boolean) = preferences.edit().putBoolean(key, value).apply()
@@ -729,6 +739,16 @@ internal fun NestNoteApp(
                 ) {
                 if (storageRecoveryRequired) {
                     AppStorageRecoveryNotice(onOpenSettings = { selectedView = "Settings" })
+                }
+                // Dismissible "update available" card on the main notes screen — never
+                // gates the UI, downloads nothing on its own. "Update" deep-links into
+                // Settings, whose Update section arrives seeded with this release.
+                if (selectedView == "Home" && updateBanner != null && !bannerDismissed) {
+                    UpdateBanner(
+                        release = updateBanner,
+                        onOpenUpdateFlow = { selectedView = "Settings" },
+                        onDismiss = startupUpdate::dismissBanner
+                    )
                 }
                 AppDashboardFilters(
                     searchVisible = searchVisible,
