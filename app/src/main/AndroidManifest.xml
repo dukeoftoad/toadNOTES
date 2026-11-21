@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- INTERNET exists solely for update checks: a silent once-per-launch GitHub
+         releases check + the user-initiated "Check for updates" flow and its APK
+         download — no periodic network, analytics or telemetry. Notes never leave
+         the device. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Needed so the update APK can be handed to the system package installer.
+         Android still asks the user to allow installs from this app first. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- BiometricPrompt uses the system-managed biometric authentication UI. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 

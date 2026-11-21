@@ -4,6 +4,9 @@ All notable changes to NESTNOTE are documented here. The current release candida
 
 ## [Unreleased] — Known-bug fixes
 
+### Added
+- **In-app update flow, ported from toadFILES.** The app now checks GitHub Releases once, silently, on app open (never periodically) and shows a dismissible "toadNOTES vX available" banner on the notes screen; Settings gains an "Update" section with "Check for updates", an in-app APK download with progress (system DownloadManager), the "Install unknown apps" permission round-trip, and "View on GitHub". The `INTERNET` and `REQUEST_INSTALL_PACKAGES` permissions were added solely for this feature — nothing else in the app touches the network and no note content is ever sent. Release version metadata bumped to 1.4.10 / versionCode 10410.
+
 ### Fixed
 - **Imported voice notes no longer show "Voice note unavailable".** Audio imported into a note (e.g. a dialer recording) carried a dash-less attachment id, while every marker parser required the dashed UUID form — so imported attachments rendered as unavailable chips with no player, the footer printed `Missing notes: voice:…`, and the (dormant) orphan reconciler would have treated their files as deletable. Marker parsing now accepts both UUID forms, the "Missing notes" diagnostic no longer lists attachment markers as note links, and new imports use the canonical dashed id.
 - **Spaced searches no longer match across field boundaries.** The dashboard query ran against a concatenated `title + body + category` string, so e.g. `plan 1.` matched a note titled "Project Plan" with a body starting "1. Finalize…" even though the phrase exists in no single field. The free-text query is now matched against the title, body, and category separately (multi-word queries match a phrase within one field; `is:`/`has:`/`category:`/`after:`/`before:` operators are unchanged).
