@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -163,7 +164,8 @@ internal fun SettingsScreen(
             Triple("Note editor", 4, Icons.Default.Code),
             Triple("Voice player", 5, Icons.Default.Mic),
             Triple("Privacy", 6, Icons.Default.Lock),
-            Triple("Data", 7, Icons.Default.Archive)
+            Triple("Data", 7, Icons.Default.Archive),
+            Triple("Update", 8, Icons.Default.SystemUpdate)
         )
     }
 
@@ -453,8 +455,15 @@ internal fun SettingsScreen(
             }
         }
 
-        // ---- 8. Reset Button ----
-        item(key = SettingsItemKeys[8]) {
+        // ---- 8. Update Section (GitHub Releases check + APK download/install) ----
+        if (matchesSettingsSearch(settingsSearch, "update")) {
+            item(key = SettingsItemKeys[8]) {
+                SettingsUpdateSection()
+            }
+        }
+
+        // ---- 9. Reset Button ----
+        item(key = SettingsItemKeys[9]) {
             OutlinedButton(
                 onClick = { confirmReset = true },
                 modifier = Modifier

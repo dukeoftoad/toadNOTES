@@ -14,6 +14,7 @@ internal val SettingsItemKeys = listOf(
     "settings_voice_player_section_v2",
     "settings_privacy",
     "settings_backup",
+    "settings_update",
     "settings_reset"
 )
 
@@ -26,7 +27,7 @@ internal val SortOptions: List<Pair<String, String>> = listOf(
 
 /** Settings sections searched by the empty-state visibility check. */
 internal val SettingsSearchSections = listOf(
-    "appearance", "layout", "behavior", "editor", "voice", "privacy", "data"
+    "appearance", "layout", "behavior", "editor", "voice", "privacy", "data", "update"
 )
 
 /**
@@ -62,6 +63,10 @@ internal fun matchesSettingsSearch(searchText: String, section: String): Boolean
         )
         "data" -> listOf(
             "data", "backup", "restore", "export", "import", "archive", "archived", "portable"
+        )
+        "update" -> listOf(
+            "update", "updates", "version", "upgrade", "check for updates", "release",
+            "releases", "github", "apk", "install"
         )
         else -> return false
     }
