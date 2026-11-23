@@ -1,0 +1,10 @@
+{
+  "name": "NESTNOTE — Your thinking space",
+  "short_name": "NESTNOTE",
+  "description": "A calm space for notes, ideas, checklists, and reminders.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#554cf6",
+  "icons": [{ "src": "assets/nestnote-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
